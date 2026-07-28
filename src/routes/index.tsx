@@ -182,6 +182,7 @@ export function RestaurantApp() {
   useDebouncedStorage(`${tenantStoragePrefix}-sales`,salesHistory,storageReady);
   useDebouncedStorage(`${tenantStoragePrefix}-expenses`,expenses,storageReady);
   const operationsSync = useOperationsSync({
+    tenantId: tenantNavigation?.tenantId,
     commands: savedCommands,
     sales: salesHistory,
     expenses,

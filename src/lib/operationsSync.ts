@@ -29,6 +29,7 @@ export type CloudExpense = {
 type SyncStatus = "local" | "loading" | "synced" | "error";
 
 type Params = {
+  tenantId?: string | null;
   commands: CloudCommand[];
   sales: CloudSale[];
   expenses: CloudExpense[];
@@ -59,11 +60,13 @@ export function useOperationsSync(params: Params) {
 
     async function load() {
       setStatus("loading");
-      const { data: membership, error: membershipError } = await supabase!
-        .from("tenant_memberships")
-        .select("tenant_id")
-        .limit(1)
-        .maybeSingle();
+      const { data: membership, error: membershipError } = params.tenantId
+        ? { data: { tenant_id: params.tenantId }, error: null }
+        : await supabase!
+          .from("tenant_memberships")
+          .select("tenant_id")
+          .limit(1)
+          .maybeSingle();
       if (cancelled) return;
       if (membershipError || !membership?.tenant_id) {
         console.error("Estabelecimento não encontrado para o usuário.", membershipError);
@@ -90,9 +93,12 @@ export function useOperationsSync(params: Params) {
       const remoteCommands = (commandsResult.data || []).map(row => row.payload as CloudCommand);
       const remoteSales = (salesResult.data || []).map(row => row.payload as CloudSale);
       const remoteExpenses = (expensesResult.data || []).map(row => row.payload as CloudExpense);
-      latest.current.setCommands(remoteCommands.length ? remoteCommands : latest.current.commands);
-      latest.current.setSales(remoteSales.length ? remoteSales : latest.current.sales);
-      latest.current.setExpenses(remoteExpenses.length ? remoteExpenses : latest.current.expenses);
+      // The cloud is authoritative even when a tenant has no rows. Falling back
+      // to the previous local state here leaked demo/previous-store values into
+      // newly created tenants and immediately uploaded them to Supabase.
+      latest.current.setCommands(remoteCommands);
+      latest.current.setSales(remoteSales);
+      latest.current.setExpenses(remoteExpenses);
       hydrated.current = true;
       setStatus("synced");
       window.setTimeout(() => { applyingRemote.current = false; }, 0);
@@ -100,7 +106,7 @@ export function useOperationsSync(params: Params) {
 
     load();
     return () => { cancelled = true; };
-  }, [params.localReady]);
+  }, [params.localReady, params.tenantId]);
 
   useEffect(() => {
     if (!supabase || !tenantId || !hydrated.current) return;
