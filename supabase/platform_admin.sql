@@ -40,6 +40,32 @@ $$;
 revoke all on function public.confirm_client_account(uuid) from public;
 grant execute on function public.confirm_client_account(uuid) to authenticated;
 
+create or replace function public.delete_client_account(client_tenant_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  client_user_ids uuid[];
+begin
+  if not public.is_platform_admin() then
+    raise exception 'Acesso negado';
+  end if;
+
+  select coalesce(array_agg(user_id), '{}'::uuid[])
+  into client_user_ids
+  from public.tenant_memberships
+  where tenant_id = client_tenant_id;
+
+  delete from public.tenants where id = client_tenant_id;
+  delete from auth.users where id = any(client_user_ids);
+end;
+$$;
+
+revoke all on function public.delete_client_account(uuid) from public;
+grant execute on function public.delete_client_account(uuid) to authenticated;
+
 drop policy if exists "platform admins manage tenants" on public.tenants;
 create policy "platform admins manage tenants"
   on public.tenants for all to authenticated

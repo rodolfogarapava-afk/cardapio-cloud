@@ -23,6 +23,7 @@ import {
   Plus,
   Mail,
   KeyRound,
+  Trash2,
 } from "lucide-react";
 import "./saas-platform.css";
 import { createIsolatedSupabaseClient, supabase } from "@/lib/supabase";
@@ -128,6 +129,16 @@ export default function SaaSPlatform({ children, area = "auto" }: { children: Re
     if(error){setLoadError("Não foi possível alterar o acesso desta loja.");return}
     setTenants((all) => all.map((item) => item.id === id ? { ...item, status, due: status === "active" ? new Date(updates.due_date as string+"T12:00:00").toLocaleDateString("pt-BR") : item.due } : item));
   };
+  const deleteTenant = async (tenant: Tenant) => {
+    if(!supabase)return;
+    const confirmed=window.confirm(`Excluir permanentemente a conta "${tenant.name}"?\n\nO acesso do cliente, cardápio, caixa, relatórios, comandas e demais dados da loja serão apagados. Esta ação não pode ser desfeita.`);
+    if(!confirmed)return;
+    setLoadError("");
+    const {error}=await supabase.rpc("delete_client_account",{client_tenant_id:tenant.id});
+    if(error){setLoadError(`Não foi possível excluir a conta: ${error.message}`);return}
+    setTenants((all)=>all.filter((item)=>item.id!==tenant.id));
+    setJobs((all)=>all.filter((job)=>job.tenantId!==tenant.id));
+  };
 
   if(role==="loading")return <main className="saas-loading"><RefreshCw className="spin"/><h2>Carregando sua operação</h2><p>{loadError||"Consultando lojas e permissões no Supabase..."}</p></main>;
 
@@ -141,6 +152,7 @@ export default function SaaSPlatform({ children, area = "auto" }: { children: Re
         onStatus={setTenantStatus}
         onCreated={(created)=>setTenants(all=>[created,...all])}
         onUpdated={(updated)=>setTenants(all=>all.map(tenant=>tenant.id===updated.id?updated:tenant))}
+        onDeleted={deleteTenant}
         onEnterTenant={(id) => { setTenantId(id); setRole("tenant"); setTenantPage("operation"); }}
         onExit={() => auth?.signOut()}
       />
@@ -206,11 +218,11 @@ function DemoLanding({ onMaster, onTenant, onBlocked }: { onMaster: () => void; 
   );
 }
 
-function MasterConsole({ page, setPage, tenants, jobs, onStatus, onEnterTenant, onExit, onCreated, onUpdated }: {
+function MasterConsole({ page, setPage, tenants, jobs, onStatus, onEnterTenant, onExit, onCreated, onUpdated, onDeleted }: {
   page: "overview" | "clients" | "billing" | "printing";
   setPage: (page: "overview" | "clients" | "billing" | "printing") => void;
   tenants: Tenant[]; jobs: PrintJob[]; onStatus: (id: string, status: SubscriptionStatus) => void;
-  onEnterTenant: (id: string) => void; onExit: () => void; onCreated: (tenant:Tenant)=>void; onUpdated:(tenant:Tenant)=>void;
+  onEnterTenant: (id: string) => void; onExit: () => void; onCreated: (tenant:Tenant)=>void; onUpdated:(tenant:Tenant)=>void; onDeleted:(tenant:Tenant)=>void;
 }) {
   const [createOpen,setCreateOpen]=useState(false);
   const [editingTenant,setEditingTenant]=useState<Tenant|null>(null);
@@ -241,9 +253,9 @@ function MasterConsole({ page, setPage, tenants, jobs, onStatus, onEnterTenant, 
             <div className="saas-panel"><PanelTitle title="Receita recorrente" subtitle="Evolução dos últimos 7 meses" /><div className="saas-revenue-chart">{[42,48,53,61,68,76,88].map((h,i)=><span key={i} style={{height:`${h}%`}}><i>{["Jan","Fev","Mar","Abr","Mai","Jun","Jul"][i]}</i></span>)}</div></div>
             <div className="saas-panel"><PanelTitle title="Saúde das assinaturas" subtitle="Situação atual da base" /><div className="saas-donut-wrap"><div className="saas-donut"><strong>{tenants.length}</strong><small>clientes</small></div><ul><li><i className="green"/>Em dia <b>{tenants.filter(t=>t.status==="active").length}</b></li><li><i className="yellow"/>Atrasados <b>{tenants.filter(t=>t.status==="past_due").length}</b></li><li><i className="red"/>Bloqueados <b>{tenants.filter(t=>t.status==="blocked").length}</b></li><li><i className="purple"/>Em teste <b>{tenants.filter(t=>t.status==="trial").length}</b></li></ul></div></div>
           </section>
-          <TenantTable tenants={tenants} onStatus={onStatus} onEnter={onEnterTenant} onEdit={setEditingTenant} compact />
+          <TenantTable tenants={tenants} onStatus={onStatus} onEnter={onEnterTenant} onEdit={setEditingTenant} onDelete={onDeleted} compact />
         </>}
-        {page === "clients" && <TenantTable tenants={tenants} onStatus={onStatus} onEnter={onEnterTenant} onEdit={setEditingTenant} />}
+        {page === "clients" && <TenantTable tenants={tenants} onStatus={onStatus} onEnter={onEnterTenant} onEdit={setEditingTenant} onDelete={onDeleted} />}
         {page === "billing" && <BillingTable tenants={tenants} onStatus={onStatus} />}
         {page === "printing" && <MasterPrinting tenants={tenants} jobs={jobs} />}
       </section>
@@ -348,14 +360,14 @@ function PanelTitle({ title, subtitle }: { title: string; subtitle: string }) {
   return <header className="saas-panel-title"><div><h3>{title}</h3><p>{subtitle}</p></div><button>Ver detalhes <ArrowRight /></button></header>;
 }
 
-function TenantTable({ tenants, onStatus, onEnter, onEdit, compact = false }: { tenants: Tenant[]; onStatus: (id: string, s: SubscriptionStatus) => void; onEnter: (id: string) => void; onEdit:(tenant:Tenant)=>void; compact?: boolean }) {
+function TenantTable({ tenants, onStatus, onEnter, onEdit, onDelete, compact = false }: { tenants: Tenant[]; onStatus: (id: string, s: SubscriptionStatus) => void; onEnter: (id: string) => void; onEdit:(tenant:Tenant)=>void; onDelete:(tenant:Tenant)=>void; compact?: boolean }) {
   const [query, setQuery] = useState("");
   const visible = tenants.filter(t => `${t.name} ${t.owner}`.toLowerCase().includes(query.toLowerCase()));
   return <section className="saas-panel saas-table-panel">
     <PanelTitle title={compact ? "Clientes recentes" : "Gestão de clientes"} subtitle={compact ? "Status e atividade da sua carteira" : "Acesse, suspenda ou reative qualquer estabelecimento"} />
     {!compact && <label className="saas-search"><Search /><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar restaurante ou responsável..." /></label>}
     <div className="saas-table-scroll"><table><thead><tr><th>Estabelecimento</th><th>Plano</th><th>Status</th><th>Vencimento</th><th>Impressora</th><th></th></tr></thead>
-      <tbody>{visible.map(t=><tr key={t.id}><td><span className="saas-tenant-avatar">{t.name.slice(0,2).toUpperCase()}</span><div><b>{t.name}</b><small>{t.owner}</small></div></td><td>{t.plan}<small>{money(t.monthly)}/mês</small></td><td><Status status={t.status}/></td><td>{t.due}</td><td><span className={`saas-printer-state ${t.printer}`}><i/>{t.printer === "online" ? "Online" : "Offline"}</span></td><td><button className="saas-enter" onClick={()=>onEnter(t.id)}>Acessar</button><button className="saas-action-edit" onClick={()=>onEdit(t)}>Editar</button>{t.status==="blocked"?<button className="saas-action-good" onClick={()=>onStatus(t.id,"active")}>Reativar</button>:<button className="saas-action-bad" onClick={()=>onStatus(t.id,"blocked")}>Bloquear</button>}</td></tr>)}</tbody>
+      <tbody>{visible.map(t=><tr key={t.id}><td><span className="saas-tenant-avatar">{t.name.slice(0,2).toUpperCase()}</span><div><b>{t.name}</b><small>{t.owner}</small></div></td><td>{t.plan}<small>{money(t.monthly)}/mês</small></td><td><Status status={t.status}/></td><td>{t.due}</td><td><span className={`saas-printer-state ${t.printer}`}><i/>{t.printer === "online" ? "Online" : "Offline"}</span></td><td><button className="saas-enter" onClick={()=>onEnter(t.id)}>Acessar</button><button className="saas-action-edit" onClick={()=>onEdit(t)}>Editar</button>{t.status==="blocked"?<button className="saas-action-good" onClick={()=>onStatus(t.id,"active")}>Reativar</button>:<button className="saas-action-bad" onClick={()=>onStatus(t.id,"blocked")}>Bloquear</button>}<button className="saas-action-delete" onClick={()=>onDelete(t)}><Trash2/> Excluir conta</button></td></tr>)}</tbody>
     </table></div>
   </section>;
 }
