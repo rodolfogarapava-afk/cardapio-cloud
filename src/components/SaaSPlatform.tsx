@@ -261,7 +261,15 @@ function CreateTenantModal({onClose,onCreated}:{onClose:()=>void;onCreated:(tena
     const slug=`${slugBase}-${String(Date.now()).slice(-5)}`;
     const monthly=Number(form.monthly.replace(",","."));
     const {data:signup,error:signupError}=await isolated.auth.signUp({email:form.email.trim(),password:form.password,options:{data:{full_name:form.owner.trim()}}});
-    if(signupError||!signup.user){setError(signupError?.message==="User already registered"?"Este e-mail já está cadastrado.":signupError?.message||"Não foi possível criar o acesso.");setBusy(false);return}
+    if(signupError||!signup.user){
+      const signupMessage=signupError?.message||"";
+      setError(
+        signupMessage==="User already registered"?"Este e-mail já está cadastrado.":
+        signupMessage.toLowerCase().includes("rate limit")?"O serviço de e-mail do Supabase atingiu o limite. Tente novamente em alguns minutos.":
+        signupMessage||"Não foi possível criar o acesso."
+      );
+      setBusy(false);return
+    }
     const {data:tenant,error:tenantError}=await supabase.from("tenants").insert({
       name:form.name.trim(),slug,owner_name:form.owner.trim(),plan:form.plan,monthly_fee:monthly,
       due_date:form.due||null,subscription_status:"active",printer_status:"offline",
