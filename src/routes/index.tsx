@@ -359,7 +359,7 @@ export function RestaurantApp() {
         </aside>
 
         <section className="content">
-          {tenantNavigation?.page !== "operation" ? tenantNavigation.content :
+          {tenantNavigation && tenantNavigation.page !== "operation" ? tenantNavigation.content :
           systemView === "products" ? <IntegratedProducts products={products} categories={categories} onChange={persistProducts} onAddCategory={(name)=>persistCategories([...categories,name])} onRenameCategory={renameCategory} onDeleteCategory={(name)=>{const next=categories.filter((c)=>c!==name);persistCategories(next);if(activeMain===name)setActiveMain(next[0]||"")}} /> :
           systemView === "stock" ? <IntegratedStock products={products} onChange={persistProducts} /> :
           systemView === "commands" ? <IntegratedCommands commands={savedCommands} setCommands={setSavedCommands} products={products} adjustStock={adjustStock} onCharge={(command) => { setCustomerName(command.name); setPaymentTotal(command.total); setPaymentItems(command.items); setPaymentCommandId(command.id); setPaymentCommandBackup(command); setModal("payment"); }} /> :
