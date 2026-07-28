@@ -23,12 +23,16 @@ import {
   CreditCard,
   Printer,
   LogOut,
+  Cloud,
+  CloudOff,
+  Trash2,
 } from "lucide-react";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { sendOrderTicketToPrinter, sendOrderUpdateToPrinter, sendReceiptToPrinter, type OrderChange } from "@/lib/printReceipt";
 import { generateReportPdf } from "@/lib/reportPdf";
 import { initAudioContext, playNotificationSound } from "@/lib/sounds";
 import { useTenantNavigation } from "@/components/SaaSPlatform";
+import { useOperationsSync } from "@/lib/operationsSync";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -167,6 +171,15 @@ export function RestaurantApp() {
   useDebouncedStorage("burguer-house-commands",savedCommands,storageReady);
   useDebouncedStorage("burguer-house-sales",salesHistory,storageReady);
   useDebouncedStorage("burguer-house-expenses",expenses,storageReady);
+  const operationsSync = useOperationsSync({
+    commands: savedCommands,
+    sales: salesHistory,
+    expenses,
+    setCommands: setSavedCommands,
+    setSales: setSalesHistory,
+    setExpenses,
+    localReady: storageReady,
+  });
   useEffect(()=>{
     if(!storageReady)return;
     const merged=mergeOpenCommands(savedCommands);
@@ -363,8 +376,8 @@ export function RestaurantApp() {
           systemView === "products" ? <IntegratedProducts products={products} categories={categories} onChange={persistProducts} onAddCategory={(name)=>persistCategories([...categories,name])} onRenameCategory={renameCategory} onDeleteCategory={(name)=>{const next=categories.filter((c)=>c!==name);persistCategories(next);if(activeMain===name)setActiveMain(next[0]||"")}} /> :
           systemView === "stock" ? <IntegratedStock products={products} onChange={persistProducts} /> :
           systemView === "commands" ? <IntegratedCommands commands={savedCommands} setCommands={setSavedCommands} products={products} adjustStock={adjustStock} onCharge={(command) => { setCustomerName(command.name); setPaymentTotal(command.total); setPaymentItems(command.items); setPaymentCommandId(command.id); setPaymentCommandBackup(command); setModal("payment"); }} /> :
-          systemView === "cash" ? <IntegratedCash sales={salesHistory} expenses={expenses} onAddExpense={() => { const description=window.prompt("Descrição do custo"); if(!description)return; const value=window.prompt("Valor do custo"); const amount=Number((value||"").replace(",",".")); if(amount>0)setExpenses((all)=>[...all,{id:Date.now(),description,amount,createdAt:Date.now()}]); }} /> :
-          systemView === "reports" ? <IntegratedReports sales={salesHistory} expenses={expenses} commands={savedCommands} /> : <>
+          systemView === "cash" ? <IntegratedCash sales={salesHistory} expenses={expenses} sync={operationsSync} onAddExpense={(description,amount) => setExpenses((all)=>[...all,{id:Date.now(),description,amount,createdAt:Date.now()}])} onDeleteExpense={(id)=>setExpenses((all)=>all.filter(expense=>expense.id!==id))} /> :
+          systemView === "reports" ? <IntegratedReports sales={salesHistory} expenses={expenses} commands={savedCommands} sync={operationsSync} /> : <>
           <div className="category-strip menu-category-strip" aria-label="Categorias do cardápio">
             {categories.map((category) => (
               <button
@@ -1161,16 +1174,40 @@ function IntegratedCommands({commands,setCommands,onCharge,products,adjustStock}
   </div>
 }
 
-function IntegratedCash({sales,expenses,onAddExpense}:{sales:IntegratedSale[];expenses:IntegratedExpense[];onAddExpense:()=>void}) {
+type OperationsSyncView = { status:string; message:string; connected:boolean };
+
+function SyncBadge({sync}:{sync:OperationsSyncView}) {
+  return <span className={`sync-badge ${sync.connected?"online":sync.status==="error"?"offline":""}`}>
+    {sync.connected?<Cloud/>:<CloudOff/>}{sync.message}
+  </span>;
+}
+
+function IntegratedCash({sales,expenses,onAddExpense,onDeleteExpense,sync}:{sales:IntegratedSale[];expenses:IntegratedExpense[];onAddExpense:(description:string,amount:number)=>void;onDeleteExpense:(id:number)=>void;sync:OperationsSyncView}) {
+  const [expenseOpen,setExpenseOpen]=useState(false);
+  const [description,setDescription]=useState("");
+  const [amount,setAmount]=useState("");
   const revenue=sales.reduce((s,x)=>s+x.total,0), costs=expenses.reduce((s,x)=>s+x.amount,0);
-  return <div className="integrated-view"><div className="integrated-heading"><div><p>FINANCEIRO · HOJE</p><h1>Fluxo de caixa</h1><span>Entradas, custos e saldo da operação.</span></div><button onClick={()=>exportFinanceCsv(sales,expenses)}>EXPORTAR CSV</button></div>
+  const numericAmount=Number(amount.replace(",","."));
+  const saveExpense=()=>{
+    if(!description.trim()||!Number.isFinite(numericAmount)||numericAmount<=0)return;
+    onAddExpense(description.trim(),numericAmount);
+    setDescription("");setAmount("");setExpenseOpen(false);
+  };
+  return <div className="integrated-view"><div className="integrated-heading"><div><p>FINANCEIRO · TEMPO REAL</p><h1>Fluxo de caixa</h1><span>Entradas, custos e saldo da operação.</span><SyncBadge sync={sync}/></div><button onClick={()=>exportFinanceCsv(sales,expenses)}>EXPORTAR CSV</button></div>
     <div className="cash-summary"><article><small>Entradas</small><strong>R$ {revenue.toFixed(2).replace(".",",")}</strong></article><article><small>Saídas</small><strong className="red">R$ {costs.toFixed(2).replace(".",",")}</strong></article><article><small>Saldo</small><strong>R$ {(revenue-costs).toFixed(2).replace(".",",")}</strong></article></div>
     <div className="finance-panels"><section><h3>Vendas pagas</h3>{sales.length?sales.slice().reverse().map((sale)=><div className="finance-row" key={sale.id}><span>{sale.name}<small>{sale.method}</small></span><b>R$ {sale.total.toFixed(2).replace(".",",")}</b></div>):<p>Nenhuma venda finalizada.</p>}</section>
-    <section><h3>Custos <button onClick={onAddExpense}>+ NOVO CUSTO</button></h3>{expenses.length?expenses.slice().reverse().map((e)=><div className="finance-row" key={e.id}><span>{e.description}<small>{new Date(e.createdAt).toLocaleDateString("pt-BR")}</small></span><b className="red">- R$ {e.amount.toFixed(2).replace(".",",")}</b></div>):<p>Nenhum custo registrado.</p>}</section></div>
+    <section><h3>Custos <button onClick={()=>setExpenseOpen(true)}>+ NOVO CUSTO</button></h3>{expenses.length?expenses.slice().reverse().map((e)=><div className="finance-row expense-row" key={e.id}><span>{e.description}<small>{new Date(e.createdAt).toLocaleDateString("pt-BR")}</small></span><b className="red">- R$ {e.amount.toFixed(2).replace(".",",")}</b><button className="expense-delete" onClick={()=>onDeleteExpense(e.id)} aria-label={`Excluir custo ${e.description}`}><Trash2/></button></div>):<p>Nenhum custo registrado.</p>}</section></div>
+    {expenseOpen&&<div className="modal-backdrop" onMouseDown={()=>setExpenseOpen(false)}><section className="modal expense-modal" onMouseDown={event=>event.stopPropagation()}>
+      <button className="modal-close" onClick={()=>setExpenseOpen(false)} aria-label="Fechar"><X/></button>
+      <span className="modal-icon"><Banknote/></span><h3>Novo custo</h3><p>Registre uma saída para manter o caixa e os relatórios atualizados.</p>
+      <label className="expense-field">Descrição<input autoFocus value={description} onChange={event=>setDescription(event.target.value)} placeholder="Ex.: compra de carvão"/></label>
+      <label className="expense-field">Valor (R$)<input inputMode="decimal" value={amount} onChange={event=>setAmount(event.target.value)} placeholder="0,00"/></label>
+      <div className="confirmation-actions"><button onClick={()=>setExpenseOpen(false)}>CANCELAR</button><button className="primary" disabled={!description.trim()||!Number.isFinite(numericAmount)||numericAmount<=0} onClick={saveExpense}>SALVAR CUSTO</button></div>
+    </section></div>}
   </div>
 }
 
-function IntegratedReports({sales,expenses,commands}:{sales:IntegratedSale[];expenses:IntegratedExpense[];commands:IntegratedCommand[]}) {
+function IntegratedReports({sales,expenses,commands,sync}:{sales:IntegratedSale[];expenses:IntegratedExpense[];commands:IntegratedCommand[];sync:OperationsSyncView}) {
   const brl=(v:number)=>`R$ ${v.toFixed(2).replace(".",",")}`;
   type Period="today"|"7d"|"30d"|"month"|"custom";
   const [period,setPeriod]=useState<Period>("today");
@@ -1230,7 +1267,7 @@ function IntegratedReports({sales,expenses,commands}:{sales:IntegratedSale[];exp
 
   return <div className="integrated-view">
     <div className="integrated-heading">
-      <div><p>ANÁLISE · {periodLabel.toUpperCase()}</p><h1>Relatórios</h1><span>Recebimentos por forma de pagamento, vendas e custos no período.</span></div>
+      <div><p>ANÁLISE · {periodLabel.toUpperCase()}</p><h1>Relatórios</h1><span>Recebimentos por forma de pagamento, vendas e custos no período.</span><SyncBadge sync={sync}/></div>
       <button onClick={()=>generateReportPdf({periodLabel,sales:periodSales,expenses:periodExpenses,pendingCommands:commands.length})}>IMPRIMIR RELATÓRIO</button>
     </div>
 
