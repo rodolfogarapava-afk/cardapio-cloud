@@ -25,19 +25,16 @@ import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { sendOrderTicketToPrinter, sendOrderUpdateToPrinter, sendReceiptToPrinter, type OrderChange } from "@/lib/printReceipt";
 import { generateReportPdf } from "@/lib/reportPdf";
 import { initAudioContext, playNotificationSound } from "@/lib/sounds";
-import SaaSPlatform from "@/components/SaaSPlatform";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Cardápio Cloud — Gestão, pedidos e impressão" },
-      { name: "description", content: "Plataforma para restaurantes com cardápio digital, cobrança automática e impressão na cozinha." },
-      { property: "og:title", content: "Cardápio Cloud" },
-      { property: "og:description", content: "Do pedido à cozinha, tudo conectado." },
+      { title: "Burguer House — Cardápio digital" },
+      { name: "description", content: "Cardápio digital da Burguer House com comandas, PDV, controle de estoque, caixa e relatórios." },
+      { property: "og:title", content: "Burguer House — Cardápio digital" },
+      { property: "og:description", content: "Cardápio digital da Burguer House com comandas, PDV, controle de estoque, caixa e relatórios." },
       { property: "og:type", content: "website" },
-      { property: "og:image", content: "/og.png" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:image", content: "/og.png" },
     ],
   }),
   component: Home,
@@ -106,7 +103,7 @@ const nav = [
   { label: "Bebidas", icon: Wine },
 ];
 
-function RestaurantApp() {
+export function RestaurantApp() {
   const [products, setProducts] = useState<Product[]>(initialProducts);
   const [categories, setCategories] = useState<string[]>(nav.map((item) => item.label));
   const [activeMain, setActiveMain] = useState("Espetinhos");
@@ -546,7 +543,7 @@ function RestaurantApp() {
 }
 
 function Home() {
-  return <SaaSPlatform><RestaurantApp /></SaaSPlatform>;
+  return <RestaurantApp />;
 }
 
 function Success({ title, text }: { title: string; text: string }) {
