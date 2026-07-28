@@ -113,6 +113,11 @@ const nav = [
 
 export function RestaurantApp() {
   const tenantNavigation = useTenantNavigation();
+  const tenantBrand = useMemo(() => {
+    const words = (tenantNavigation?.tenantName || "Deus Proveu Espetinhos").trim().split(/\s+/);
+    if (words.length === 1) return { main: words[0], detail: "CARDÁPIO DIGITAL" };
+    return { main: words.slice(0, -1).join(" "), detail: words.at(-1) || "CARDÁPIO DIGITAL" };
+  }, [tenantNavigation?.tenantName]);
   const [products, setProducts] = useState<Product[]>(initialProducts);
   const [categories, setCategories] = useState<string[]>(nav.map((item) => item.label));
   const [activeMain, setActiveMain] = useState("Espetinhos");
@@ -293,9 +298,9 @@ export function RestaurantApp() {
         <button className="mobile-menu" onClick={() => setMenuOpen(true)} aria-label="Abrir menu">
           <Menu size={22} />
         </button>
-        <div className="brand" aria-label="Deus Proveu Espetinhos">
+        <div className="brand" aria-label={tenantNavigation?.tenantName || "Deus Proveu Espetinhos"}>
           <span className="brand-mark"><Utensils size={24} /></span>
-          <span><b>DEUS PROVEU</b><small>ESPETINHOS</small></span>
+          <span><b>{tenantBrand.main.toUpperCase()}</b><small>{tenantBrand.detail.toUpperCase()}</small></span>
         </div>
         <div className={`search-box ${searchOpen ? "open" : ""}`}>
           <Search size={18} />

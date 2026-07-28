@@ -54,6 +54,7 @@ type TenantNavigation = {
   setPage: (page: "operation" | "billing" | "printing") => void;
   content: ReactNode;
   status: SubscriptionStatus;
+  tenantName: string;
   onExit: () => void;
 };
 
@@ -155,7 +156,7 @@ export default function SaaSPlatform({ children, area = "auto" }: { children: Re
       : null;
 
   return (
-    <TenantNavigationContext.Provider value={{ page: tenantPage, setPage: setTenantPage, content: tenantContent, status: tenant.status, onExit: () => area==="auto"&&role==="tenant"&&auth?.user.email==="admin@admin.com"?setRole("master"):auth?.signOut() }}>
+    <TenantNavigationContext.Provider value={{ page: tenantPage, setPage: setTenantPage, content: tenantContent, status: tenant.status, tenantName: tenant.name, onExit: () => area==="auto"&&role==="tenant"&&auth?.user.email==="admin@admin.com"?setRole("master"):auth?.signOut() }}>
     <div className="saas-tenant-shell">
       {tenant.status === "past_due" && (
         <button className="saas-overdue-banner" onClick={() => setTenantPage("billing")}>
