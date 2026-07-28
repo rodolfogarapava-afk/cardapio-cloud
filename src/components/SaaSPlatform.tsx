@@ -139,6 +139,7 @@ export default function SaaSPlatform({ children, area = "auto" }: { children: Re
         jobs={jobs}
         onStatus={setTenantStatus}
         onCreated={(created)=>setTenants(all=>[created,...all])}
+        onUpdated={(updated)=>setTenants(all=>all.map(tenant=>tenant.id===updated.id?updated:tenant))}
         onEnterTenant={(id) => { setTenantId(id); setRole("tenant"); setTenantPage("operation"); }}
         onExit={() => auth?.signOut()}
       />
@@ -204,13 +205,14 @@ function DemoLanding({ onMaster, onTenant, onBlocked }: { onMaster: () => void; 
   );
 }
 
-function MasterConsole({ page, setPage, tenants, jobs, onStatus, onEnterTenant, onExit, onCreated }: {
+function MasterConsole({ page, setPage, tenants, jobs, onStatus, onEnterTenant, onExit, onCreated, onUpdated }: {
   page: "overview" | "clients" | "billing" | "printing";
   setPage: (page: "overview" | "clients" | "billing" | "printing") => void;
   tenants: Tenant[]; jobs: PrintJob[]; onStatus: (id: string, status: SubscriptionStatus) => void;
-  onEnterTenant: (id: string) => void; onExit: () => void; onCreated: (tenant:Tenant)=>void;
+  onEnterTenant: (id: string) => void; onExit: () => void; onCreated: (tenant:Tenant)=>void; onUpdated:(tenant:Tenant)=>void;
 }) {
   const [createOpen,setCreateOpen]=useState(false);
+  const [editingTenant,setEditingTenant]=useState<Tenant|null>(null);
   const revenue = tenants.filter((t) => t.status === "active").reduce((sum, t) => sum + t.monthly, 0);
   const nav = [
     ["overview", LayoutDashboard, "Visão geral"],
@@ -238,13 +240,14 @@ function MasterConsole({ page, setPage, tenants, jobs, onStatus, onEnterTenant, 
             <div className="saas-panel"><PanelTitle title="Receita recorrente" subtitle="Evolução dos últimos 7 meses" /><div className="saas-revenue-chart">{[42,48,53,61,68,76,88].map((h,i)=><span key={i} style={{height:`${h}%`}}><i>{["Jan","Fev","Mar","Abr","Mai","Jun","Jul"][i]}</i></span>)}</div></div>
             <div className="saas-panel"><PanelTitle title="Saúde das assinaturas" subtitle="Situação atual da base" /><div className="saas-donut-wrap"><div className="saas-donut"><strong>{tenants.length}</strong><small>clientes</small></div><ul><li><i className="green"/>Em dia <b>{tenants.filter(t=>t.status==="active").length}</b></li><li><i className="yellow"/>Atrasados <b>{tenants.filter(t=>t.status==="past_due").length}</b></li><li><i className="red"/>Bloqueados <b>{tenants.filter(t=>t.status==="blocked").length}</b></li><li><i className="purple"/>Em teste <b>{tenants.filter(t=>t.status==="trial").length}</b></li></ul></div></div>
           </section>
-          <TenantTable tenants={tenants} onStatus={onStatus} onEnter={onEnterTenant} compact />
+          <TenantTable tenants={tenants} onStatus={onStatus} onEnter={onEnterTenant} onEdit={setEditingTenant} compact />
         </>}
-        {page === "clients" && <TenantTable tenants={tenants} onStatus={onStatus} onEnter={onEnterTenant} />}
+        {page === "clients" && <TenantTable tenants={tenants} onStatus={onStatus} onEnter={onEnterTenant} onEdit={setEditingTenant} />}
         {page === "billing" && <BillingTable tenants={tenants} onStatus={onStatus} />}
         {page === "printing" && <MasterPrinting tenants={tenants} jobs={jobs} />}
       </section>
       {createOpen&&<CreateTenantModal onClose={()=>setCreateOpen(false)} onCreated={(tenant)=>{onCreated(tenant);setCreateOpen(false);setPage("clients")}}/>}
+      {editingTenant&&<EditTenantModal tenant={editingTenant} onClose={()=>setEditingTenant(null)} onUpdated={(tenant)=>{onUpdated(tenant);setEditingTenant(null)}}/>}
     </main>
   );
 }
@@ -302,6 +305,41 @@ function CreateTenantModal({onClose,onCreated}:{onClose:()=>void;onCreated:(tena
   </form></div>
 }
 
+function EditTenantModal({tenant,onClose,onUpdated}:{tenant:Tenant;onClose:()=>void;onUpdated:(tenant:Tenant)=>void}) {
+  const toISODate=(value:string)=>{
+    const parts=value.split("/");
+    return parts.length===3?`${parts[2]}-${parts[1]}-${parts[0]}`:"";
+  };
+  const [form,setForm]=useState({name:tenant.name,owner:tenant.owner,plan:tenant.plan,monthly:tenant.monthly.toFixed(2).replace(".",","),due:toISODate(tenant.due)});
+  const [busy,setBusy]=useState(false);
+  const [error,setError]=useState("");
+  const update=(field:string,value:string)=>setForm(current=>({...current,[field]:value}));
+  const submit=async(event:React.FormEvent)=>{
+    event.preventDefault();setBusy(true);setError("");
+    if(!supabase){setError("Supabase não configurado.");setBusy(false);return}
+    const monthly=Number(form.monthly.replace(",","."));
+    const {error:updateError}=await supabase.from("tenants").update({
+      name:form.name.trim(),owner_name:form.owner.trim(),plan:form.plan,
+      monthly_fee:monthly,due_date:form.due||null,
+    }).eq("id",tenant.id);
+    if(updateError){setError(updateError.message);setBusy(false);return}
+    onUpdated({...tenant,name:form.name.trim(),owner:form.owner.trim(),plan:form.plan,monthly,due:form.due?new Date(form.due+"T12:00:00").toLocaleDateString("pt-BR"):"—"});
+  };
+  return <div className="saas-modal-backdrop" onMouseDown={onClose}><form className="saas-client-modal" onMouseDown={event=>event.stopPropagation()} onSubmit={submit}>
+    <button type="button" className="saas-modal-close" onClick={onClose} aria-label="Fechar"><XCircle/></button>
+    <p>CLIENTE · SUPABASE</p><h2>Editar loja</h2><span>As alterações serão aplicadas também na Área do Cliente.</span>
+    <div className="saas-client-fields">
+      <label>Nome da loja<input required value={form.name} onChange={e=>update("name",e.target.value)}/></label>
+      <label>Responsável<input required value={form.owner} onChange={e=>update("owner",e.target.value)}/></label>
+      <label>Plano<select value={form.plan} onChange={e=>update("plan",e.target.value)}><option>Essencial</option><option>Pro</option><option>Premium</option></select></label>
+      <label>Mensalidade<input required inputMode="decimal" value={form.monthly} onChange={e=>update("monthly",e.target.value)}/></label>
+      <label>Próximo vencimento<input required type="date" value={form.due} onChange={e=>update("due",e.target.value)}/></label>
+    </div>
+    {error&&<div className="saas-form-error">{error}</div>}
+    <div className="saas-modal-actions"><button type="button" onClick={onClose}>CANCELAR</button><button type="submit" disabled={busy}>{busy?<RefreshCw className="spin"/>:null}{busy?"SALVANDO...":"SALVAR ALTERAÇÕES"}</button></div>
+  </form></div>
+}
+
 function Kpi({ icon, label, value, detail, tone }: { icon: ReactNode; label: string; value: string; detail: string; tone: string }) {
   return <article className="saas-kpi"><span className={tone}>{icon}</span><div><small>{label}</small><strong>{value}</strong><em>{detail}</em></div></article>;
 }
@@ -309,14 +347,14 @@ function PanelTitle({ title, subtitle }: { title: string; subtitle: string }) {
   return <header className="saas-panel-title"><div><h3>{title}</h3><p>{subtitle}</p></div><button>Ver detalhes <ArrowRight /></button></header>;
 }
 
-function TenantTable({ tenants, onStatus, onEnter, compact = false }: { tenants: Tenant[]; onStatus: (id: string, s: SubscriptionStatus) => void; onEnter: (id: string) => void; compact?: boolean }) {
+function TenantTable({ tenants, onStatus, onEnter, onEdit, compact = false }: { tenants: Tenant[]; onStatus: (id: string, s: SubscriptionStatus) => void; onEnter: (id: string) => void; onEdit:(tenant:Tenant)=>void; compact?: boolean }) {
   const [query, setQuery] = useState("");
   const visible = tenants.filter(t => `${t.name} ${t.owner}`.toLowerCase().includes(query.toLowerCase()));
   return <section className="saas-panel saas-table-panel">
     <PanelTitle title={compact ? "Clientes recentes" : "Gestão de clientes"} subtitle={compact ? "Status e atividade da sua carteira" : "Acesse, suspenda ou reative qualquer estabelecimento"} />
     {!compact && <label className="saas-search"><Search /><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar restaurante ou responsável..." /></label>}
     <div className="saas-table-scroll"><table><thead><tr><th>Estabelecimento</th><th>Plano</th><th>Status</th><th>Vencimento</th><th>Impressora</th><th></th></tr></thead>
-      <tbody>{visible.map(t=><tr key={t.id}><td><span className="saas-tenant-avatar">{t.name.slice(0,2).toUpperCase()}</span><div><b>{t.name}</b><small>{t.owner}</small></div></td><td>{t.plan}<small>{money(t.monthly)}/mês</small></td><td><Status status={t.status}/></td><td>{t.due}</td><td><span className={`saas-printer-state ${t.printer}`}><i/>{t.printer === "online" ? "Online" : "Offline"}</span></td><td><button className="saas-enter" onClick={()=>onEnter(t.id)}>Acessar</button>{t.status==="blocked"?<button className="saas-action-good" onClick={()=>onStatus(t.id,"active")}>Reativar</button>:<button className="saas-action-bad" onClick={()=>onStatus(t.id,"blocked")}>Bloquear</button>}</td></tr>)}</tbody>
+      <tbody>{visible.map(t=><tr key={t.id}><td><span className="saas-tenant-avatar">{t.name.slice(0,2).toUpperCase()}</span><div><b>{t.name}</b><small>{t.owner}</small></div></td><td>{t.plan}<small>{money(t.monthly)}/mês</small></td><td><Status status={t.status}/></td><td>{t.due}</td><td><span className={`saas-printer-state ${t.printer}`}><i/>{t.printer === "online" ? "Online" : "Offline"}</span></td><td><button className="saas-enter" onClick={()=>onEnter(t.id)}>Acessar</button><button className="saas-action-edit" onClick={()=>onEdit(t)}>Editar</button>{t.status==="blocked"?<button className="saas-action-good" onClick={()=>onStatus(t.id,"active")}>Reativar</button>:<button className="saas-action-bad" onClick={()=>onStatus(t.id,"blocked")}>Bloquear</button>}</td></tr>)}</tbody>
     </table></div>
   </section>;
 }
