@@ -20,10 +20,15 @@ import {
   Users,
   Wifi,
   XCircle,
+  Plus,
+  Mail,
+  KeyRound,
 } from "lucide-react";
 import "./saas-platform.css";
+import { createIsolatedSupabaseClient, supabase } from "@/lib/supabase";
+import { useAppAuth } from "@/components/AuthGate";
 
-type SubscriptionStatus = "active" | "past_due" | "blocked" | "trial";
+type SubscriptionStatus = "active" | "past_due" | "blocked" | "trial" | "canceled";
 type Tenant = {
   id: string;
   name: string;
@@ -44,22 +49,6 @@ type PrintJob = {
   createdAt: number;
 };
 
-const initialTenants: Tenant[] = [
-  { id: "deus-proveu", name: "Deus Proveu Espetinhos", owner: "Marcos Almeida", plan: "Pro", monthly: 149.9, status: "active", due: "05/08/2026", orders: 184, printer: "online" },
-  { id: "cantina-bella", name: "Cantina Bella", owner: "Ana Souza", plan: "Essencial", monthly: 89.9, status: "past_due", due: "25/07/2026", orders: 97, printer: "online" },
-  { id: "burger-station", name: "Burger Station", owner: "Lucas Lima", plan: "Pro", monthly: 149.9, status: "blocked", due: "18/07/2026", orders: 211, printer: "offline" },
-  { id: "acai-do-parque", name: "Açaí do Parque", owner: "Renata Costa", plan: "Essencial", monthly: 89.9, status: "trial", due: "10/08/2026", orders: 42, printer: "online" },
-];
-
-const initialJobs: PrintJob[] = [
-  { id: 8742, tenantId: "deus-proveu", label: "Pedido #184 · Mesa 07", destination: "Cozinha", status: "printed", createdAt: Date.now() - 90_000 },
-  { id: 8743, tenantId: "deus-proveu", label: "Pedido #185 · Mesa 03", destination: "Churrasqueira", status: "pending", createdAt: Date.now() - 18_000 },
-  { id: 8744, tenantId: "burger-station", label: "Pedido #211 · Balcão", destination: "Cozinha", status: "failed", createdAt: Date.now() - 310_000 },
-];
-
-const tenantStore = "cardapio-cloud-tenants-v1";
-const jobsStore = "cardapio-cloud-jobs-v1";
-
 type TenantNavigation = {
   page: "operation" | "billing" | "printing";
   setPage: (page: "operation" | "billing" | "printing") => void;
@@ -76,40 +65,62 @@ function money(value: number) {
 }
 
 function statusLabel(status: SubscriptionStatus) {
-  return { active: "Em dia", past_due: "Em atraso", blocked: "Bloqueado", trial: "Teste grátis" }[status];
+  return { active: "Em dia", past_due: "Em atraso", blocked: "Bloqueado", trial: "Teste grátis", canceled: "Cancelado" }[status];
 }
 
 export default function SaaSPlatform({ children }: { children: ReactNode }) {
-  const [role, setRole] = useState<"landing" | "master" | "tenant">("landing");
-  const [tenantId, setTenantId] = useState("deus-proveu");
+  const auth = useAppAuth();
+  const [role, setRole] = useState<"loading" | "master" | "tenant">("loading");
+  const [tenantId, setTenantId] = useState("");
   const [tenantPage, setTenantPage] = useState<"operation" | "billing" | "printing">("operation");
   const [masterPage, setMasterPage] = useState<"overview" | "clients" | "billing" | "printing">("overview");
-  const [tenants, setTenants] = useState<Tenant[]>(initialTenants);
-  const [jobs, setJobs] = useState<PrintJob[]>(initialJobs);
-  const [hydrated, setHydrated] = useState(false);
+  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [jobs, setJobs] = useState<PrintJob[]>([]);
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
-    try {
-      const savedTenants = localStorage.getItem(tenantStore);
-      const savedJobs = localStorage.getItem(jobsStore);
-      if (savedTenants) setTenants(JSON.parse(savedTenants));
-      if (savedJobs) setJobs(JSON.parse(savedJobs));
-    } catch {}
-    setHydrated(true);
-  }, []);
-  useEffect(() => {
-    if (!hydrated) return;
-    localStorage.setItem(tenantStore, JSON.stringify(tenants));
-    localStorage.setItem(jobsStore, JSON.stringify(jobs));
-  }, [tenants, jobs, hydrated]);
+    if (!supabase || !auth?.user) return;
+    let cancelled=false;
+    const formatDate=(date:string|null)=>date?new Date(`${date}T12:00:00`).toLocaleDateString("pt-BR"):"—";
+    const load=async()=>{
+      setLoadError("");
+      const {data:profile,error:profileError}=await supabase.from("profiles").select("platform_role").eq("id",auth.user.id).maybeSingle();
+      if(cancelled)return;
+      if(profileError){setLoadError("Não foi possível carregar o perfil administrativo.");return}
+      const isMaster=profile?.platform_role==="super_admin";
+      let query=supabase.from("tenants").select("id,name,owner_name,plan,monthly_fee,subscription_status,due_date,printer_status");
+      if(!isMaster){
+        const {data:membership}=await supabase.from("tenant_memberships").select("tenant_id").eq("user_id",auth.user.id).limit(1).maybeSingle();
+        if(!membership?.tenant_id){setLoadError("Este usuário ainda não está vinculado a uma loja.");return}
+        query=query.eq("id",membership.tenant_id);
+      }
+      const {data,error}=await query.order("created_at",{ascending:false});
+      if(cancelled)return;
+      if(error){setLoadError("Não foi possível carregar as lojas.");return}
+      const mapped=(data||[]).map((row)=>({
+        id:row.id,name:row.name,owner:row.owner_name||"Sem responsável",plan:row.plan,
+        monthly:Number(row.monthly_fee),status:row.subscription_status as SubscriptionStatus,
+        due:formatDate(row.due_date),orders:0,printer:row.printer_status as "online"|"offline",
+      }));
+      setTenants(mapped);
+      if(isMaster)setRole("master");
+      else {setTenantId(mapped[0]?.id||"");setRole("tenant")}
+    };
+    load();
+    return()=>{cancelled=true};
+  },[auth?.user.id]);
 
   const tenant = tenants.find((item) => item.id === tenantId) ?? tenants[0];
-  const setTenantStatus = (id: string, status: SubscriptionStatus) =>
-    setTenants((all) => all.map((item) => item.id === id ? { ...item, status, due: status === "active" ? "05/09/2026" : item.due } : item));
+  const setTenantStatus = async (id: string, status: SubscriptionStatus) => {
+    if(!supabase)return;
+    const updates:Record<string,unknown>={subscription_status:status};
+    if(status==="active"){const next=new Date();next.setMonth(next.getMonth()+1);updates.due_date=next.toISOString().slice(0,10)}
+    const {error}=await supabase.from("tenants").update(updates).eq("id",id);
+    if(error){setLoadError("Não foi possível alterar o acesso desta loja.");return}
+    setTenants((all) => all.map((item) => item.id === id ? { ...item, status, due: status === "active" ? new Date(updates.due_date as string+"T12:00:00").toLocaleDateString("pt-BR") : item.due } : item));
+  };
 
-  if (role === "landing") {
-    return <DemoLanding onMaster={() => setRole("master")} onTenant={() => { setTenantId("deus-proveu"); setRole("tenant"); }} onBlocked={() => { setTenantId("burger-station"); setRole("tenant"); }} />;
-  }
+  if(role==="loading")return <main className="saas-loading"><RefreshCw className="spin"/><h2>Carregando sua operação</h2><p>{loadError||"Consultando lojas e permissões no Supabase..."}</p></main>;
 
   if (role === "master") {
     return (
@@ -119,14 +130,15 @@ export default function SaaSPlatform({ children }: { children: ReactNode }) {
         tenants={tenants}
         jobs={jobs}
         onStatus={setTenantStatus}
+        onCreated={(created)=>setTenants(all=>[created,...all])}
         onEnterTenant={(id) => { setTenantId(id); setRole("tenant"); setTenantPage("operation"); }}
-        onExit={() => setRole("landing")}
+        onExit={() => auth?.signOut()}
       />
     );
   }
 
   if (tenant.status === "blocked") {
-    return <BlockedScreen tenant={tenant} onPaid={() => setTenantStatus(tenant.id, "active")} onExit={() => setRole("landing")} />;
+    return <BlockedScreen tenant={tenant} onPaid={() => window.location.reload()} onExit={() => auth?.signOut()} />;
   }
 
   const tenantContent = tenantPage === "billing"
@@ -136,7 +148,7 @@ export default function SaaSPlatform({ children }: { children: ReactNode }) {
       : null;
 
   return (
-    <TenantNavigationContext.Provider value={{ page: tenantPage, setPage: setTenantPage, content: tenantContent, status: tenant.status, onExit: () => setRole("landing") }}>
+    <TenantNavigationContext.Provider value={{ page: tenantPage, setPage: setTenantPage, content: tenantContent, status: tenant.status, onExit: () => role==="tenant"&&auth?.user.email==="admin@admin.com"?setRole("master"):auth?.signOut() }}>
     <div className="saas-tenant-shell">
       {tenant.status === "past_due" && (
         <button className="saas-overdue-banner" onClick={() => setTenantPage("billing")}>
@@ -184,12 +196,13 @@ function DemoLanding({ onMaster, onTenant, onBlocked }: { onMaster: () => void; 
   );
 }
 
-function MasterConsole({ page, setPage, tenants, jobs, onStatus, onEnterTenant, onExit }: {
+function MasterConsole({ page, setPage, tenants, jobs, onStatus, onEnterTenant, onExit, onCreated }: {
   page: "overview" | "clients" | "billing" | "printing";
   setPage: (page: "overview" | "clients" | "billing" | "printing") => void;
   tenants: Tenant[]; jobs: PrintJob[]; onStatus: (id: string, status: SubscriptionStatus) => void;
-  onEnterTenant: (id: string) => void; onExit: () => void;
+  onEnterTenant: (id: string) => void; onExit: () => void; onCreated: (tenant:Tenant)=>void;
 }) {
+  const [createOpen,setCreateOpen]=useState(false);
   const revenue = tenants.filter((t) => t.status === "active").reduce((sum, t) => sum + t.monthly, 0);
   const nav = [
     ["overview", LayoutDashboard, "Visão geral"],
@@ -202,10 +215,10 @@ function MasterConsole({ page, setPage, tenants, jobs, onStatus, onEnterTenant, 
       <aside className="saas-master-side">
         <div className="saas-brand"><span><ChefHat /></span><div><strong>Cardápio Cloud</strong><small>PAINEL MASTER</small></div></div>
         <nav>{nav.map(([id, Icon, label]) => <button key={id} className={page === id ? "active" : ""} onClick={() => setPage(id)}><Icon />{label}</button>)}</nav>
-        <div className="saas-side-account"><span>SA</span><div><b>Super Admin</b><small>admin@cardapiocloud.com</small></div><button onClick={onExit} aria-label="Sair"><LogOut /></button></div>
+        <div className="saas-side-account"><span>SA</span><div><b>Super Admin</b><small>admin@admin.com</small></div><button onClick={onExit} aria-label="Sair"><LogOut /></button></div>
       </aside>
       <section className="saas-master-main">
-        <header><div><p>PLATAFORMA</p><h1>{page === "overview" ? "Visão geral" : page === "clients" ? "Clientes" : page === "billing" ? "Cobranças" : "Rede de impressão"}</h1></div><span className="saas-health"><i /> Todos os serviços operacionais</span></header>
+        <header><div><p>PLATAFORMA</p><h1>{page === "overview" ? "Visão geral" : page === "clients" ? "Clientes" : page === "billing" ? "Cobranças" : "Rede de impressão"}</h1></div><div className="saas-header-actions"><span className="saas-health"><i /> Supabase conectado</span><button className="saas-new-client" onClick={()=>setCreateOpen(true)}><Plus/> NOVO CLIENTE</button></div></header>
         {page === "overview" && <>
           <div className="saas-kpis">
             <Kpi icon={<Building2 />} label="Clientes" value={String(tenants.length)} detail={`${tenants.filter(t => t.status === "active").length} ativos`} tone="purple" />
@@ -223,8 +236,54 @@ function MasterConsole({ page, setPage, tenants, jobs, onStatus, onEnterTenant, 
         {page === "billing" && <BillingTable tenants={tenants} onStatus={onStatus} />}
         {page === "printing" && <MasterPrinting tenants={tenants} jobs={jobs} />}
       </section>
+      {createOpen&&<CreateTenantModal onClose={()=>setCreateOpen(false)} onCreated={(tenant)=>{onCreated(tenant);setCreateOpen(false);setPage("clients")}}/>}
     </main>
   );
+}
+
+function CreateTenantModal({onClose,onCreated}:{onClose:()=>void;onCreated:(tenant:Tenant)=>void}) {
+  const [form,setForm]=useState({name:"",owner:"",email:"",password:"",plan:"Essencial",monthly:"89,90",due:""});
+  const [busy,setBusy]=useState(false);
+  const [error,setError]=useState("");
+  const update=(field:string,value:string)=>setForm(current=>({...current,[field]:value}));
+  const submit=async(event:React.FormEvent)=>{
+    event.preventDefault();setError("");setBusy(true);
+    const isolated=createIsolatedSupabaseClient();
+    if(!supabase||!isolated){setError("Supabase não configurado.");setBusy(false);return}
+    const slugBase=form.name.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
+    const slug=`${slugBase}-${String(Date.now()).slice(-5)}`;
+    const monthly=Number(form.monthly.replace(",","."));
+    const {data:signup,error:signupError}=await isolated.auth.signUp({email:form.email.trim(),password:form.password,options:{data:{full_name:form.owner.trim()}}});
+    if(signupError||!signup.user){setError(signupError?.message==="User already registered"?"Este e-mail já está cadastrado.":signupError?.message||"Não foi possível criar o acesso.");setBusy(false);return}
+    const {data:tenant,error:tenantError}=await supabase.from("tenants").insert({
+      name:form.name.trim(),slug,owner_name:form.owner.trim(),plan:form.plan,monthly_fee:monthly,
+      due_date:form.due||null,subscription_status:"active",printer_status:"offline",
+    }).select("id").single();
+    if(tenantError||!tenant){setError(tenantError?.message||"Não foi possível criar a loja.");setBusy(false);return}
+    const [profileResult,membershipResult,confirmationResult]=await Promise.all([
+      supabase.from("profiles").upsert({id:signup.user.id,full_name:form.owner.trim(),platform_role:"tenant_admin"}),
+      supabase.from("tenant_memberships").insert({tenant_id:tenant.id,user_id:signup.user.id,role:"owner"}),
+      supabase.rpc("confirm_client_account",{client_user_id:signup.user.id}),
+    ]);
+    const finalError=profileResult.error||membershipResult.error||confirmationResult.error;
+    if(finalError){setError(finalError.message);setBusy(false);return}
+    onCreated({id:tenant.id,name:form.name.trim(),owner:form.owner.trim(),plan:form.plan,monthly,status:"active",due:form.due?new Date(form.due+"T12:00:00").toLocaleDateString("pt-BR"):"—",orders:0,printer:"offline"});
+  };
+  return <div className="saas-modal-backdrop" onMouseDown={onClose}><form className="saas-client-modal" onMouseDown={event=>event.stopPropagation()} onSubmit={submit}>
+    <button type="button" className="saas-modal-close" onClick={onClose} aria-label="Fechar"><XCircle/></button>
+    <p>CADASTRO REAL · SUPABASE</p><h2>Novo cliente</h2><span>Crie a loja e o acesso do responsável. Os dados financeiros serão separados automaticamente.</span>
+    <div className="saas-client-fields">
+      <label>Nome da loja<input required value={form.name} onChange={e=>update("name",e.target.value)} placeholder="Ex.: Cantina da Praça"/></label>
+      <label>Responsável<input required value={form.owner} onChange={e=>update("owner",e.target.value)} placeholder="Nome completo"/></label>
+      <label><Mail/> E-mail de acesso<input required type="email" value={form.email} onChange={e=>update("email",e.target.value)} placeholder="cliente@empresa.com"/></label>
+      <label><KeyRound/> Senha inicial<input required minLength={6} type="password" value={form.password} onChange={e=>update("password",e.target.value)} placeholder="Mínimo 6 caracteres"/></label>
+      <label>Plano<select value={form.plan} onChange={e=>update("plan",e.target.value)}><option>Essencial</option><option>Pro</option><option>Premium</option></select></label>
+      <label>Mensalidade<input required inputMode="decimal" value={form.monthly} onChange={e=>update("monthly",e.target.value)} placeholder="89,90"/></label>
+      <label>Próximo vencimento<input required type="date" value={form.due} onChange={e=>update("due",e.target.value)}/></label>
+    </div>
+    {error&&<div className="saas-form-error">{error}</div>}
+    <div className="saas-modal-actions"><button type="button" onClick={onClose}>CANCELAR</button><button type="submit" disabled={busy}>{busy?<RefreshCw className="spin"/>:<Plus/>}{busy?"CRIANDO...":"CRIAR CLIENTE E ACESSO"}</button></div>
+  </form></div>
 }
 
 function Kpi({ icon, label, value, detail, tone }: { icon: ReactNode; label: string; value: string; detail: string; tone: string }) {
@@ -261,10 +320,10 @@ function MasterPrinting({ tenants, jobs }: { tenants: Tenant[]; jobs: PrintJob[]
   return <><div className="saas-kpis"><Kpi icon={<Wifi/>} label="Agentes conectados" value={String(tenants.filter(t=>t.printer==="online").length)} detail="conexão HTTPS ativa" tone="green"/><Kpi icon={<Printer/>} label="Impressos hoje" value={String(jobs.filter(j=>j.status==="printed").length)} detail="confirmação do spooler" tone="blue"/><Kpi icon={<RefreshCw/>} label="Na fila" value={String(jobs.filter(j=>j.status==="pending").length)} detail="aguardando agente" tone="yellow"/><Kpi icon={<XCircle/>} label="Falhas" value={String(jobs.filter(j=>j.status==="failed").length)} detail="tentativa automática" tone="purple"/></div><section className="saas-panel saas-table-panel"><PanelTitle title="Fila global" subtitle="Últimos trabalhos enviados aos agentes locais"/><JobTable jobs={jobs} tenants={tenants}/></section></>;
 }
 
-function TenantBilling({ tenant, onBlock }: { tenant: Tenant; onBlock:()=>void }) {
+function TenantBilling({ tenant }: { tenant: Tenant; onBlock:()=>void }) {
   return <main className="saas-tenant-page"><div className="saas-page-heading"><div><p>CONTA & ASSINATURA</p><h1>Minha assinatura</h1><span>Gerencie seu plano e acompanhe as mensalidades.</span></div></div>
     <div className="saas-plan-card"><div><span className="saas-plan-icon"><CreditCard/></span><p>PLANO ATUAL</p><h2>{tenant.plan}</h2><strong>{money(tenant.monthly)}<small>/mês</small></strong><Status status={tenant.status}/></div><ul><li><CheckCircle2/>Cardápio digital e QR Code</li><li><CheckCircle2/>PDV, estoque e relatórios</li><li><CheckCircle2/>Impressão automática na cozinha</li><li><CheckCircle2/>Suporte e atualizações</li></ul></div>
-    <section className="saas-panel saas-invoice"><PanelTitle title="Última mensalidade" subtitle="Julho de 2026"/><div><span><small>Vencimento</small><b>{tenant.due}</b></span><span><small>Valor</small><b>{money(tenant.monthly)}</b></span><span><small>Status</small><Status status={tenant.status}/></span><button onClick={onBlock}>Simular vencimento e bloqueio</button></div></section>
+    <section className="saas-panel saas-invoice"><PanelTitle title="Mensalidade atual" subtitle={new Date().toLocaleDateString("pt-BR",{month:"long",year:"numeric"})}/><div><span><small>Vencimento</small><b>{tenant.due}</b></span><span><small>Valor</small><b>{money(tenant.monthly)}</b></span><span><small>Status</small><Status status={tenant.status}/></span></div></section>
   </main>;
 }
 
@@ -284,14 +343,14 @@ function JobTable({ jobs, tenants }: { jobs:PrintJob[]; tenants:Tenant[] }) {
 function BlockedScreen({ tenant, onPaid, onExit }: { tenant: Tenant; onPaid:()=>void; onExit:()=>void }) {
   const [checking,setChecking]=useState(false);
   const pix=useMemo(()=>`00020126580014BR.GOV.BCB.PIX0136${tenant.id}-mensalidade-0720265204000053039865406${tenant.monthly.toFixed(2)}5802BR5914CARDAPIO CLOUD6009SAO PAULO62070503***6304ABCD`,[tenant]);
-  const confirm=()=>{setChecking(true);setTimeout(()=>{onPaid()},1800)};
+  const confirm=()=>{setChecking(true);onPaid()};
   return <main className="saas-blocked">
     <header><div className="saas-brand"><span><ChefHat/></span><div><strong>Cardápio Cloud</strong><small>GESTÃO & PEDIDOS</small></div></div><button onClick={onExit}><LogOut/> Sair da demo</button></header>
     <section className="saas-blocked-card">
       <div className="saas-lock-copy"><span className="saas-lock-icon"><Clock3/></span><p>ASSINATURA PENDENTE</p><h1>Regularize para continuar usando o sistema.</h1><span>A mensalidade de <b>{tenant.name}</b> venceu em {tenant.due}. Seus dados estão seguros e serão liberados assim que o pagamento for confirmado.</span>
         <ul><li><ShieldCheck/>Nenhum dado ou pedido foi apagado</li><li><RefreshCw/>Liberação automática após a confirmação</li><li><CheckCircle2/>Pagamento processado em ambiente seguro</li></ul>
       </div>
-      <div className="saas-pix-card"><div className="saas-pix-title"><span><QrCode/></span><div><p>PAGAMENTO VIA PIX</p><h2>{money(tenant.monthly)}</h2></div><em>Julho/2026</em></div><div className="saas-qr"><QRCode value={pix} size={190}/></div><p>Abra o aplicativo do seu banco e escaneie o QR Code</p><div className="saas-pix-code"><span>{pix.slice(0,45)}...</span><button onClick={()=>navigator.clipboard?.writeText(pix)}>Copiar código</button></div><button className="saas-confirm-payment" onClick={confirm} disabled={checking}>{checking?<><RefreshCw className="spin"/>Confirmando com o provedor...</>:<><CheckCircle2/>Simular pagamento confirmado</>}</button><small><ShieldCheck/>Acesso liberado automaticamente pelo webhook</small></div>
+      <div className="saas-pix-card"><div className="saas-pix-title"><span><QrCode/></span><div><p>PAGAMENTO VIA PIX</p><h2>{money(tenant.monthly)}</h2></div><em>{new Date().toLocaleDateString("pt-BR",{month:"short",year:"numeric"})}</em></div><div className="saas-qr"><QRCode value={pix} size={190}/></div><p>Abra o aplicativo do seu banco e escaneie o QR Code</p><div className="saas-pix-code"><span>{pix.slice(0,45)}...</span><button onClick={()=>navigator.clipboard?.writeText(pix)}>Copiar código</button></div><button className="saas-confirm-payment" onClick={confirm} disabled={checking}>{checking?<><RefreshCw className="spin"/>Atualizando situação...</>:<><RefreshCw/>Já paguei — atualizar situação</>}</button><small><ShieldCheck/>A liberação ocorre quando o pagamento é confirmado pelo administrador</small></div>
     </section>
     <footer>Precisa de ajuda? <b>Falar com o suporte</b> · atendimento@cardapiocloud.com.br</footer>
   </main>;
