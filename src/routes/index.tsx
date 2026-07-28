@@ -113,14 +113,18 @@ const nav = [
 
 export function RestaurantApp() {
   const tenantNavigation = useTenantNavigation();
+  const isOriginalStore = !tenantNavigation || tenantNavigation.tenantName.trim().toLowerCase() === "deus proveu espetinhos";
+  const tenantStoragePrefix = isOriginalStore ? "burguer-house" : `cardapio-cloud-${tenantNavigation.tenantId}`;
+  const tenantInitialProducts = isOriginalStore ? initialProducts : [];
+  const tenantInitialCategories = isOriginalStore ? nav.map((item) => item.label) : [];
   const tenantBrand = useMemo(() => {
     const words = (tenantNavigation?.tenantName || "Deus Proveu Espetinhos").trim().split(/\s+/);
     if (words.length === 1) return { main: words[0], detail: "CARDÁPIO DIGITAL" };
     return { main: words.slice(0, -1).join(" "), detail: words.at(-1) || "CARDÁPIO DIGITAL" };
   }, [tenantNavigation?.tenantName]);
-  const [products, setProducts] = useState<Product[]>(initialProducts);
-  const [categories, setCategories] = useState<string[]>(nav.map((item) => item.label));
-  const [activeMain, setActiveMain] = useState("Espetinhos");
+  const [products, setProducts] = useState<Product[]>(tenantInitialProducts);
+  const [categories, setCategories] = useState<string[]>(tenantInitialCategories);
+  const [activeMain, setActiveMain] = useState(tenantInitialCategories[0] || "");
   const [cart, setCart] = useState<Record<number, number>>({});
   const [modal, setModal] = useState<"review" | "cart" | "about" | "commands" | "payment" | "doneness" | null>(null);
   const [pendingMeatId, setPendingMeatId] = useState<number | null>(null);
@@ -147,35 +151,36 @@ export function RestaurantApp() {
 
   useEffect(() => {
     initAudioContext();
-    const menuVersionKey = "burguer-house-v31-espetinhos-menu";
+    const menuVersionKey = isOriginalStore ? "burguer-house-v31-espetinhos-menu" : `${tenantStoragePrefix}-menu-ready`;
     const menuDone = window.localStorage.getItem(menuVersionKey);
-    const saved = window.localStorage.getItem("burguer-house-products");
+    const saved = window.localStorage.getItem(`${tenantStoragePrefix}-products`);
     if (!menuDone) {
-      setProducts(initialProducts);
-      setCategories(nav.map((item) => item.label));
-      window.localStorage.setItem("burguer-house-products", JSON.stringify(initialProducts));
-      window.localStorage.setItem("burguer-house-categories", JSON.stringify(nav.map((item) => item.label)));
+      setProducts(tenantInitialProducts);
+      setCategories(tenantInitialCategories);
+      setActiveMain(tenantInitialCategories[0] || "");
+      window.localStorage.setItem(`${tenantStoragePrefix}-products`, JSON.stringify(tenantInitialProducts));
+      window.localStorage.setItem(`${tenantStoragePrefix}-categories`, JSON.stringify(tenantInitialCategories));
       window.localStorage.setItem(menuVersionKey, "1");
     } else if (saved) {
       try { setProducts(JSON.parse(saved)); } catch {}
-      const savedCategories = window.localStorage.getItem("burguer-house-categories");
-      if (savedCategories) { try { setCategories(JSON.parse(savedCategories)); } catch {} }
+      const savedCategories = window.localStorage.getItem(`${tenantStoragePrefix}-categories`);
+      if (savedCategories) { try { const parsed=JSON.parse(savedCategories);setCategories(parsed);setActiveMain(parsed[0]||""); } catch {} }
     } else {
-      setProducts(initialProducts);
+      setProducts(tenantInitialProducts);
     }
     try {
-      const commands=window.localStorage.getItem("burguer-house-commands");
-      const sales=window.localStorage.getItem("burguer-house-sales");
-      const savedExpenses=window.localStorage.getItem("burguer-house-expenses");
+      const commands=window.localStorage.getItem(`${tenantStoragePrefix}-commands`);
+      const sales=window.localStorage.getItem(`${tenantStoragePrefix}-sales`);
+      const savedExpenses=window.localStorage.getItem(`${tenantStoragePrefix}-expenses`);
       if(commands)setSavedCommands(mergeOpenCommands(JSON.parse(commands)));
       if(sales)setSalesHistory(JSON.parse(sales));
       if(savedExpenses)setExpenses(JSON.parse(savedExpenses));
     } catch {}
     setStorageReady(true);
   }, []);
-  useDebouncedStorage("burguer-house-commands",savedCommands,storageReady);
-  useDebouncedStorage("burguer-house-sales",salesHistory,storageReady);
-  useDebouncedStorage("burguer-house-expenses",expenses,storageReady);
+  useDebouncedStorage(`${tenantStoragePrefix}-commands`,savedCommands,storageReady);
+  useDebouncedStorage(`${tenantStoragePrefix}-sales`,salesHistory,storageReady);
+  useDebouncedStorage(`${tenantStoragePrefix}-expenses`,expenses,storageReady);
   const operationsSync = useOperationsSync({
     commands: savedCommands,
     sales: salesHistory,
@@ -192,7 +197,7 @@ export function RestaurantApp() {
   },[savedCommands,storageReady]);
   const persistProducts = (next: Product[]) => {
     setProducts(next);
-    if (typeof window !== "undefined") window.localStorage.setItem("burguer-house-products", JSON.stringify(next));
+    if (typeof window !== "undefined") window.localStorage.setItem(`${tenantStoragePrefix}-products`, JSON.stringify(next));
   };
   const adjustStock = (deltas: { name: string; qty: number }[]) => {
     setProducts((prev) => {
@@ -202,13 +207,13 @@ export function RestaurantApp() {
         if (!delta) return p;
         return { ...p, stock: Math.max(0, Number(p.stock || 0) + delta) };
       });
-      if (typeof window !== "undefined") window.localStorage.setItem("burguer-house-products", JSON.stringify(next));
+      if (typeof window !== "undefined") window.localStorage.setItem(`${tenantStoragePrefix}-products`, JSON.stringify(next));
       return next;
     });
   };
   const persistCategories = (next: string[]) => {
     setCategories(next);
-    window.localStorage.setItem("burguer-house-categories", JSON.stringify(next));
+    window.localStorage.setItem(`${tenantStoragePrefix}-categories`, JSON.stringify(next));
   };
   const renameCategory = (oldName:string,newName:string) => {
     const clean=newName.trim();
@@ -383,6 +388,7 @@ export function RestaurantApp() {
           systemView === "commands" ? <IntegratedCommands commands={savedCommands} setCommands={setSavedCommands} products={products} adjustStock={adjustStock} onCharge={(command) => { setCustomerName(command.name); setPaymentTotal(command.total); setPaymentItems(command.items); setPaymentCommandId(command.id); setPaymentCommandBackup(command); setModal("payment"); }} /> :
           systemView === "cash" ? <IntegratedCash sales={salesHistory} expenses={expenses} sync={operationsSync} onAddExpense={(description,amount) => setExpenses((all)=>[...all,{id:Date.now(),description,amount,createdAt:Date.now()}])} onDeleteExpense={(id)=>setExpenses((all)=>all.filter(expense=>expense.id!==id))} /> :
           systemView === "reports" ? <IntegratedReports sales={salesHistory} expenses={expenses} commands={savedCommands} sync={operationsSync} /> : <>
+          {!categories.length && <div className="integrated-empty new-store-empty"><Store/><h3>Seu cardápio está vazio</h3><p>Esta é uma loja nova. Cadastre a primeira categoria e os produtos para começar.</p><button className="primary" onClick={()=>setSystemView("products")}>CADASTRAR PRODUTOS</button></div>}
           <div className="category-strip menu-category-strip" aria-label="Categorias do cardápio">
             {categories.map((category) => (
               <button
@@ -398,11 +404,11 @@ export function RestaurantApp() {
             ))}
           </div>
 
-          <div className="intro">
+          {!!categories.length && <div className="intro">
             <p className="eyebrow">CARDÁPIO · {activeMain.toUpperCase()}</p>
             <h1>{sectionCopy[activeMain]?.title || activeMain}</h1>
             <p>{sectionCopy[activeMain]?.description || `Produtos selecionados da categoria ${activeMain}.`}</p>
-          </div>
+          </div>}
 
           <div className="product-list">
             {filtered.map((product, idx) => (
@@ -435,7 +441,7 @@ export function RestaurantApp() {
                 </div>
               </article>
             ))}
-            {!filtered.length && <p className="empty">Nenhum item encontrado para “{query}”.</p>}
+            {!!categories.length && !filtered.length && <p className="empty">Nenhum item encontrado para “{query}”.</p>}
           </div>
           </>}
         </section>
