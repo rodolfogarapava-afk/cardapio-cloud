@@ -1,6 +1,13 @@
 import { cp, mkdir, rm } from "node:fs/promises";
 import { resolve } from "node:path";
 
+// Vercel's Nitro preset writes directly to `.vercel/output` using the Build
+// Output API. The staging below is only required by the existing Sites host.
+if (process.env.VERCEL === "1" || process.env.NITRO_PRESET === "vercel") {
+  console.log("Vercel build detected; keeping Nitro's .vercel/output directory.");
+  process.exit(0);
+}
+
 const project = process.cwd();
 const output = resolve(project, ".output");
 const dist = resolve(project, "dist");

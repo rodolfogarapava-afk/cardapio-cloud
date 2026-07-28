@@ -1,5 +1,18 @@
 # Welcome to your Lovable project
 
+## Deploy na Vercel
+
+1. Importe este repositório no painel da Vercel.
+2. Em **Environment Variables**, adicione:
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_PUBLISHABLE_KEY`
+3. Mantenha o comando de build como `npm run build`.
+4. Publique o projeto. O Nitro detecta a Vercel e gera `.vercel/output`
+   automaticamente.
+
+As variáveis devem ser configuradas para Production, Preview e Development
+quando os três ambientes usarem o mesmo projeto Supabase.
+
 This project was built with [Lovable](https://lovable.dev).
 
 ## Build with Lovable
