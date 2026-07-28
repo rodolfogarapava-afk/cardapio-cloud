@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import SaaSPlatform from "@/components/SaaSPlatform";
 import { RestaurantApp } from "./index";
+import AuthGate from "@/components/AuthGate";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
@@ -18,8 +19,10 @@ export const Route = createFileRoute("/admin")({
 
 function AdminPage() {
   return (
-    <SaaSPlatform>
-      <RestaurantApp />
-    </SaaSPlatform>
+    <AuthGate>
+      <SaaSPlatform>
+        <RestaurantApp />
+      </SaaSPlatform>
+    </AuthGate>
   );
 }

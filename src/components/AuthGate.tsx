@@ -1,0 +1,136 @@
+import { createContext, useContext, useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { ArrowRight, ChefHat, Eye, EyeOff, LockKeyhole, Mail, ShieldCheck } from "lucide-react";
+import type { User } from "@supabase/supabase-js";
+import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import "./auth-gate.css";
+
+type AuthContextValue = {
+  user: Pick<User, "id" | "email"> | { id: string; email: string };
+  signOut: () => Promise<void>;
+  isDemo: boolean;
+};
+
+const AuthContext = createContext<AuthContextValue | null>(null);
+export const useAppAuth = () => useContext(AuthContext);
+
+const demoStorageKey = "cardapio-cloud-demo-session";
+
+export default function AuthGate({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<AuthContextValue["user"] | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!supabase) {
+      if (sessionStorage.getItem(demoStorageKey) === "active") {
+        setUser({ id: "demo-admin", email: "admin@cardapiocloud.com" });
+      }
+      setLoading(false);
+      return;
+    }
+    supabase.auth.getSession().then(({ data }) => {
+      setUser(data.session?.user ?? null);
+      setLoading(false);
+    });
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      setLoading(false);
+    });
+    return () => data.subscription.unsubscribe();
+  }, []);
+
+  const signOut = async () => {
+    if (supabase) await supabase.auth.signOut();
+    sessionStorage.removeItem(demoStorageKey);
+    setUser(null);
+  };
+
+  if (loading) return <AuthLoading />;
+  if (!user) {
+    return <LoginScreen onDemoLogin={(email) => {
+      sessionStorage.setItem(demoStorageKey, "active");
+      setUser({ id: "demo-admin", email });
+    }} />;
+  }
+
+  return <AuthContext.Provider value={{ user, signOut, isDemo: !isSupabaseConfigured }}>{children}</AuthContext.Provider>;
+}
+
+function AuthLoading() {
+  return <main className="auth-screen"><div className="auth-loading"><span><ChefHat /></span><p>Verificando acesso...</p></div></main>;
+}
+
+function LoginScreen({ onDemoLogin }: { onDemoLogin: (email: string) => void }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    setMessage("");
+    if (!supabase) {
+      if (email.toLowerCase() === "admin@cardapiocloud.com" && password === "demo1234") {
+        onDemoLogin(email);
+      } else {
+        setError("Use o acesso de demonstração indicado abaixo.");
+      }
+      setBusy(false);
+      return;
+    }
+    const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+    if (authError) setError(authError.message === "Invalid login credentials" ? "E-mail ou senha incorretos." : authError.message);
+    setBusy(false);
+  };
+
+  const resetPassword = async () => {
+    setError("");
+    setMessage("");
+    if (!email) {
+      setError("Digite seu e-mail antes de solicitar uma nova senha.");
+      return;
+    }
+    if (!supabase) {
+      setMessage("No modo de demonstração, use a senha informada abaixo.");
+      return;
+    }
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/admin`,
+    });
+    if (resetError) setError(resetError.message);
+    else setMessage("Enviamos as instruções de recuperação para o seu e-mail.");
+  };
+
+  return (
+    <main className="auth-screen">
+      <section className="auth-brand-panel">
+        <div className="auth-brand"><span><ChefHat /></span><div><b>CARDÁPIO CLOUD</b><small>DEUS PROVEU ESPETINHOS</small></div></div>
+        <div className="auth-brand-copy">
+          <p>ACESSO ADMINISTRATIVO</p>
+          <h1>Gestão simples.<br />Operação sob controle.</h1>
+          <span>Entre para gerenciar seu cardápio, comandas, estoque, caixa e impressão da cozinha.</span>
+        </div>
+        <div className="auth-security"><ShieldCheck /><span><b>Ambiente protegido</b><small>Seus dados e os dados dos clientes são isolados por estabelecimento.</small></span></div>
+      </section>
+      <section className="auth-form-panel">
+        <form className="auth-form" onSubmit={submit}>
+          <div className="auth-mobile-brand"><span><ChefHat /></span><b>CARDÁPIO CLOUD</b></div>
+          <p>ENTRAR NO SISTEMA</p>
+          <h2>Bem-vindo de volta</h2>
+          <span className="auth-subtitle">Informe seus dados para acessar o painel.</span>
+          <label><span>E-MAIL</span><div><Mail /><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="seu@email.com" autoComplete="email" required /></div></label>
+          <label><span>SENHA</span><div><LockKeyhole /><input type={showPassword ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} placeholder="Digite sua senha" autoComplete="current-password" required /><button type="button" onClick={() => setShowPassword(value => !value)} aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}>{showPassword ? <EyeOff /> : <Eye />}</button></div></label>
+          <button className="auth-forgot" type="button" onClick={resetPassword}>Esqueci minha senha</button>
+          {error && <div className="auth-message error">{error}</div>}
+          {message && <div className="auth-message success">{message}</div>}
+          <button className="auth-submit" type="submit" disabled={busy}>{busy ? "ENTRANDO..." : <>ENTRAR <ArrowRight /></>}</button>
+          {!isSupabaseConfigured && <div className="auth-demo"><b>ACESSO DE DEMONSTRAÇÃO</b><span>admin@cardapiocloud.com</span><span>Senha: demo1234</span><button type="button" onClick={() => { setEmail("admin@cardapiocloud.com"); setPassword("demo1234"); }}>PREENCHER DADOS</button></div>}
+          <small className="auth-footnote">Ao entrar, você concorda com os termos de uso e a política de privacidade.</small>
+        </form>
+      </section>
+    </main>
+  );
+}
