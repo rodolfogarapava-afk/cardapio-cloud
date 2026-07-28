@@ -15,7 +15,7 @@ export const useAppAuth = () => useContext(AuthContext);
 
 const demoStorageKey = "cardapio-cloud-demo-session";
 
-export default function AuthGate({ children }: { children: ReactNode }) {
+export default function AuthGate({ children, area = "sistema" }: { children: ReactNode; area?: "admin" | "cliente" | "sistema" }) {
   const [user, setUser] = useState<AuthContextValue["user"] | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -46,7 +46,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
 
   if (loading) return <AuthLoading />;
   if (!user) {
-    return <LoginScreen onDemoLogin={(email) => {
+    return <LoginScreen area={area} onDemoLogin={(email) => {
       sessionStorage.setItem(demoStorageKey, "active");
       setUser({ id: "demo-admin", email });
     }} />;
@@ -59,7 +59,7 @@ function AuthLoading() {
   return <main className="auth-screen"><div className="auth-loading"><span><ChefHat /></span><p>Verificando acesso...</p></div></main>;
 }
 
-function LoginScreen({ onDemoLogin }: { onDemoLogin: (email: string) => void }) {
+function LoginScreen({ onDemoLogin, area }: { onDemoLogin: (email: string) => void; area: "admin" | "cliente" | "sistema" }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -118,9 +118,9 @@ function LoginScreen({ onDemoLogin }: { onDemoLogin: (email: string) => void }) 
       <section className="auth-form-panel">
         <form className="auth-form" onSubmit={submit}>
           <div className="auth-mobile-brand"><span><ChefHat /></span><b>CARDÁPIO CLOUD</b></div>
-          <p>ENTRAR NO SISTEMA</p>
-          <h2>Bem-vindo de volta</h2>
-          <span className="auth-subtitle">Informe seus dados para acessar o painel.</span>
+          <p>{area === "admin" ? "ADMINISTRAÇÃO DA PLATAFORMA" : area === "cliente" ? "ÁREA DO CLIENTE" : "ENTRAR NO SISTEMA"}</p>
+          <h2>{area === "admin" ? "Acesso administrativo" : "Bem-vindo de volta"}</h2>
+          <span className="auth-subtitle">{area === "cliente" ? "Entre para acessar a operação da sua loja." : "Informe seus dados para acessar o painel."}</span>
           <label><span>E-MAIL</span><div><Mail /><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="seu@email.com" autoComplete="email" required /></div></label>
           <label><span>SENHA</span><div><LockKeyhole /><input type={showPassword ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} placeholder="Digite sua senha" autoComplete="current-password" required /><button type="button" onClick={() => setShowPassword(value => !value)} aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}>{showPassword ? <EyeOff /> : <Eye />}</button></div></label>
           <button className="auth-forgot" type="button" onClick={resetPassword}>Esqueci minha senha</button>

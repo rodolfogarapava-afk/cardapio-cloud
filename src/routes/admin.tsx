@@ -19,8 +19,8 @@ export const Route = createFileRoute("/admin")({
 
 function AdminPage() {
   return (
-    <AuthGate>
-      <SaaSPlatform>
+    <AuthGate area="admin">
+      <SaaSPlatform area="admin">
         <RestaurantApp />
       </SaaSPlatform>
     </AuthGate>

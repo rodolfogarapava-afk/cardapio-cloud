@@ -68,7 +68,7 @@ function statusLabel(status: SubscriptionStatus) {
   return { active: "Em dia", past_due: "Em atraso", blocked: "Bloqueado", trial: "Teste grátis", canceled: "Cancelado" }[status];
 }
 
-export default function SaaSPlatform({ children }: { children: ReactNode }) {
+export default function SaaSPlatform({ children, area = "auto" }: { children: ReactNode; area?: "admin" | "cliente" | "auto" }) {
   const auth = useAppAuth();
   const [role, setRole] = useState<"loading" | "master" | "tenant">("loading");
   const [tenantId, setTenantId] = useState("");
@@ -103,12 +103,19 @@ export default function SaaSPlatform({ children }: { children: ReactNode }) {
         due:formatDate(row.due_date),orders:0,printer:row.printer_status as "online"|"offline",
       }));
       setTenants(mapped);
-      if(isMaster)setRole("master");
+      if(area==="admin"){
+        if(!isMaster){setLoadError("Este acesso é exclusivo para o administrador da plataforma.");return}
+        setRole("master");
+      } else if(area==="cliente"){
+        const ownTenant = isMaster ? mapped[0] : mapped[0];
+        if(!ownTenant){setLoadError("Este usuário ainda não está vinculado a uma loja.");return}
+        setTenantId(ownTenant.id);setRole("tenant");
+      } else if(isMaster)setRole("master");
       else {setTenantId(mapped[0]?.id||"");setRole("tenant")}
     };
     load();
     return()=>{cancelled=true};
-  },[auth?.user.id]);
+  },[auth?.user.id,area]);
 
   const tenant = tenants.find((item) => item.id === tenantId) ?? tenants[0];
   const setTenantStatus = async (id: string, status: SubscriptionStatus) => {
@@ -148,7 +155,7 @@ export default function SaaSPlatform({ children }: { children: ReactNode }) {
       : null;
 
   return (
-    <TenantNavigationContext.Provider value={{ page: tenantPage, setPage: setTenantPage, content: tenantContent, status: tenant.status, onExit: () => role==="tenant"&&auth?.user.email==="admin@admin.com"?setRole("master"):auth?.signOut() }}>
+    <TenantNavigationContext.Provider value={{ page: tenantPage, setPage: setTenantPage, content: tenantContent, status: tenant.status, onExit: () => area==="auto"&&role==="tenant"&&auth?.user.email==="admin@admin.com"?setRole("master"):auth?.signOut() }}>
     <div className="saas-tenant-shell">
       {tenant.status === "past_due" && (
         <button className="saas-overdue-banner" onClick={() => setTenantPage("billing")}>
