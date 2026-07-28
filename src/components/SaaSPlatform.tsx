@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import QRCode from "react-qr-code";
 import {
   Activity,
@@ -60,6 +60,17 @@ const initialJobs: PrintJob[] = [
 const tenantStore = "cardapio-cloud-tenants-v1";
 const jobsStore = "cardapio-cloud-jobs-v1";
 
+type TenantNavigation = {
+  page: "operation" | "billing" | "printing";
+  setPage: (page: "operation" | "billing" | "printing") => void;
+  content: ReactNode;
+  status: SubscriptionStatus;
+  onExit: () => void;
+};
+
+const TenantNavigationContext = createContext<TenantNavigation | null>(null);
+export const useTenantNavigation = () => useContext(TenantNavigationContext);
+
 function money(value: number) {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
@@ -118,18 +129,23 @@ export default function SaaSPlatform({ children }: { children: ReactNode }) {
     return <BlockedScreen tenant={tenant} onPaid={() => setTenantStatus(tenant.id, "active")} onExit={() => setRole("landing")} />;
   }
 
+  const tenantContent = tenantPage === "billing"
+    ? <TenantBilling tenant={tenant} onBlock={() => setTenantStatus(tenant.id, "blocked")} />
+    : tenantPage === "printing"
+      ? <PrintingCenter tenant={tenant} jobs={jobs} setJobs={setJobs} />
+      : null;
+
   return (
+    <TenantNavigationContext.Provider value={{ page: tenantPage, setPage: setTenantPage, content: tenantContent, status: tenant.status, onExit: () => setRole("landing") }}>
     <div className="saas-tenant-shell">
-      <TenantBar tenant={tenant} page={tenantPage} setPage={setTenantPage} onExit={() => setRole("landing")} />
       {tenant.status === "past_due" && (
         <button className="saas-overdue-banner" onClick={() => setTenantPage("billing")}>
           <Clock3 /> Sua mensalidade venceu em {tenant.due}. Regularize para evitar a suspensão. <strong>Ver cobrança <ArrowRight /></strong>
         </button>
       )}
-      {tenantPage === "operation" && children}
-      {tenantPage === "billing" && <TenantBilling tenant={tenant} onBlock={() => setTenantStatus(tenant.id, "blocked")} />}
-      {tenantPage === "printing" && <PrintingCenter tenant={tenant} jobs={jobs} setJobs={setJobs} />}
+      {children}
     </div>
+    </TenantNavigationContext.Provider>
   );
 }
 
@@ -243,10 +259,6 @@ function BillingTable({ tenants, onStatus }: { tenants: Tenant[]; onStatus: (id:
 
 function MasterPrinting({ tenants, jobs }: { tenants: Tenant[]; jobs: PrintJob[] }) {
   return <><div className="saas-kpis"><Kpi icon={<Wifi/>} label="Agentes conectados" value={String(tenants.filter(t=>t.printer==="online").length)} detail="conexão HTTPS ativa" tone="green"/><Kpi icon={<Printer/>} label="Impressos hoje" value={String(jobs.filter(j=>j.status==="printed").length)} detail="confirmação do spooler" tone="blue"/><Kpi icon={<RefreshCw/>} label="Na fila" value={String(jobs.filter(j=>j.status==="pending").length)} detail="aguardando agente" tone="yellow"/><Kpi icon={<XCircle/>} label="Falhas" value={String(jobs.filter(j=>j.status==="failed").length)} detail="tentativa automática" tone="purple"/></div><section className="saas-panel saas-table-panel"><PanelTitle title="Fila global" subtitle="Últimos trabalhos enviados aos agentes locais"/><JobTable jobs={jobs} tenants={tenants}/></section></>;
-}
-
-function TenantBar({ tenant, page, setPage, onExit }: { tenant: Tenant; page: "operation"|"billing"|"printing"; setPage:(p:"operation"|"billing"|"printing")=>void; onExit:()=>void }) {
-  return <header className="saas-tenant-bar"><div className="saas-brand"><span><ChefHat/></span><div><strong>Cardápio Cloud</strong><small>{tenant.name}</small></div></div><nav><button className={page==="operation"?"active":""} onClick={()=>setPage("operation")}><Store/> Operação</button><button className={page==="billing"?"active":""} onClick={()=>setPage("billing")}><CreditCard/> Minha assinatura</button><button className={page==="printing"?"active":""} onClick={()=>setPage("printing")}><Printer/> Impressão</button></nav><div className="saas-tenant-session"><Status status={tenant.status}/><button onClick={onExit}><LogOut/> Sair da demo</button></div></header>;
 }
 
 function TenantBilling({ tenant, onBlock }: { tenant: Tenant; onBlock:()=>void }) {

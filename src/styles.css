@@ -177,6 +177,9 @@ button { cursor:pointer;touch-action:manipulation; }
 .side-bottom button { background:#ffffff06;border:1px solid #ffffff18;color:#d7d7dc;border-radius:9px;padding:12px;display:flex;justify-content:center;gap:8px;font-weight:600; }
 .nav-list button.management-entry { margin-top:8px;border-color:#ffc90044;background:linear-gradient(135deg,#ffc90018,#ffffff05);color:var(--yellow); }
 .nav-list button.system-nav{min-height:66px}.nav-list button.system-nav:first-of-type{margin-top:8px;border-top:1px solid #ffffff0e}
+.platform-nav-divider{height:1px;background:#ffffff12;margin:9px 8px 7px}
+.nav-list button.platform-nav{min-height:58px}
+.nav-list button.platform-nav:last-child{color:#8f949f}
 .side-bottom .about { background:transparent;border:0;color:#999ea8; }
 .close-menu { display:none; }
 .content { position:relative;min-width:0;padding:30px 34px 90px;overflow:hidden;background:#111318; }

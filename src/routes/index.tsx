@@ -20,11 +20,15 @@ import {
   Wine,
   X,
   ChevronDown,
+  CreditCard,
+  Printer,
+  LogOut,
 } from "lucide-react";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { sendOrderTicketToPrinter, sendOrderUpdateToPrinter, sendReceiptToPrinter, type OrderChange } from "@/lib/printReceipt";
 import { generateReportPdf } from "@/lib/reportPdf";
 import { initAudioContext, playNotificationSound } from "@/lib/sounds";
+import { useTenantNavigation } from "@/components/SaaSPlatform";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -104,6 +108,7 @@ const nav = [
 ];
 
 export function RestaurantApp() {
+  const tenantNavigation = useTenantNavigation();
   const [products, setProducts] = useState<Product[]>(initialProducts);
   const [categories, setCategories] = useState<string[]>(nav.map((item) => item.label));
   const [activeMain, setActiveMain] = useState("Espetinhos");
@@ -309,8 +314,9 @@ export function RestaurantApp() {
           <button className="close-menu" onClick={() => setMenuOpen(false)} aria-label="Fechar menu"><X /></button>
           <div className="nav-list">
             <button
-              className={systemView === null ? "active" : ""}
+              className={tenantNavigation?.page !== "operation" ? "" : systemView === null ? "active" : ""}
               onClick={() => {
+                tenantNavigation?.setPage("operation");
                 setSystemView(null);
                 setQuery("");
                 setSearchOpen(false);
@@ -319,21 +325,33 @@ export function RestaurantApp() {
             >
               <Utensils size={25} strokeWidth={1.7} /><span>Cardápio</span>
             </button>
-            <button className={systemView === "commands" ? "active system-nav" : "system-nav"} onClick={() => { setSystemView("commands"); setMenuOpen(false); }}>
+            <button className={systemView === "commands" ? "active system-nav" : "system-nav"} onClick={() => { tenantNavigation?.setPage("operation"); setSystemView("commands"); setMenuOpen(false); }}>
               <ShoppingBag size={24} /><span>Comandas</span>
             </button>
-            <button className={systemView === "products" ? "active system-nav" : "system-nav"} onClick={() => { setSystemView("products"); setMenuOpen(false); }}>
+            <button className={systemView === "products" ? "active system-nav" : "system-nav"} onClick={() => { tenantNavigation?.setPage("operation"); setSystemView("products"); setMenuOpen(false); }}>
               <Tags size={24} /><span>Produtos</span>
             </button>
-            <button className={systemView === "stock" ? "active system-nav" : "system-nav"} onClick={() => { setSystemView("stock"); setMenuOpen(false); }}>
+            <button className={systemView === "stock" ? "active system-nav" : "system-nav"} onClick={() => { tenantNavigation?.setPage("operation"); setSystemView("stock"); setMenuOpen(false); }}>
               <Store size={24} /><span>Estoque</span>
             </button>
-            <button className={systemView === "cash" ? "active system-nav" : "system-nav"} onClick={() => { setSystemView("cash"); setMenuOpen(false); }}>
+            <button className={systemView === "cash" ? "active system-nav" : "system-nav"} onClick={() => { tenantNavigation?.setPage("operation"); setSystemView("cash"); setMenuOpen(false); }}>
               <Banknote size={24} /><span>Caixa</span>
             </button>
-            <button className={systemView === "reports" ? "active system-nav" : "system-nav"} onClick={() => { setSystemView("reports"); setMenuOpen(false); }}>
+            <button className={systemView === "reports" ? "active system-nav" : "system-nav"} onClick={() => { tenantNavigation?.setPage("operation"); setSystemView("reports"); setMenuOpen(false); }}>
               <BarChart3 size={24} /><span>Relatórios</span>
             </button>
+            {tenantNavigation && <>
+              <div className="platform-nav-divider" />
+              <button className={tenantNavigation.page === "billing" ? "active system-nav platform-nav" : "system-nav platform-nav"} onClick={() => { tenantNavigation.setPage("billing"); setSystemView(null); setMenuOpen(false); }}>
+                <CreditCard size={24} /><span>Assinatura</span>
+              </button>
+              <button className={tenantNavigation.page === "printing" ? "active system-nav platform-nav" : "system-nav platform-nav"} onClick={() => { tenantNavigation.setPage("printing"); setSystemView(null); setMenuOpen(false); }}>
+                <Printer size={24} /><span>Impressão</span>
+              </button>
+              <button className="system-nav platform-nav" onClick={tenantNavigation.onExit}>
+                <LogOut size={24} /><span>Sair</span>
+              </button>
+            </>}
           </div>
           <div className="side-bottom">
             <button className="about" onClick={() => { setModal("about"); setMenuOpen(false); }}><Info size={17} /> Sobre</button>
@@ -341,7 +359,8 @@ export function RestaurantApp() {
         </aside>
 
         <section className="content">
-          {systemView === "products" ? <IntegratedProducts products={products} categories={categories} onChange={persistProducts} onAddCategory={(name)=>persistCategories([...categories,name])} onRenameCategory={renameCategory} onDeleteCategory={(name)=>{const next=categories.filter((c)=>c!==name);persistCategories(next);if(activeMain===name)setActiveMain(next[0]||"")}} /> :
+          {tenantNavigation?.page !== "operation" ? tenantNavigation.content :
+          systemView === "products" ? <IntegratedProducts products={products} categories={categories} onChange={persistProducts} onAddCategory={(name)=>persistCategories([...categories,name])} onRenameCategory={renameCategory} onDeleteCategory={(name)=>{const next=categories.filter((c)=>c!==name);persistCategories(next);if(activeMain===name)setActiveMain(next[0]||"")}} /> :
           systemView === "stock" ? <IntegratedStock products={products} onChange={persistProducts} /> :
           systemView === "commands" ? <IntegratedCommands commands={savedCommands} setCommands={setSavedCommands} products={products} adjustStock={adjustStock} onCharge={(command) => { setCustomerName(command.name); setPaymentTotal(command.total); setPaymentItems(command.items); setPaymentCommandId(command.id); setPaymentCommandBackup(command); setModal("payment"); }} /> :
           systemView === "cash" ? <IntegratedCash sales={salesHistory} expenses={expenses} onAddExpense={() => { const description=window.prompt("Descrição do custo"); if(!description)return; const value=window.prompt("Valor do custo"); const amount=Number((value||"").replace(",",".")); if(amount>0)setExpenses((all)=>[...all,{id:Date.now(),description,amount,createdAt:Date.now()}]); }} /> :
