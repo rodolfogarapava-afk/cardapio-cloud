@@ -404,7 +404,7 @@ export function RestaurantApp() {
 
         <section className="content">
           {tenantNavigation && tenantNavigation.page !== "operation" ? tenantNavigation.content :
-          systemView === "products" ? <IntegratedProducts products={products} categories={categories} onChange={persistProducts} onAddCategory={(name)=>persistCategories([...categories,name])} onRenameCategory={renameCategory} onDeleteCategory={(name)=>{const next=categories.filter((c)=>c!==name);persistCategories(next);if(activeMain===name)setActiveMain(next[0]||"")}} /> :
+          systemView === "products" ? <IntegratedProducts tenantId={tenantNavigation?.tenantId} products={products} categories={categories} onChange={persistProducts} onAddCategory={(name)=>persistCategories([...categories,name])} onRenameCategory={renameCategory} onDeleteCategory={(name)=>{const next=categories.filter((c)=>c!==name);persistCategories(next);if(activeMain===name)setActiveMain(next[0]||"")}} /> :
           systemView === "stock" ? <IntegratedStock products={products} onChange={persistProducts} /> :
           systemView === "commands" ? <IntegratedCommands commands={savedCommands} setCommands={setSavedCommands} products={products} adjustStock={adjustStock} onCharge={(command) => { setCustomerName(command.name); setPaymentTotal(command.total); setPaymentItems(command.items); setPaymentCommandId(command.id); setPaymentCommandBackup(command); setModal("payment"); }} /> :
           systemView === "cash" ? <IntegratedCash sales={salesHistory} expenses={expenses} sync={operationsSync} onAddExpense={(description,amount) => setExpenses((all)=>[...all,{id:Date.now(),description,amount,createdAt:Date.now()}])} onDeleteExpense={(id)=>setExpenses((all)=>all.filter(expense=>expense.id!==id))} /> :
@@ -805,7 +805,7 @@ function mergeOpenCommands(commands:IntegratedCommand[]){
   return merged;
 }
 
-function IntegratedProducts({products,categories,onChange,onAddCategory,onRenameCategory,onDeleteCategory}:{products:Product[];categories:string[];onChange:(products:Product[])=>void;onAddCategory:(name:string)=>void;onRenameCategory:(oldName:string,newName:string)=>void;onDeleteCategory:(name:string)=>void}) {
+function IntegratedProducts({tenantId,products,categories,onChange,onAddCategory,onRenameCategory,onDeleteCategory}:{tenantId?:string|null;products:Product[];categories:string[];onChange:(products:Product[])=>void;onAddCategory:(name:string)=>void;onRenameCategory:(oldName:string,newName:string)=>void;onDeleteCategory:(name:string)=>void}) {
   const blank={id:0,name:"",price:"",category:categories[0]||"",description:"",image:"",tag:"",trackStock:true,preparationPointEnabled:false,stock:"0",minStock:"5"};
   const [form,setForm]=useState(blank);
   const [drawerOpen,setDrawerOpen]=useState(false);
@@ -817,9 +817,14 @@ function IntegratedProducts({products,categories,onChange,onAddCategory,onRename
   const [categoryToDelete,setCategoryToDelete]=useState<string|null>(null);
   const [productError,setProductError]=useState("");
   const [categoryNotice,setCategoryNotice]=useState("");
+  const [imageUploading,setImageUploading]=useState(false);
 
-  const selectLocalImage=(file?:File)=>{
+  const selectLocalImage=async(file?:File)=>{
     if(!file)return;
+    if(!supabase||!tenantId){
+      setProductError("Entre na conta da loja para enviar imagens à nuvem.");
+      return;
+    }
     if(!file.type.startsWith("image/")){
       setProductError("Selecione um arquivo de imagem válido.");
       return;
@@ -831,15 +836,28 @@ function IntegratedProducts({products,categories,onChange,onAddCategory,onRename
     const reader=new FileReader();
     reader.onload=()=>{
       const image=new Image();
-      image.onload=()=>{
+      image.onload=async()=>{
         const maxSize=1000;
         const scale=Math.min(1,maxSize/Math.max(image.width,image.height));
         const canvas=document.createElement("canvas");
         canvas.width=Math.max(1,Math.round(image.width*scale));
         canvas.height=Math.max(1,Math.round(image.height*scale));
         canvas.getContext("2d")?.drawImage(image,0,0,canvas.width,canvas.height);
-        setProductError("");
-        setForm((current)=>({...current,image:canvas.toDataURL("image/jpeg",.82)}));
+        setImageUploading(true);
+        try{
+          const blob=await new Promise<Blob>((resolve,reject)=>
+            canvas.toBlob((value)=>value?resolve(value):reject(new Error("Falha ao preparar imagem")),"image/jpeg",.82));
+          const path=`${tenantId}/${crypto.randomUUID()}.jpg`;
+          const {error}=await supabase.storage.from("product-images").upload(path,blob,{contentType:"image/jpeg",cacheControl:"31536000"});
+          if(error)throw error;
+          const {data}=supabase.storage.from("product-images").getPublicUrl(path);
+          setProductError("");
+          setForm((current)=>({...current,image:data.publicUrl}));
+        }catch(error){
+          setProductError(`Não foi possível enviar a imagem à nuvem: ${error instanceof Error?error.message:"erro desconhecido"}`);
+        }finally{
+          setImageUploading(false);
+        }
       };
       image.onerror=()=>setProductError("Não foi possível abrir essa imagem.");
       image.src=String(reader.result);
@@ -942,10 +960,10 @@ function IntegratedProducts({products,categories,onChange,onAddCategory,onRename
           {productError&&<div className="drawer-form-alert" role="alert">{productError}</div>}
           <label className="field">Descrição<textarea rows={3} value={form.description} onChange={(e)=>setForm({...form,description:e.target.value})} placeholder="Ingredientes e detalhes"/></label>
           <label className="field">Imagem
-            <input value={form.image.startsWith("data:")?"Imagem enviada do dispositivo":form.image} onChange={(e)=>setForm({...form,image:e.target.value})} placeholder="Cole uma URL: https://..."/>
+            <input value={form.image} onChange={(e)=>setForm({...form,image:e.target.value})} placeholder="Cole uma URL: https://..."/>
             <span className="local-image-picker">
-              <input type="file" accept="image/*" onChange={(e)=>selectLocalImage(e.target.files?.[0])}/>
-              <b>ESCOLHER IMAGEM DO DISPOSITIVO</b>
+              <input type="file" accept="image/*" disabled={imageUploading} onChange={(e)=>selectLocalImage(e.target.files?.[0])}/>
+              <b>{imageUploading?"ENVIANDO PARA A NUVEM...":"ESCOLHER IMAGEM DO DISPOSITIVO"}</b>
               <small>JPG, PNG ou WEBP · máximo 8 MB</small>
             </span>
           </label>
@@ -969,7 +987,7 @@ function IntegratedProducts({products,categories,onChange,onAddCategory,onRename
         <footer className="drawer-foot">
           {editing&&<button className="danger-btn" onClick={()=>remove(editing!)}>Remover</button>}
           <button className="ghost-btn" onClick={closeDrawer}>Cancelar</button>
-          <button className="primary-btn" onClick={submit}>{editing?"Salvar":"Adicionar"}</button>
+          <button className="primary-btn" disabled={imageUploading} onClick={submit}>{imageUploading?"Enviando imagem...":editing?"Salvar":"Adicionar"}</button>
         </footer>
       </aside>
     </div>}
