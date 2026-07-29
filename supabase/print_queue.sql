@@ -85,7 +85,7 @@ create policy "members read print jobs" on public.print_jobs
 create or replace function public.queue_print_job(
   p_tenant_id uuid, p_command_id bigint, p_payload jsonb, p_job_kind text default 'new_order'
 ) returns uuid
-language plpgsql security definer set search_path=public
+language plpgsql security definer set search_path=public,extensions
 as $$
 declare v_id uuid;
 begin
@@ -105,7 +105,7 @@ end $$;
 create or replace function public.create_printer_activation_code(
   p_tenant_id uuid, p_agent_name text default 'Cozinha'
 ) returns text
-language plpgsql security definer set search_path=public
+language plpgsql security definer set search_path=public,extensions
 as $$
 declare v_code text;
 begin
@@ -124,7 +124,7 @@ end $$;
 
 create or replace function public.activate_printer_agent(p_code text,p_device_name text)
 returns table(agent_id uuid,agent_token text,tenant_id uuid,tenant_name text)
-language plpgsql security definer set search_path=public
+language plpgsql security definer set search_path=public,extensions
 as $$
 declare v_activation public.printer_activation_codes%rowtype; v_token text; v_agent uuid;
 begin
@@ -142,7 +142,7 @@ begin
 end $$;
 
 create or replace function public.printer_agent_heartbeat(p_token text,p_printer_name text)
-returns boolean language plpgsql security definer set search_path=public
+returns boolean language plpgsql security definer set search_path=public,extensions
 as $$
 declare v_tenant uuid;
 begin
@@ -156,7 +156,7 @@ end $$;
 
 create or replace function public.claim_print_jobs(p_token text,p_limit integer default 5)
 returns table(job_id uuid,payload jsonb)
-language plpgsql security definer set search_path=public
+language plpgsql security definer set search_path=public,extensions
 as $$
 declare v_agent uuid; v_tenant uuid;
 begin
@@ -179,7 +179,7 @@ end $$;
 
 create or replace function public.complete_print_job(
   p_token text,p_job_id uuid,p_success boolean,p_error text default null
-) returns boolean language plpgsql security definer set search_path=public
+) returns boolean language plpgsql security definer set search_path=public,extensions
 as $$
 declare v_agent uuid; v_updated uuid;
 begin
