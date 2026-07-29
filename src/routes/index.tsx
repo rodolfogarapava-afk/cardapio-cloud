@@ -760,7 +760,7 @@ function mergeOpenCommands(commands:IntegratedCommand[]){
 }
 
 function IntegratedProducts({products,categories,onChange,onAddCategory,onRenameCategory,onDeleteCategory}:{products:Product[];categories:string[];onChange:(products:Product[])=>void;onAddCategory:(name:string)=>void;onRenameCategory:(oldName:string,newName:string)=>void;onDeleteCategory:(name:string)=>void}) {
-  const blank={id:0,name:"",price:"",category:categories[0]||"Entradas",description:"",image:"",tag:"",trackStock:true,stock:"0",minStock:"5"};
+  const blank={id:0,name:"",price:"",category:categories[0]||"",description:"",image:"",tag:"",trackStock:true,stock:"0",minStock:"5"};
   const [form,setForm]=useState(blank);
   const [drawerOpen,setDrawerOpen]=useState(false);
   const [editing,setEditing]=useState<number|null>(null);
@@ -769,17 +769,33 @@ function IntegratedProducts({products,categories,onChange,onAddCategory,onRename
   const [manageOpen,setManageOpen]=useState(false);
   const [newCategory,setNewCategory]=useState("");
   const [categoryToDelete,setCategoryToDelete]=useState<string|null>(null);
+  const [productError,setProductError]=useState("");
+  const [categoryNotice,setCategoryNotice]=useState("");
 
   const visible=products
     .filter((p)=>filter==="Todos"||p.category===filter)
     .filter((p)=>!query.trim()||p.name.toLowerCase().includes(query.trim().toLowerCase())||p.description.toLowerCase().includes(query.trim().toLowerCase()));
 
-  const openNew=()=>{setEditing(null);setForm(blank);setDrawerOpen(true)};
-  const openEdit=(product:Product)=>{setEditing(product.id);setForm({id:product.id,name:product.name,price:String(product.price).replace(".",","),category:product.category,description:product.description,image:product.image,tag:product.tag||"",trackStock:!!product.trackStock,stock:String(product.stock||0),minStock:String(product.minStock||0)});setDrawerOpen(true)};
-  const closeDrawer=()=>{setDrawerOpen(false);setEditing(null);setForm(blank)};
+  const openNew=()=>{
+    if(!categories.length){
+      setCategoryNotice("Crie uma categoria antes de adicionar o primeiro produto.");
+      setManageOpen(true);
+      return;
+    }
+    setEditing(null);setProductError("");setForm({...blank,category:categories[0]});setDrawerOpen(true);
+  };
+  const openEdit=(product:Product)=>{setProductError("");setEditing(product.id);setForm({id:product.id,name:product.name,price:String(product.price).replace(".",","),category:product.category,description:product.description,image:product.image,tag:product.tag||"",trackStock:!!product.trackStock,stock:String(product.stock||0),minStock:String(product.minStock||0)});setDrawerOpen(true)};
+  const closeDrawer=()=>{setDrawerOpen(false);setEditing(null);setProductError("");setForm(blank)};
   const submit=()=>{
     const price=Number(form.price.replace(",","."));
-    if(!form.name.trim()||!Number.isFinite(price)||price<=0||!form.category)return;
+    if(!categories.length||!form.category||!categories.includes(form.category)){
+      setProductError("Crie uma categoria ou selecione uma categoria existente antes de salvar o produto.");
+      return;
+    }
+    if(!form.name.trim()||!Number.isFinite(price)||price<=0){
+      setProductError("Preencha o nome e informe um preço válido para salvar o produto.");
+      return;
+    }
     const item:Product={id:editing??Math.max(0,...products.map((p)=>p.id))+1,name:form.name.trim(),price,category:form.category,description:form.description.trim()||"Produto preparado com ingredientes selecionados.",image:form.image.trim()||"https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=900&q=88",tag:form.tag.trim()||undefined,trackStock:form.trackStock,stock:Math.max(0,Number(form.stock)||0),minStock:Math.max(0,Number(form.minStock)||0)};
     onChange(editing?products.map((p)=>p.id===editing?item:p):[...products,item]);
     closeDrawer();
@@ -795,7 +811,7 @@ function IntegratedProducts({products,categories,onChange,onAddCategory,onRename
       </div>
       <div className="catalog-actions">
         <div className="catalog-search"><Search size={15}/><input placeholder="Buscar produto..." value={query} onChange={(e)=>setQuery(e.target.value)}/></div>
-        <button className="ghost-btn" onClick={()=>setManageOpen(true)}><Tags size={15}/> Categorias</button>
+        <button className="ghost-btn" onClick={()=>{setCategoryNotice("");setManageOpen(true)}}><Tags size={15}/> Categorias</button>
         <button className="primary-btn" onClick={openNew}><Plus size={16}/> Novo produto</button>
       </div>
     </header>
@@ -845,8 +861,9 @@ function IntegratedProducts({products,categories,onChange,onAddCategory,onRename
           <label className="field">Nome<input value={form.name} onChange={(e)=>setForm({...form,name:e.target.value})} placeholder="Ex.: Burger da Casa"/></label>
           <div className="field-row">
             <label className="field">Preço<input value={form.price} inputMode="decimal" onChange={(e)=>setForm({...form,price:e.target.value})} placeholder="39,90"/></label>
-            <label className="field">Categoria<select value={form.category} onChange={(e)=>setForm({...form,category:e.target.value})}>{categories.map((c)=><option key={c}>{c}</option>)}</select></label>
+            <label className="field">Categoria<select value={form.category} onChange={(e)=>{setProductError("");setForm({...form,category:e.target.value})}}><option value="" disabled>Selecione uma categoria</option>{categories.map((c)=><option key={c}>{c}</option>)}</select></label>
           </div>
+          {productError&&<div className="drawer-form-alert" role="alert">{productError}</div>}
           <label className="field">Descrição<textarea rows={3} value={form.description} onChange={(e)=>setForm({...form,description:e.target.value})} placeholder="Ingredientes e detalhes"/></label>
           <label className="field">Imagem (URL)<input value={form.image} onChange={(e)=>setForm({...form,image:e.target.value})} placeholder="https://..."/></label>
           <label className="field">Badge<input value={form.tag} onChange={(e)=>setForm({...form,tag:e.target.value})} placeholder="NOVO, DESTAQUE..."/></label>
@@ -864,15 +881,16 @@ function IntegratedProducts({products,categories,onChange,onAddCategory,onRename
       </aside>
     </div>}
 
-    {manageOpen&&<div className="modal-backdrop" onMouseDown={()=>setManageOpen(false)}>
+    {manageOpen&&<div className="modal-backdrop" onMouseDown={()=>{setManageOpen(false);setCategoryNotice("")}}>
       <section className="modal categories-modal" onMouseDown={(e)=>e.stopPropagation()}>
-        <button className="modal-close" onClick={()=>setManageOpen(false)} aria-label="Fechar"><X/></button>
+        <button className="modal-close" onClick={()=>{setManageOpen(false);setCategoryNotice("")}} aria-label="Fechar"><X/></button>
         <span className="modal-icon"><Tags/></span>
         <h3>Categorias</h3>
         <p>Organize as seções do cardápio.</p>
+        {categoryNotice&&<div className="category-required-alert" role="alert">{categoryNotice}</div>}
         <div className="cat-new">
-          <input value={newCategory} onChange={(e)=>setNewCategory(e.target.value)} placeholder="Nova categoria" onKeyDown={(e)=>{if(e.key==="Enter"){const clean=newCategory.trim();if(clean&&!categories.some((c)=>c.toLowerCase()===clean.toLowerCase())){onAddCategory(clean);setNewCategory("")}}}}/>
-          <button className="primary-btn" onClick={()=>{const clean=newCategory.trim();if(clean&&!categories.some((c)=>c.toLowerCase()===clean.toLowerCase())){onAddCategory(clean);setNewCategory("")}}}><Plus size={14}/></button>
+          <input value={newCategory} onChange={(e)=>setNewCategory(e.target.value)} placeholder="Nova categoria" onKeyDown={(e)=>{if(e.key==="Enter"){const clean=newCategory.trim();if(clean&&!categories.some((c)=>c.toLowerCase()===clean.toLowerCase())){onAddCategory(clean);setNewCategory("");setCategoryNotice("")}}}}/>
+          <button className="primary-btn" onClick={()=>{const clean=newCategory.trim();if(clean&&!categories.some((c)=>c.toLowerCase()===clean.toLowerCase())){onAddCategory(clean);setNewCategory("");setCategoryNotice("")}}}><Plus size={14}/></button>
         </div>
         <div className="cat-list">{categories.map((category)=>{
           const count=products.filter((p)=>p.category===category).length;

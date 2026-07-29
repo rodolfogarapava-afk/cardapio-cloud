@@ -570,10 +570,12 @@ button { cursor:pointer;touch-action:manipulation; }
 .drawer-switch input:checked+span::before{transform:translateX(16px);background:#111}
 .drawer-foot{display:flex;gap:8px;justify-content:flex-end;padding:14px 22px 22px;border-top:1px solid #ffffff08}
 .drawer-foot .danger-btn{margin-right:auto}
+.drawer-form-alert,.category-required-alert{border:1px solid #f5c51855;background:#f5c5180d;color:#f7d75c;border-radius:9px;padding:10px 12px;font-size:11px;line-height:1.5;font-weight:600}
 
 /* Categories modal */
 .categories-modal{max-width:420px;text-align:left}
 .categories-modal h3,.categories-modal>p{text-align:center}
+.category-required-alert{margin:14px 0 4px;text-align:left}
 .cat-new{display:flex;gap:6px;margin:12px 0 14px}
 .cat-new input{flex:1;background:#191b21;border:1px solid #ffffff10;border-radius:9px;padding:10px 12px;color:#fff;font-size:12px;outline:none}
 .cat-new input:focus{border-color:var(--yellow)}
