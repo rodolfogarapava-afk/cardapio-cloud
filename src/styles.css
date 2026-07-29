@@ -600,21 +600,32 @@ button { cursor:pointer;touch-action:manipulation; }
 .drawer-add{margin-left:auto;display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;border:1px solid #2a2a2a;background:#141414;color:#f5c518;cursor:pointer}
 .drawer-add:hover{background:#f5c518;color:#0a0a0a}
 .stock-drawer summary{display:flex;align-items:center;gap:10px}
-.stock-modal{max-width:460px;width:100%}
+.modal-overlay{position:fixed;inset:0;z-index:500;display:grid;place-items:center;padding:20px;background:#050609d9;backdrop-filter:blur(6px);overflow-y:auto}
+.stock-modal{width:min(560px,100%);max-width:none;padding:0;text-align:left;overflow:hidden;box-sizing:border-box}
 .stock-modal header{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid #1e1e1e}
 .stock-modal header h3{margin:0;font-size:16px;color:#fff}
-.stock-modal header button{background:none;border:none;color:#888;font-size:22px;cursor:pointer}
+.stock-modal header button{display:grid;place-items:center;width:32px;height:32px;padding:0;background:none;border:none;border-radius:8px;color:#888;font-size:22px;cursor:pointer}
+.stock-modal header button:hover{background:#ffffff0a;color:#fff}
 .stock-modal-body{padding:20px;display:flex;flex-direction:column;gap:14px}
-.stock-modal-body label{display:flex;flex-direction:column;gap:6px;font-size:12px;color:#aaa;font-weight:600}
-.stock-modal-body input,.stock-modal-body select{background:#0f0f0f;border:1px solid #262626;color:#fff;padding:9px 11px;border-radius:8px;font-size:13.5px}
+.stock-modal-body label{display:flex;min-width:0;flex-direction:column;gap:6px;font-size:12px;color:#aaa;font-weight:600}
+.stock-modal-body input,.stock-modal-body select{width:100%;min-width:0;box-sizing:border-box;background:#0f0f0f;border:1px solid #262626;color:#fff;padding:11px 12px;border-radius:8px;font-size:13.5px}
 .stock-modal-body input:focus,.stock-modal-body select:focus{outline:none;border-color:#f5c518}
-.stock-modal-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.stock-modal-row{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,.85fr) minmax(0,.85fr);gap:12px}
 .stock-modal-body .inline-check{flex-direction:row;align-items:center;gap:8px;color:#ddd;font-size:13px;font-weight:500}
+.stock-modal-body .inline-check input{width:16px;height:16px;flex:0 0 16px}
 .stock-modal-hint{margin:0;color:#888;font-size:12px;line-height:1.5}
 .stock-modal footer{display:flex;justify-content:flex-end;gap:10px;padding:14px 20px;border-top:1px solid #1e1e1e}
 .stock-modal footer button{padding:9px 16px;border-radius:8px;border:1px solid #2a2a2a;background:#141414;color:#ddd;font-weight:600;font-size:13px;cursor:pointer}
-.stock-modal footer button.primary{background:#f5c518;border-color:#f5c518;color:#0a0a0a}
+.stock-modal footer button.primary{width:auto;margin-top:0;background:#f5c518;border-color:#f5c518;color:#0a0a0a}
 .stock-modal footer button.primary:disabled{opacity:.4;cursor:not-allowed}
+
+@media (max-width: 560px) {
+  .modal-overlay{place-items:start center;padding:12px}
+  .stock-modal{margin:auto 0}
+  .stock-modal-row{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .stock-modal-row label:first-child{grid-column:1/-1}
+  .stock-modal footer button{flex:1}
+}
 
 /* ===== Mobile UX polish: larger tap targets & readable text ===== */
 @media (max-width: 640px) {
