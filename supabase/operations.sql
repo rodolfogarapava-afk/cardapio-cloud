@@ -29,6 +29,13 @@ create table if not exists public.restaurant_expenses (
   primary key (tenant_id, id)
 );
 
+create table if not exists public.restaurant_catalogs (
+  tenant_id uuid primary key references public.tenants(id) on delete cascade,
+  products jsonb not null default '[]'::jsonb,
+  categories jsonb not null default '[]'::jsonb,
+  updated_at timestamptz not null default now()
+);
+
 create index if not exists restaurant_sales_tenant_sold_at_idx
   on public.restaurant_sales (tenant_id, sold_at desc);
 create index if not exists restaurant_expenses_tenant_spent_at_idx
@@ -37,6 +44,7 @@ create index if not exists restaurant_expenses_tenant_spent_at_idx
 alter table public.restaurant_commands enable row level security;
 alter table public.restaurant_sales enable row level security;
 alter table public.restaurant_expenses enable row level security;
+alter table public.restaurant_catalogs enable row level security;
 
 drop policy if exists "members manage restaurant commands" on public.restaurant_commands;
 create policy "members manage restaurant commands"
@@ -80,6 +88,20 @@ create policy "members manage restaurant expenses"
       and membership.user_id = (select auth.uid())
   ));
 
+drop policy if exists "members manage restaurant catalogs" on public.restaurant_catalogs;
+create policy "members manage restaurant catalogs"
+  on public.restaurant_catalogs for all to authenticated
+  using (exists (
+    select 1 from public.tenant_memberships membership
+    where membership.tenant_id = restaurant_catalogs.tenant_id
+      and membership.user_id = (select auth.uid())
+  ))
+  with check (exists (
+    select 1 from public.tenant_memberships membership
+    where membership.tenant_id = restaurant_catalogs.tenant_id
+      and membership.user_id = (select auth.uid())
+  ));
+
 do $$
 declare
   admin_id uuid := 'b23ab4c7-e4dd-4c85-b796-ea845a9e52f1';
@@ -120,5 +142,10 @@ end $$;
 do $$
 begin
   alter publication supabase_realtime add table public.restaurant_expenses;
+exception when duplicate_object then null;
+end $$;
+do $$
+begin
+  alter publication supabase_realtime add table public.restaurant_catalogs;
 exception when duplicate_object then null;
 end $$;
