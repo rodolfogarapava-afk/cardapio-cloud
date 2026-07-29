@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import {
   
   BarChart3,
@@ -36,6 +36,9 @@ import { useOperationsSync } from "@/lib/operationsSync";
 import { useCatalogSync } from "@/lib/catalogSync";
 
 export const Route = createFileRoute("/")({
+  beforeLoad: () => {
+    throw redirect({ to: "/cliente" });
+  },
   head: () => ({
     meta: [
       { title: "Burguer House — Cardápio digital" },
