@@ -84,10 +84,33 @@ create policy "platform admins manage memberships"
   using ((select public.is_platform_admin()))
   with check ((select public.is_platform_admin()));
 
+-- The platform administrator can enter any tenant from the master console.
+-- Tenant members remain restricted to their own store by the member policies
+-- declared in operations.sql and catalogs.sql.
 drop policy if exists "platform admins read sales" on public.restaurant_sales;
-create policy "platform admins read sales"
-  on public.restaurant_sales for select to authenticated
-  using ((select public.is_platform_admin()));
+drop policy if exists "platform admins manage sales" on public.restaurant_sales;
+create policy "platform admins manage sales"
+  on public.restaurant_sales for all to authenticated
+  using ((select public.is_platform_admin()))
+  with check ((select public.is_platform_admin()));
+
+drop policy if exists "platform admins manage commands" on public.restaurant_commands;
+create policy "platform admins manage commands"
+  on public.restaurant_commands for all to authenticated
+  using ((select public.is_platform_admin()))
+  with check ((select public.is_platform_admin()));
+
+drop policy if exists "platform admins manage expenses" on public.restaurant_expenses;
+create policy "platform admins manage expenses"
+  on public.restaurant_expenses for all to authenticated
+  using ((select public.is_platform_admin()))
+  with check ((select public.is_platform_admin()));
+
+drop policy if exists "platform admins manage catalogs" on public.restaurant_catalogs;
+create policy "platform admins manage catalogs"
+  on public.restaurant_catalogs for all to authenticated
+  using ((select public.is_platform_admin()))
+  with check ((select public.is_platform_admin()));
 
 update public.profiles
 set platform_role = 'super_admin', full_name = 'Administrador da plataforma'
