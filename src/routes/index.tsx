@@ -33,6 +33,7 @@ import { generateReportPdf } from "@/lib/reportPdf";
 import { initAudioContext, playNotificationSound } from "@/lib/sounds";
 import { useTenantNavigation } from "@/components/SaaSPlatform";
 import { useOperationsSync } from "@/lib/operationsSync";
+import { useCatalogSync } from "@/lib/catalogSync";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -74,16 +75,6 @@ const ProductImage=memo(function ProductImage({product,className="",priority=fal
   const src=product.image?.trim()||fallback;
   return <img className={className} src={src} alt={product.name} loading={priority?"eager":"lazy"} decoding="async" fetchPriority={priority?"high":"low"} width={600} height={600} onError={(event)=>{const image=event.currentTarget;if(image.src!==FALLBACK_IMG)image.src=FALLBACK_IMG}}/>;
 });
-
-function useDebouncedStorage<T>(key:string,value:T,ready:boolean,delay=400){
-  const first=useRef(true);
-  useEffect(()=>{
-    if(!ready)return;
-    if(first.current){first.current=false;return;}
-    const t=setTimeout(()=>{try{window.localStorage.setItem(key,JSON.stringify(value))}catch{}},delay);
-    return()=>clearTimeout(t);
-  },[key,value,ready,delay]);
-}
 
 const initialProducts: Product[] = [
   { id: 9,  category: "Espetinhos", name: "Carne",             price: 10, image: "/products/generated/espeto-carne.webp",        description: "Espetinho de carne preparado na brasa e servido no ponto escolhido.", stock: 30, minStock: 8, trackStock: true },
@@ -151,22 +142,11 @@ export function RestaurantApp() {
 
   useEffect(() => {
     initAudioContext();
-    const menuVersionKey = isOriginalStore ? "burguer-house-v31-espetinhos-menu" : `${tenantStoragePrefix}-menu-ready`;
-    const menuDone = window.localStorage.getItem(menuVersionKey);
     const saved = window.localStorage.getItem(`${tenantStoragePrefix}-products`);
-    if (!menuDone) {
-      setProducts(tenantInitialProducts);
-      setCategories(tenantInitialCategories);
-      setActiveMain(tenantInitialCategories[0] || "");
-      window.localStorage.setItem(`${tenantStoragePrefix}-products`, JSON.stringify(tenantInitialProducts));
-      window.localStorage.setItem(`${tenantStoragePrefix}-categories`, JSON.stringify(tenantInitialCategories));
-      window.localStorage.setItem(menuVersionKey, "1");
-    } else if (saved) {
+    if (saved) {
       try { setProducts(JSON.parse(saved)); } catch {}
       const savedCategories = window.localStorage.getItem(`${tenantStoragePrefix}-categories`);
       if (savedCategories) { try { const parsed=JSON.parse(savedCategories);setCategories(parsed);setActiveMain(parsed[0]||""); } catch {} }
-    } else {
-      setProducts(tenantInitialProducts);
     }
     try {
       const commands=window.localStorage.getItem(`${tenantStoragePrefix}-commands`);
@@ -178,9 +158,15 @@ export function RestaurantApp() {
     } catch {}
     setStorageReady(true);
   }, []);
-  useDebouncedStorage(`${tenantStoragePrefix}-commands`,savedCommands,storageReady);
-  useDebouncedStorage(`${tenantStoragePrefix}-sales`,salesHistory,storageReady);
-  useDebouncedStorage(`${tenantStoragePrefix}-expenses`,expenses,storageReady);
+  useCatalogSync({
+    tenantId: tenantNavigation?.tenantId,
+    products,
+    categories,
+    setProducts,
+    setCategories,
+    ready: storageReady,
+    legacyStoragePrefix: tenantStoragePrefix,
+  });
   const operationsSync = useOperationsSync({
     tenantId: tenantNavigation?.tenantId,
     commands: savedCommands,
@@ -190,7 +176,15 @@ export function RestaurantApp() {
     setSales: setSalesHistory,
     setExpenses,
     localReady: storageReady,
+    legacyStoragePrefix: tenantStoragePrefix,
   });
+  useEffect(() => {
+    if (!categories.length) {
+      setActiveMain("");
+    } else if (!categories.includes(activeMain)) {
+      setActiveMain(categories[0]);
+    }
+  }, [categories, activeMain]);
   useEffect(()=>{
     if(!storageReady)return;
     const merged=mergeOpenCommands(savedCommands);
@@ -198,7 +192,6 @@ export function RestaurantApp() {
   },[savedCommands,storageReady]);
   const persistProducts = (next: Product[]) => {
     setProducts(next);
-    if (typeof window !== "undefined") window.localStorage.setItem(`${tenantStoragePrefix}-products`, JSON.stringify(next));
   };
   const adjustStock = (deltas: { name: string; qty: number }[]) => {
     setProducts((prev) => {
@@ -208,13 +201,11 @@ export function RestaurantApp() {
         if (!delta) return p;
         return { ...p, stock: Math.max(0, Number(p.stock || 0) + delta) };
       });
-      if (typeof window !== "undefined") window.localStorage.setItem(`${tenantStoragePrefix}-products`, JSON.stringify(next));
       return next;
     });
   };
   const persistCategories = (next: string[]) => {
     setCategories(next);
-    window.localStorage.setItem(`${tenantStoragePrefix}-categories`, JSON.stringify(next));
   };
   const renameCategory = (oldName:string,newName:string) => {
     const clean=newName.trim();

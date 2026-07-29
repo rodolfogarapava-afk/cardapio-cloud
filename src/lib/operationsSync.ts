@@ -37,6 +37,7 @@ type Params = {
   setSales: Dispatch<SetStateAction<CloudSale[]>>;
   setExpenses: Dispatch<SetStateAction<CloudExpense[]>>;
   localReady: boolean;
+  legacyStoragePrefix: string;
 };
 
 const messageFor = (status: SyncStatus) => ({
@@ -101,6 +102,9 @@ export function useOperationsSync(params: Params) {
       latest.current.setExpenses(remoteExpenses);
       hydrated.current = true;
       setStatus("synced");
+      window.localStorage.removeItem(`${latest.current.legacyStoragePrefix}-commands`);
+      window.localStorage.removeItem(`${latest.current.legacyStoragePrefix}-sales`);
+      window.localStorage.removeItem(`${latest.current.legacyStoragePrefix}-expenses`);
       window.setTimeout(() => { applyingRemote.current = false; }, 0);
     }
 
