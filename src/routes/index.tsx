@@ -1043,7 +1043,15 @@ function IntegratedStock({products,onChange}:{products:Product[];onChange:(produ
           <div className="stock-modal-row">
             <label>Preço (R$)<input type="number" step="0.01" min={0} value={draft.price} onChange={(e)=>setDraft({...draft,price:e.target.value})}/></label>
             <label>Estoque<input type="number" min={0} value={draft.stock} onChange={(e)=>setDraft({...draft,stock:e.target.value})}/></label>
-            <label>Mínimo<input type="number" min={0} value={draft.minStock} onChange={(e)=>setDraft({...draft,minStock:e.target.value})}/></label>
+            <label>
+              <span className="stock-label-with-help">Mínimo
+                <span className="field-help">
+                  <button type="button" aria-label="O que significa estoque mínimo?">?</button>
+                  <span className="field-help-tooltip" role="tooltip">Quando o estoque chegar a esta quantidade ou ficar abaixo dela, o sistema mostrará um alerta para reposição.</span>
+                </span>
+              </span>
+              <input type="number" min={0} value={draft.minStock} onChange={(e)=>setDraft({...draft,minStock:e.target.value})}/>
+            </label>
           </div>
           <label className="inline-check"><input type="checkbox" checked={draft.trackStock} onChange={(e)=>setDraft({...draft,trackStock:e.target.checked})}/> Controlar estoque deste produto</label>
         </div>

@@ -616,6 +616,7 @@ button { cursor:pointer;touch-action:manipulation; }
 .stock-modal header button:hover{background:#ffffff0a;color:#fff}
 .stock-modal-body{padding:20px;display:flex;flex-direction:column;gap:14px}
 .stock-modal-body label{display:flex;min-width:0;flex-direction:column;gap:6px;font-size:12px;color:#aaa;font-weight:600}
+.stock-label-with-help{display:flex;align-items:center;gap:6px}
 .stock-modal-body input,.stock-modal-body select{width:100%;min-width:0;box-sizing:border-box;background:#0f0f0f;border:1px solid #262626;color:#fff;padding:11px 12px;border-radius:8px;font-size:13.5px}
 .stock-modal-body input:focus,.stock-modal-body select:focus{outline:none;border-color:#f5c518}
 .stock-modal-row{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,.85fr) minmax(0,.85fr);gap:12px}
