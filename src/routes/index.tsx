@@ -35,6 +35,7 @@ import { initAudioContext, playNotificationSound } from "@/lib/sounds";
 import { useTenantNavigation } from "@/components/SaaSPlatform";
 import { useOperationsSync } from "@/lib/operationsSync";
 import { useCatalogSync } from "@/lib/catalogSync";
+import { supabase } from "@/lib/supabase";
 
 export const Route = createFileRoute("/")({
   beforeLoad: () => {
@@ -142,6 +143,7 @@ export function RestaurantApp() {
   const [savedCommands, setSavedCommands] = useState<{id:number;name:string;count:number;total:number;createdAt:number;items:{name:string;qty:number;price:number;detail?:string;delivered:boolean}[]}[]>([]);
   const [salesHistory, setSalesHistory] = useState<{id:number;name:string;total:number;method:string;createdAt:number;items:{name:string;qty:number;price:number;detail?:string}[]}[]>([]);
   const [expenses, setExpenses] = useState<{id:number;description:string;amount:number;createdAt:number}[]>([]);
+  const [printStatuses, setPrintStatuses] = useState<Record<number,"sending"|"pending"|"processing"|"printed"|"failed">>({});
   const [storageReady, setStorageReady] = useState(false);
 
   useEffect(() => {
@@ -182,6 +184,25 @@ export function RestaurantApp() {
     localReady: storageReady,
     legacyStoragePrefix: tenantStoragePrefix,
   });
+  useEffect(()=>{
+    if(!supabase||!tenantNavigation?.tenantId||!savedCommands.length)return;
+    let active=true;
+    const refresh=async()=>{
+      const {data,error}=await supabase.from("print_jobs")
+        .select("command_id,status")
+        .eq("tenant_id",tenantNavigation.tenantId)
+        .in("command_id",savedCommands.map((command)=>command.id));
+      if(error||!active)return;
+      setPrintStatuses((current)=>{
+        const next={...current};
+        for(const job of data||[])next[Number(job.command_id)]=job.status as "pending"|"processing"|"printed"|"failed";
+        return next;
+      });
+    };
+    refresh();
+    const timer=window.setInterval(refresh,2000);
+    return()=>{active=false;window.clearInterval(timer)};
+  },[tenantNavigation?.tenantId,savedCommands]);
   useEffect(() => {
     if (!categories.length) {
       setActiveMain("");
@@ -515,6 +536,7 @@ export function RestaurantApp() {
                         const name=customerName.trim();
                         const newItems=currentCartItems.map((item)=>({...item,delivered:false}));
                         const commandId=Date.now();
+                        setPrintStatuses((current)=>({...current,[commandId]:"sending"}));
                         setSavedCommands((current)=>mergeOpenCommands([...current,{id:commandId,name,count,total,createdAt:commandId,items:newItems}]));
                         adjustStock(newItems.map((item)=>({name:item.name,qty:-item.qty})));
                         if(tenantNavigation?.tenantId)queueKitchenOrder({
@@ -523,7 +545,11 @@ export function RestaurantApp() {
                           customer:name,
                           items:newItems.map((item)=>({name:item.name,qty:item.qty,unitPrice:item.price,total:item.price*item.qty,notes:item.detail})),
                           total,
-                        }).catch((error)=>console.error("Comanda salva, mas não foi possível entrar na fila de impressão:",error));
+                        }).then(()=>setPrintStatuses((current)=>({...current,[commandId]:"pending"})))
+                          .catch((error)=>{
+                            setPrintStatuses((current)=>({...current,[commandId]:"failed"}));
+                            console.error("Comanda salva, mas não foi possível entrar na fila de impressão:",error);
+                          });
                         playNotificationSound("sale");
                         setCart({}); setCartDetails({}); setModal("commands");
                       }}>SALVAR COMANDA</button>
@@ -538,7 +564,14 @@ export function RestaurantApp() {
                 <h3>Comandas abertas</h3>
                 {!savedCommands.length ? <p>Nenhuma comanda aberta no momento.</p> :
                   <div className="saved-commands">{savedCommands.map((command) => <div key={command.id}>
-                    <div><b>{command.name}</b><small>{command.count} {command.count === 1 ? "item" : "itens"}</small></div>
+                    <div><b>{command.name}</b><small>{command.count} {command.count === 1 ? "item" : "itens"}</small>
+                      <span className={`command-print-status ${printStatuses[command.id]||"pending"}`}>{
+                        printStatuses[command.id]==="printed"?"✓ IMPRESSO":
+                        printStatuses[command.id]==="failed"?"! FALHA AO IMPRIMIR":
+                        printStatuses[command.id]==="processing"?"IMPRIMINDO...":
+                        printStatuses[command.id]==="sending"?"ENVIANDO...":"AGUARDANDO IMPRESSORA"
+                      }</span>
+                    </div>
                     <strong>R$ {command.total.toFixed(2).replace(".", ",")}</strong>
                     <button onClick={() => {
                       setCustomerName(command.name);
