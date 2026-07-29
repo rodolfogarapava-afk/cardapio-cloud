@@ -1,5 +1,3 @@
-const BUSINESS_NAME = 'Burguer House';
-
 // Recibos são enviados como bytes ESC/POS crus para uma ponte HTTP local
 // (print-helper/print-helper.ps1) que roda no PC do caixa e repassa em modo
 // RAW ao spooler do Windows. Esse caminho é necessário porque a impressão
@@ -105,9 +103,6 @@ function buildReceiptEscPos({ customer, items, total, paymentMethod }: ReceiptDa
   b.init();
 
   b.align('center');
-  b.bold(true);
-  b.line(BUSINESS_NAME);
-  b.bold(false);
   b.line(`${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR')}`);
   b.divider();
 
