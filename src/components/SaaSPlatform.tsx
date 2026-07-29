@@ -418,7 +418,11 @@ function PrintingCenter({ tenant, jobs, setJobs }: { tenant: Tenant; jobs: Print
     if(!supabase)return;
     setSetupError("");
     const {data,error}=await supabase.rpc("create_printer_activation_code",{p_tenant_id:tenant.id,p_agent_name:"Cozinha"});
-    if(error){setSetupError("Não foi possível gerar o código. Verifique se a atualização do Supabase foi aplicada.");return}
+    if(error){
+      console.error("Falha ao gerar código de ativação:",error);
+      setSetupError(`Não foi possível gerar o código: ${error.message}`);
+      return;
+    }
     setActivationCode(String(data||""));
   };
   const test=async()=>{

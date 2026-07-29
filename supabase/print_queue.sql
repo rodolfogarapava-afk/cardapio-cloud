@@ -202,3 +202,6 @@ grant execute on function public.activate_printer_agent(text,text) to anon,authe
 grant execute on function public.printer_agent_heartbeat(text,text) to anon,authenticated;
 grant execute on function public.claim_print_jobs(text,integer) to anon,authenticated;
 grant execute on function public.complete_print_job(text,uuid,boolean,text) to anon,authenticated;
+
+-- Atualiza imediatamente o catálogo usado pela API REST após executar este arquivo.
+notify pgrst, 'reload schema';
