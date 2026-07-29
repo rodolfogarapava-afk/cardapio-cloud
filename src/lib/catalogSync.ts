@@ -12,6 +12,7 @@ export type CloudProduct = {
   stock?: number;
   minStock?: number;
   trackStock?: boolean;
+  preparationPointEnabled?: boolean;
 };
 
 type Params = {

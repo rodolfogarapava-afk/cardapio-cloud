@@ -66,7 +66,11 @@ type Product = {
   stock?: number;
   minStock?: number;
   trackStock?: boolean;
+  preparationPointEnabled?: boolean;
 };
+
+const usesPreparationPoint=(product:Product)=>
+  product.preparationPointEnabled ?? product.category==="Espetinhos";
 
 const stockFallbackImages:Record<string,string>={
   Espetinhos:"https://images.unsplash.com/photo-1529692236671-f1f6cf9683ba?auto=format&fit=crop&w=600&q=82",
@@ -292,7 +296,7 @@ export function RestaurantApp() {
   const add = (id: number) => {
     const product=products.find((item)=>item.id===id);
     if(product?.trackStock&&Number(product.stock||0)<=0)return;
-    if(product?.category==="Espetinhos"&&!cart[id]){
+    if(product&&usesPreparationPoint(product)&&!cart[id]){
       setPendingMeatId(id);
       setDoneness("");
       setMeatNote("");
@@ -491,7 +495,7 @@ export function RestaurantApp() {
             {modal === "doneness" && pendingMeatId !== null && (
               <>
                 <span className="modal-icon"><Utensils /></span>
-                <h3>Ponto da carne</h3>
+                <h3>Ponto de preparo</h3>
                 <p><b>{products.find((product)=>product.id===pendingMeatId)?.name}</b> — escolha como deseja o preparo.</p>
                 <div className="doneness-options">
                   {["Mal passada","Ao ponto","Bem passada"].map((point)=>(
@@ -802,7 +806,7 @@ function mergeOpenCommands(commands:IntegratedCommand[]){
 }
 
 function IntegratedProducts({products,categories,onChange,onAddCategory,onRenameCategory,onDeleteCategory}:{products:Product[];categories:string[];onChange:(products:Product[])=>void;onAddCategory:(name:string)=>void;onRenameCategory:(oldName:string,newName:string)=>void;onDeleteCategory:(name:string)=>void}) {
-  const blank={id:0,name:"",price:"",category:categories[0]||"",description:"",image:"",tag:"",trackStock:true,stock:"0",minStock:"5"};
+  const blank={id:0,name:"",price:"",category:categories[0]||"",description:"",image:"",tag:"",trackStock:true,preparationPointEnabled:false,stock:"0",minStock:"5"};
   const [form,setForm]=useState(blank);
   const [drawerOpen,setDrawerOpen]=useState(false);
   const [editing,setEditing]=useState<number|null>(null);
@@ -826,7 +830,7 @@ function IntegratedProducts({products,categories,onChange,onAddCategory,onRename
     }
     setEditing(null);setProductError("");setForm({...blank,category:categories[0]});setDrawerOpen(true);
   };
-  const openEdit=(product:Product)=>{setProductError("");setEditing(product.id);setForm({id:product.id,name:product.name,price:String(product.price).replace(".",","),category:product.category,description:product.description,image:product.image,tag:product.tag||"",trackStock:!!product.trackStock,stock:String(product.stock||0),minStock:String(product.minStock||0)});setDrawerOpen(true)};
+  const openEdit=(product:Product)=>{setProductError("");setEditing(product.id);setForm({id:product.id,name:product.name,price:String(product.price).replace(".",","),category:product.category,description:product.description,image:product.image,tag:product.tag||"",trackStock:!!product.trackStock,preparationPointEnabled:usesPreparationPoint(product),stock:String(product.stock||0),minStock:String(product.minStock||0)});setDrawerOpen(true)};
   const closeDrawer=()=>{setDrawerOpen(false);setEditing(null);setProductError("");setForm(blank)};
   const submit=()=>{
     const price=Number(form.price.replace(",","."));
@@ -838,7 +842,7 @@ function IntegratedProducts({products,categories,onChange,onAddCategory,onRename
       setProductError("Preencha o nome e informe um preço válido para salvar o produto.");
       return;
     }
-    const item:Product={id:editing??Math.max(0,...products.map((p)=>p.id))+1,name:form.name.trim(),price,category:form.category,description:form.description.trim()||"Produto preparado com ingredientes selecionados.",image:form.image.trim()||"https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=900&q=88",tag:form.tag.trim()||undefined,trackStock:form.trackStock,stock:Math.max(0,Number(form.stock)||0),minStock:Math.max(0,Number(form.minStock)||0)};
+    const item:Product={id:editing??Math.max(0,...products.map((p)=>p.id))+1,name:form.name.trim(),price,category:form.category,description:form.description.trim()||"Produto preparado com ingredientes selecionados.",image:form.image.trim()||"https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=900&q=88",tag:form.tag.trim()||undefined,trackStock:form.trackStock,preparationPointEnabled:form.preparationPointEnabled,stock:Math.max(0,Number(form.stock)||0),minStock:Math.max(0,Number(form.minStock)||0)};
     onChange(editing?products.map((p)=>p.id===editing?item:p):[...products,item]);
     closeDrawer();
   };
@@ -909,6 +913,8 @@ function IntegratedProducts({products,categories,onChange,onAddCategory,onRename
           <label className="field">Descrição<textarea rows={3} value={form.description} onChange={(e)=>setForm({...form,description:e.target.value})} placeholder="Ingredientes e detalhes"/></label>
           <label className="field">Imagem (URL)<input value={form.image} onChange={(e)=>setForm({...form,image:e.target.value})} placeholder="https://..."/></label>
           <label className="field">Badge<input value={form.tag} onChange={(e)=>setForm({...form,tag:e.target.value})} placeholder="NOVO, DESTAQUE..."/></label>
+          <label className="drawer-switch"><input type="checkbox" checked={form.preparationPointEnabled} onChange={(e)=>setForm({...form,preparationPointEnabled:e.target.checked})}/><span/> Permitir escolha do ponto de preparo</label>
+          {form.preparationPointEnabled&&<p className="drawer-switch-note">O cliente poderá escolher entre Mal passado, Ao ponto e Bem passado ao adicionar este produto.</p>}
           <label className="drawer-switch"><input type="checkbox" checked={form.trackStock} onChange={(e)=>setForm({...form,trackStock:e.target.checked})}/><span/> Controlar estoque</label>
           {form.trackStock&&<div className="field-row">
             <label className="field">Estoque<input value={form.stock} inputMode="numeric" onChange={(e)=>setForm({...form,stock:e.target.value})}/></label>
@@ -992,13 +998,13 @@ function IntegratedStock({products,onChange}:{products:Product[];onChange:(produ
   const saveNewProduct=()=>{
     const name=draft.name.trim(); if(!name||!newProductFor) return;
     const nextId=(products.reduce((m,p)=>Math.max(m,p.id),0)||0)+1;
-    onChange([...products,{id:nextId,category:newProductFor,name,price:Number(draft.price)||0,image:"",description:"",trackStock:draft.trackStock,stock:Number(draft.stock)||0,minStock:Number(draft.minStock)||0}]);
+    onChange([...products,{id:nextId,category:newProductFor,name,price:Number(draft.price)||0,image:"",description:"",trackStock:draft.trackStock,preparationPointEnabled:false,stock:Number(draft.stock)||0,minStock:Number(draft.minStock)||0}]);
     setNewProductFor(null);
   };
   const saveNewCategory=()=>{
     const name=catName.trim(); if(!name||categories.includes(name)) {setNewCategory(false);setCatName("");return;}
     const nextId=(products.reduce((m,p)=>Math.max(m,p.id),0)||0)+1;
-    onChange([...products,{id:nextId,category:name,name:`Novo item · ${name}`,price:0,image:"",description:"",trackStock:true,stock:0,minStock:5}]);
+    onChange([...products,{id:nextId,category:name,name:`Novo item · ${name}`,price:0,image:"",description:"",trackStock:true,preparationPointEnabled:false,stock:0,minStock:5}]);
     setNewCategory(false);setCatName("");
   };
 
@@ -1179,7 +1185,7 @@ function IntegratedCommands({commands,setCommands,onCharge,products,adjustStock}
     applyEdit(command,nextItems,{type:"adicionado",name:product.name,qty:1,notes:detail||undefined});
   };
   const openAddProduct=(command:IntegratedCommand,product:Product)=>{
-    if(product.category==="Espetinhos"){setEditDoneness("");setEditMeatNote("");setPendingEditMeat({command,product});return}
+    if(usesPreparationPoint(product)){setEditDoneness("");setEditMeatNote("");setPendingEditMeat({command,product});return}
     setPendingProduct({command,product});
   };
   return <div className="integrated-view">
@@ -1233,7 +1239,7 @@ function IntegratedCommands({commands,setCommands,onCharge,products,adjustStock}
     {pendingEditMeat&&<div className="modal-backdrop" onMouseDown={()=>setPendingEditMeat(null)}><section className="modal" onMouseDown={(event)=>event.stopPropagation()}>
       <button className="modal-close" onClick={()=>setPendingEditMeat(null)} aria-label="Fechar"><X/></button>
       <span className="modal-icon"><Utensils/></span>
-      <h3>Ponto da carne</h3>
+      <h3>Ponto de preparo</h3>
       <p><b>{pendingEditMeat.product.name}</b> — escolha como deseja o preparo para <b>{pendingEditMeat.command.name}</b>.</p>
       <div className="doneness-options">
         {["Mal passada","Ao ponto","Bem passada"].map((point)=>(
