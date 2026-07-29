@@ -1,47 +1,58 @@
 @echo off
-title Instalar ponte de impressao - Burguer House
-setlocal enabledelayedexpansion
+title Instalar agente de impressao - Cardapio Cloud
+setlocal
+
+net session >nul 2>&1
+if errorlevel 1 (
+  powershell -NoProfile -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
+  exit /b
+)
 
 set "PASTA=%~dp0"
 set "VBS=%PASTA%iniciar-impressora.vbs"
 set "PASTASEMBARRA=%PASTA:~0,-1%"
 
 echo ============================================================
-echo   Instalacao da ponte de impressao - Burguer House
+echo   Agente de impressao - Cardapio Cloud
 echo ============================================================
 echo.
 
 if not exist "%VBS%" (
-  echo [ERRO] Nao encontrei "iniciar-impressora.vbs" nesta pasta.
-  echo Deixe este .bat dentro da pasta print-helper e rode de novo.
+  echo [ERRO] Extraia todos os arquivos do ZIP antes de instalar.
   echo.
   pause
   exit /b 1
 )
 
-echo [1/3] Configurando inicio automatico com o Windows...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$s=New-Object -ComObject WScript.Shell; $dest=[IO.Path]::Combine($env:APPDATA,'Microsoft\Windows\Start Menu\Programs\Startup','Impressora Burguer House.lnk'); $l=$s.CreateShortcut($dest); $l.TargetPath='%VBS%'; $l.WorkingDirectory='%PASTASEMBARRA%'; $l.Description='Ponte de impressao Burguer House'; $l.Save()"
+echo [1/4] Autorizando comunicacao local segura...
+netsh http delete urlacl url=http://127.0.0.1:9100/ >nul 2>&1
+netsh http add urlacl url=http://127.0.0.1:9100/ user=Everyone >nul
+echo      OK.
+echo.
+
+echo [2/4] Configurando inicio automatico com o Windows...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$s=New-Object -ComObject WScript.Shell; $dest=[IO.Path]::Combine($env:APPDATA,'Microsoft\Windows\Start Menu\Programs\Startup','Impressora Cardapio Cloud.lnk'); $l=$s.CreateShortcut($dest); $l.TargetPath='%VBS%'; $l.WorkingDirectory='%PASTASEMBARRA%'; $l.Description='Agente de impressao Cardapio Cloud'; $l.Save()"
 if errorlevel 1 (
-  echo      [AVISO] Nao consegui criar o atalho de inicio automatico.
+  echo      [AVISO] Nao consegui criar o inicio automatico.
 ) else (
-  echo      OK - a impressora vai ligar sozinha ao iniciar o PC.
+  echo      OK - o agente iniciara junto com o Windows.
 )
 echo.
 
-echo [2/3] Iniciando a ponte de impressao agora...
+echo [3/4] Iniciando o agente agora...
 start "" wscript "%VBS%"
-echo      OK - ponte iniciada (roda invisivel, sem janela).
+echo      OK.
 echo.
 
-echo [3/3] Testando a conexao com a impressora...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Sleep -Seconds 3; try { $r=Invoke-RestMethod -Uri 'http://localhost:9100/status' -TimeoutSec 5; if($r.printer){ Write-Host ('      OK - Ponte ativa. Impressora detectada: ' + $r.printer) -ForegroundColor Green } else { Write-Host '      Ponte ativa, mas nenhuma impressora foi detectada ainda.' -ForegroundColor Yellow } } catch { Write-Host '      [AVISO] A ponte nao respondeu. Verifique se o driver da impressora termica ja foi instalado.' -ForegroundColor Yellow }"
+echo [4/4] Procurando a impressora USB...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Sleep -Seconds 3; try { $r=Invoke-RestMethod -Uri 'http://127.0.0.1:9100/status' -TimeoutSec 5; if($r.printer){ Write-Host ('      OK - Impressora detectada: ' + $r.printer) -ForegroundColor Green } else { Write-Host '      Agente ativo, mas nenhuma impressora foi detectada.' -ForegroundColor Yellow } } catch { Write-Host '      [AVISO] O agente nao respondeu. Instale o driver da Knup e tente novamente.' -ForegroundColor Yellow }"
 echo.
 
 echo ============================================================
-echo   CONCLUIDO
+echo   INSTALACAO CONCLUIDA
 echo.
-echo   Falta apenas instalar o driver da sua impressora termica
-echo   (modo POS-58/POS-80, ESC/POS) caso ainda nao tenha feito.
+echo   Volte ao site, abra Impressao e clique em:
+echo   "Ativar impressao automatica".
 echo ============================================================
 echo.
 pause

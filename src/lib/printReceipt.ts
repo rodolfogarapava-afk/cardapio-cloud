@@ -4,10 +4,9 @@
 // gráfica normal (window.print() -> driver) trava com 0 páginas em várias
 // impressoras térmicas clone, enquanto o modo RAW imprime corretamente.
 //
-// A ponte roda no mesmo PC que serve o site, então o host usado pelo
-// navegador pra abrir a página (localhost no PC do caixa, ou o IP da rede
-// Wi-Fi quando acessado pelo celular) é sempre o host certo pra ponte também.
-const PRINT_HELPER_URL = () => `http://${window.location.hostname}:9100/print`;
+// O site pode estar hospedado na Vercel, mas a ponte sempre roda no notebook
+// Windows conectado por USB à impressora da própria loja.
+const PRINT_HELPER_BASE_URL = "http://127.0.0.1:9100";
 const PAPER_WIDTH_CHARS = 32;
 
 export interface ReceiptItem {
@@ -268,7 +267,7 @@ function bytesToBase64(bytes: Uint8Array): string {
 }
 
 async function sendToPrintHelper(bytes: Uint8Array) {
-  const res = await fetch(PRINT_HELPER_URL(), {
+  const res = await fetch(`${PRINT_HELPER_BASE_URL}/print`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ data: bytesToBase64(bytes) }),
@@ -277,6 +276,19 @@ async function sendToPrintHelper(bytes: Uint8Array) {
     const detail = await res.json().catch(() => ({}));
     throw new Error(detail?.error || `HTTP ${res.status}`);
   }
+}
+
+export async function getPrintHelperStatus() {
+  const response = await fetch(`${PRINT_HELPER_BASE_URL}/status`, { signal: AbortSignal.timeout(3500) });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json() as Promise<{ ok: boolean; printer?: string | null }>;
+}
+
+export async function sendPrinterTest() {
+  const builder = new EscPosBuilder();
+  builder.init().align("center").bold(true).doubleSize(true).line("TESTE OK");
+  builder.doubleSize(false).bold(false).line("Cardapio Cloud").line(new Date().toLocaleString("pt-BR")).feedLines(4);
+  await sendToPrintHelper(builder.build());
 }
 
 /**

@@ -1,0 +1,15 @@
+CARDAPIO CLOUD - IMPRESSAO AUTOMATICA
+=====================================
+
+1. Conecte a impressora Knup ao notebook por USB.
+2. Instale o driver da impressora no Windows.
+3. Extraia todos os arquivos deste ZIP.
+4. Clique duas vezes em instalar-impressora.bat.
+5. Autorize a instalacao quando o Windows perguntar.
+6. Volte ao Cardapio Cloud, abra Impressao e ative esta estacao.
+7. Use o botao Imprimir teste.
+
+O notebook precisa estar ligado, conectado a internet e com o Cardapio Cloud
+aberto para receber os pedidos feitos pelo telefone.
+
+Cada loja imprime apenas os pedidos do seu proprio acesso.

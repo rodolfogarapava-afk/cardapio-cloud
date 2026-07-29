@@ -142,6 +142,8 @@ export function RestaurantApp() {
   const [salesHistory, setSalesHistory] = useState<{id:number;name:string;total:number;method:string;createdAt:number;items:{name:string;qty:number;price:number;detail?:string}[]}[]>([]);
   const [expenses, setExpenses] = useState<{id:number;description:string;amount:number;createdAt:number}[]>([]);
   const [storageReady, setStorageReady] = useState(false);
+  const [autoPrintEnabled,setAutoPrintEnabled]=useState(false);
+  const knownAutoPrintCommands=useRef<Set<number>|null>(null);
 
   useEffect(() => {
     initAudioContext();
@@ -181,6 +183,34 @@ export function RestaurantApp() {
     localReady: storageReady,
     legacyStoragePrefix: tenantStoragePrefix,
   });
+  useEffect(()=>{
+    const key=`${tenantStoragePrefix}-auto-print`;
+    setAutoPrintEnabled(window.localStorage.getItem(key)==="true");
+    knownAutoPrintCommands.current=null;
+    const update=(event:Event)=>{
+      const detail=(event as CustomEvent<{tenantId:string;enabled:boolean}>).detail;
+      if(detail?.tenantId===(tenantNavigation?.tenantId||tenantStoragePrefix))setAutoPrintEnabled(detail.enabled);
+    };
+    window.addEventListener("cardapio:auto-print-change",update);
+    return()=>window.removeEventListener("cardapio:auto-print-change",update);
+  },[tenantNavigation?.tenantId,tenantStoragePrefix]);
+  useEffect(()=>{
+    if(!operationsSync.connected)return;
+    if(!knownAutoPrintCommands.current){
+      knownAutoPrintCommands.current=new Set(savedCommands.map((command)=>command.id));
+      return;
+    }
+    const unseen=savedCommands.filter((command)=>!knownAutoPrintCommands.current!.has(command.id));
+    savedCommands.forEach((command)=>knownAutoPrintCommands.current!.add(command.id));
+    if(!autoPrintEnabled||!unseen.length)return;
+    unseen.forEach((command)=>{
+      sendOrderTicketToPrinter({
+        customer:command.name,
+        items:command.items.map((item)=>({name:item.name,qty:item.qty,unitPrice:item.price,total:item.price*item.qty,notes:item.detail})),
+        total:command.total,
+      }).then(()=>playNotificationSound("sale")).catch((error)=>console.error("Pedido recebido, mas a impressora local não respondeu:",error));
+    });
+  },[savedCommands,operationsSync.connected,autoPrintEnabled]);
   useEffect(() => {
     if (!categories.length) {
       setActiveMain("");
@@ -515,7 +545,6 @@ export function RestaurantApp() {
                         const newItems=currentCartItems.map((item)=>({...item,delivered:false}));
                         setSavedCommands((current)=>mergeOpenCommands([...current,{id:Date.now(),name,count,total,createdAt:Date.now(),items:newItems}]));
                         adjustStock(newItems.map((item)=>({name:item.name,qty:-item.qty})));
-                        printKitchenTicket(name, newItems);
                         playNotificationSound("sale");
                         setCart({}); setCartDetails({}); setModal("commands");
                       }}>SALVAR COMANDA</button>

@@ -1,4 +1,4 @@
-# Burguer House - Ponte de impressao RAW ESC/POS
+# Cardapio Cloud - Agente de impressao RAW ESC/POS
 # ------------------------------------------------------------------
 # Pequeno servidor HTTP local que recebe bytes ESC/POS (em base64) do
 # navegador e os envia em modo RAW direto para a impressora termica,
@@ -6,7 +6,7 @@
 # varias impressoras termicas clone.
 #
 # Uso: clique duplo em iniciar-impressora.vbs (ou rode este .ps1).
-# O app web faz POST em http://localhost:9100/print com { data: <base64> }.
+# O app web faz POST em http://127.0.0.1:9100/print com { data: <base64> }.
 
 param(
   [int]$Port = 9100,
@@ -47,7 +47,7 @@ public class RawPrinter {
     if (!OpenPrinter(printerName, out h, IntPtr.Zero))
       return "ERRO OpenPrinter: " + Marshal.GetLastWin32Error();
     DOCINFOA di = new DOCINFOA();
-    di.pDocName = "Recibo Burguer House";
+    di.pDocName = "Pedido Cardapio Cloud";
     di.pDataType = "RAW";
     if (!StartDocPrinter(h, 1, di)) { ClosePrinter(h); return "ERRO StartDoc: " + Marshal.GetLastWin32Error(); }
     if (!StartPagePrinter(h)) { EndDocPrinter(h); ClosePrinter(h); return "ERRO StartPage: " + Marshal.GetLastWin32Error(); }
@@ -76,13 +76,11 @@ function Resolve-Printer([string]$requested) {
 }
 
 $listener = New-Object System.Net.HttpListener
-# "+" escuta em todas as interfaces (localhost e o IP da rede Wi-Fi), pra dar
-# pra imprimir tambem a partir do celular. Exige reserva previa da URL, feita
-# uma unica vez com privilegio de administrador:
-#   netsh http add urlacl url=http://+:9100/ user=Everyone
-$listener.Prefixes.Add("http://+:$Port/")
+# Escuta somente neste notebook. O telefone envia o pedido ao Supabase e o
+# navegador do notebook repassa a impressao para esta ponte local.
+$listener.Prefixes.Add("http://127.0.0.1:$Port/")
 $listener.Start()
-Write-Host "Ponte de impressao ativa em http://+:$Port/  (localhost e rede)  (Ctrl+C para sair)"
+Write-Host "Agente de impressao ativo em http://127.0.0.1:$Port/  (Ctrl+C para sair)"
 Write-Host "Impressora alvo: $((Resolve-Printer $PrinterName))"
 
 while ($listener.IsListening) {
@@ -94,6 +92,7 @@ while ($listener.IsListening) {
   $res.Headers.Add("Access-Control-Allow-Origin", "*")
   $res.Headers.Add("Access-Control-Allow-Methods", "POST, OPTIONS")
   $res.Headers.Add("Access-Control-Allow-Headers", "Content-Type")
+  $res.Headers.Add("Access-Control-Allow-Private-Network", "true")
 
   try {
     if ($req.HttpMethod -eq "OPTIONS") {

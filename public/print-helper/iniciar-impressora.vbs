@@ -1,4 +1,4 @@
-' Burguer House - Inicia a ponte de impressao sem abrir janela preta.
+' Cardapio Cloud - Inicia o agente de impressao sem abrir janela preta.
 ' Coloque um atalho deste arquivo na pasta Inicializar do Windows para
 ' que a impressao funcione automaticamente ao ligar o PC.
 ' (Win+R  ->  shell:startup  ->  cole um atalho deste .vbs)

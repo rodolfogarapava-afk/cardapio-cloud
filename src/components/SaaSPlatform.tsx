@@ -24,10 +24,13 @@ import {
   Mail,
   KeyRound,
   Trash2,
+  Download,
+  Power,
 } from "lucide-react";
 import "./saas-platform.css";
 import { createIsolatedSupabaseClient, supabase } from "@/lib/supabase";
 import { useAppAuth } from "@/components/AuthGate";
+import { getPrintHelperStatus, sendPrinterTest } from "@/lib/printReceipt";
 
 type SubscriptionStatus = "active" | "past_due" | "blocked" | "trial" | "canceled";
 type Tenant = {
@@ -396,9 +399,33 @@ function TenantBilling({ tenant }: { tenant: Tenant; onBlock:()=>void }) {
 
 function PrintingCenter({ tenant, jobs, setJobs }: { tenant: Tenant; jobs: PrintJob[]; setJobs:(fn:(j:PrintJob[])=>PrintJob[])=>void }) {
   const ownJobs=jobs.filter(j=>j.tenantId===tenant.id);
-  const test=()=>{const id=Date.now();setJobs(all=>[{id,tenantId:tenant.id,label:`Teste #${String(id).slice(-4)}`,destination:"Cozinha",status:"pending",createdAt:Date.now()},...all]);setTimeout(()=>setJobs(all=>all.map(j=>j.id===id?{...j,status:"printed"}:j)),1800)};
-  return <main className="saas-tenant-page"><div className="saas-page-heading"><div><p>IMPRESSÃO LOCAL</p><h1>Central de impressão</h1><span>O agente busca os pedidos na nuvem e imprime na rede do restaurante.</span></div><button className="saas-primary" onClick={test}><Printer/> Imprimir teste</button></div>
-    <div className="saas-agent-card"><span className={tenant.printer}><Wifi/></span><div><p>AGENTE WINDOWS</p><h2>{tenant.printer==="online"?"Conectado e pronto":"Agente desconectado"}</h2><small>{tenant.printer==="online"?"Último sinal recebido há 8 segundos · Cozinha-POS80":"Verifique o computador da cozinha"}</small></div><i className={tenant.printer}/></div>
+  const storagePrefix=tenant.name.trim().toLowerCase()==="deus proveu espetinhos"?"burguer-house":`cardapio-cloud-${tenant.id}`;
+  const [enabled,setEnabled]=useState(()=>typeof window!=="undefined"&&window.localStorage.getItem(`${storagePrefix}-auto-print`)==="true");
+  const [agent,setAgent]=useState<{checking:boolean;online:boolean;printer:string}>({checking:true,online:false,printer:""});
+  const checkAgent=async()=>{
+    setAgent((current)=>({...current,checking:true}));
+    try{const status=await getPrintHelperStatus();setAgent({checking:false,online:status.ok,printer:status.printer||"Impressora USB detectada"});}
+    catch{setAgent({checking:false,online:false,printer:""});}
+  };
+  useEffect(()=>{checkAgent();const timer=window.setInterval(checkAgent,15000);return()=>window.clearInterval(timer)},[]);
+  const toggle=()=>{
+    const next=!enabled;
+    window.localStorage.setItem(`${storagePrefix}-auto-print`,String(next));
+    setEnabled(next);
+    window.dispatchEvent(new CustomEvent("cardapio:auto-print-change",{detail:{tenantId:tenant.id,enabled:next}}));
+  };
+  const test=async()=>{
+    const id=Date.now();
+    setJobs(all=>[{id,tenantId:tenant.id,label:`Teste #${String(id).slice(-4)}`,destination:"Cozinha",status:"pending",createdAt:Date.now()},...all]);
+    try{await sendPrinterTest();setJobs(all=>all.map(j=>j.id===id?{...j,status:"printed"}:j));await checkAgent();}
+    catch{setJobs(all=>all.map(j=>j.id===id?{...j,status:"failed"}:j));setAgent({checking:false,online:false,printer:""});}
+  };
+  return <main className="saas-tenant-page"><div className="saas-page-heading"><div><p>IMPRESSÃO LOCAL</p><h1>Central de impressão</h1><span>Pedidos feitos no telefone chegam pelo Supabase e são impressos neste notebook.</span></div><button className="saas-primary" onClick={test} disabled={!agent.online}><Printer/> Imprimir teste</button></div>
+    <div className={`saas-agent-card ${agent.online?"is-online":""}`}><span className={agent.online?"online":"offline"}><Wifi/></span><div><p>AGENTE WINDOWS</p><h2>{agent.checking?"Verificando agente...":agent.online?"Conectado e pronto":"Agente não instalado ou desconectado"}</h2><small>{agent.online?agent.printer:"Baixe e instale o agente neste notebook conectado à Knup USB."}</small></div><i className={agent.online?"online":"offline"}/></div>
+    <section className="saas-print-setup">
+      <div><b>1</b><span><strong>Instale no notebook</strong><small>Baixe, extraia o arquivo e execute “instalar-impressora.bat” uma única vez.</small></span><a className="saas-primary" href="/print-helper/cardapio-cloud-impressora.zip" download><Download/> Baixar agente Windows</a></div>
+      <div><b>2</b><span><strong>Ative esta estação</strong><small>Mantenha o site aberto neste notebook. Somente esta estação imprimirá os pedidos da loja.</small></span><button className={enabled?"saas-print-toggle active":"saas-print-toggle"} onClick={toggle}><Power/> {enabled?"Impressão automática ativa":"Ativar impressão automática"}</button></div>
+    </section>
     <section className="saas-panel saas-table-panel"><PanelTitle title="Trabalhos recentes" subtitle="A fila evita perda e impressão duplicada"/><JobTable jobs={ownJobs} tenants={[tenant]}/></section>
   </main>;
 }
