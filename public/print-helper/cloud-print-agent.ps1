@@ -50,10 +50,12 @@ function Invoke-AgentRpc([string]$Name, [hashtable]$Body) {
 }
 
 function Resolve-ThermalPrinter {
-  $all = Get-Printer -ErrorAction SilentlyContinue
+  $virtualPattern = 'PDF|XPS|OneNote|Fax|Microsoft Print|Adobe PDF|CutePDF|doPDF'
+  $all = Get-Printer -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -notmatch $virtualPattern -and $_.PortName -notmatch 'PORTPROMPT:|FILE:|NUL:' }
   $printer = $all | Where-Object { $_.Name -match 'KNUP|POS|58|80|IM60|thermal|termic' } | Select-Object -First 1
   if (-not $printer) { $printer = $all | Where-Object { $_.PortName -match 'USB' } | Select-Object -First 1 }
-  if (-not $printer) { $printer = Get-CimInstance Win32_Printer -Filter "Default=True" -ErrorAction SilentlyContinue }
+  if (-not $printer) { return $null }
   return $printer.Name
 }
 

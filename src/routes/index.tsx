@@ -566,7 +566,7 @@ export function RestaurantApp() {
                   <div className="saved-commands">{savedCommands.map((command) => <div key={command.id}>
                     <div><b>{command.name}</b><small>{command.count} {command.count === 1 ? "item" : "itens"}</small>
                       <span className={`command-print-status ${printStatuses[command.id]||"checking"}`}>{
-                        printStatuses[command.id]==="printed"?"✓ IMPRESSO":
+                        printStatuses[command.id]==="printed"?"✓ ENVIADO À IMPRESSORA":
                         printStatuses[command.id]==="failed"?"! FALHA AO IMPRIMIR":
                         printStatuses[command.id]==="processing"?"IMPRIMINDO...":
                         printStatuses[command.id]==="sending"?"ENVIANDO...":
