@@ -1,0 +1,38 @@
+import { buildOrderTicketBase64, type ReceiptItem } from "@/lib/printReceipt";
+import { supabase } from "@/lib/supabase";
+
+export async function queueKitchenOrder(input:{
+  tenantId:string;
+  commandId:number;
+  customer:string;
+  items:ReceiptItem[];
+  total:number;
+  kind?:string;
+}) {
+  if(!supabase) throw new Error("Supabase não configurado");
+  const data=buildOrderTicketBase64({customer:input.customer,items:input.items,total:input.total});
+  const {error}=await supabase.rpc("queue_print_job",{
+    p_tenant_id:input.tenantId,
+    p_command_id:input.commandId,
+    p_payload:{data,customer:input.customer,total:input.total,createdAt:Date.now()},
+    p_job_kind:input.kind||"new_order",
+  });
+  if(error)throw error;
+}
+
+export async function queuePrinterTest(tenantId:string) {
+  if(!supabase) throw new Error("Supabase não configurado");
+  const now=Date.now();
+  const data=buildOrderTicketBase64({
+    customer:"TESTE DA IMPRESSORA",
+    items:[{name:"Conexão com Cardápio Cloud OK",qty:1,unitPrice:0,total:0}],
+    total:0,
+  });
+  const {error}=await supabase.rpc("queue_print_job",{
+    p_tenant_id:tenantId,
+    p_command_id:-now,
+    p_payload:{data,customer:"TESTE",total:0,createdAt:now},
+    p_job_kind:"printer_test",
+  });
+  if(error)throw error;
+}

@@ -310,6 +310,10 @@ export async function sendOrderTicketToPrinter(data: { customer: string; items: 
   await sendToPrintHelper(bytes);
 }
 
+export function buildOrderTicketBase64(data: { customer: string; items: ReceiptItem[]; total?: number }) {
+  return bytesToBase64(buildOrderTicketEscPos(data));
+}
+
 /**
  * Envia só o bloco de ATUALIZAÇÃO (item removido/adicionado numa edição de
  * comanda já aberta) para a impressora térmica via ponte local.

@@ -25,12 +25,11 @@ import {
   KeyRound,
   Trash2,
   Download,
-  Power,
 } from "lucide-react";
 import "./saas-platform.css";
 import { createIsolatedSupabaseClient, supabase } from "@/lib/supabase";
 import { useAppAuth } from "@/components/AuthGate";
-import { getPrintHelperStatus, sendPrinterTest } from "@/lib/printReceipt";
+import { queuePrinterTest } from "@/lib/printQueue";
 
 type SubscriptionStatus = "active" | "past_due" | "blocked" | "trial" | "canceled";
 type Tenant = {
@@ -45,7 +44,7 @@ type Tenant = {
   printer: "online" | "offline";
 };
 type PrintJob = {
-  id: number;
+  id: number | string;
   tenantId: string;
   label: string;
   destination: string;
@@ -398,35 +397,43 @@ function TenantBilling({ tenant }: { tenant: Tenant; onBlock:()=>void }) {
 }
 
 function PrintingCenter({ tenant, jobs, setJobs }: { tenant: Tenant; jobs: PrintJob[]; setJobs:(fn:(j:PrintJob[])=>PrintJob[])=>void }) {
-  const ownJobs=jobs.filter(j=>j.tenantId===tenant.id);
-  const storagePrefix=tenant.name.trim().toLowerCase()==="deus proveu espetinhos"?"burguer-house":`cardapio-cloud-${tenant.id}`;
-  const [enabled,setEnabled]=useState(()=>typeof window!=="undefined"&&window.localStorage.getItem(`${storagePrefix}-auto-print`)==="true");
-  const [agent,setAgent]=useState<{checking:boolean;online:boolean;printer:string}>({checking:true,online:false,printer:""});
-  const checkAgent=async()=>{
-    setAgent((current)=>({...current,checking:true}));
-    try{const status=await getPrintHelperStatus();setAgent({checking:false,online:status.ok,printer:status.printer||"Impressora USB detectada"});}
-    catch{setAgent({checking:false,online:false,printer:""});}
+  const [agent,setAgent]=useState<{checking:boolean;online:boolean;printer:string;lastSeen:string}>({checking:true,online:false,printer:"",lastSeen:""});
+  const [activationCode,setActivationCode]=useState("");
+  const [setupError,setSetupError]=useState("");
+  const [cloudJobs,setCloudJobs]=useState<PrintJob[]>(jobs.filter(j=>j.tenantId===tenant.id));
+  const refresh=async()=>{
+    if(!supabase)return;
+    const [{data:agents},{data:recentJobs}]=await Promise.all([
+      supabase.from("printer_agents").select("printer_name,last_seen_at,revoked_at").eq("tenant_id",tenant.id).is("revoked_at",null).order("last_seen_at",{ascending:false}).limit(1),
+      supabase.from("print_jobs").select("id,status,created_at").eq("tenant_id",tenant.id).order("created_at",{ascending:false}).limit(20),
+    ]);
+    const current=agents?.[0];
+    const lastSeen=current?.last_seen_at?new Date(current.last_seen_at):null;
+    const online=Boolean(lastSeen&&Date.now()-lastSeen.getTime()<45000);
+    setAgent({checking:false,online,printer:current?.printer_name||"",lastSeen:lastSeen?.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})||""});
+    setCloudJobs((recentJobs||[]).map((job)=>({id:job.id,tenantId:tenant.id,label:`Impressão ${String(job.id).slice(0,8)}`,destination:"Cozinha",status:job.status==="printed"?"printed":job.status==="failed"?"failed":"pending",createdAt:new Date(job.created_at).getTime()})));
   };
-  useEffect(()=>{checkAgent();const timer=window.setInterval(checkAgent,15000);return()=>window.clearInterval(timer)},[]);
-  const toggle=()=>{
-    const next=!enabled;
-    window.localStorage.setItem(`${storagePrefix}-auto-print`,String(next));
-    setEnabled(next);
-    window.dispatchEvent(new CustomEvent("cardapio:auto-print-change",{detail:{tenantId:tenant.id,enabled:next}}));
+  useEffect(()=>{refresh();const timer=window.setInterval(refresh,10000);return()=>window.clearInterval(timer)},[tenant.id]);
+  const generateCode=async()=>{
+    if(!supabase)return;
+    setSetupError("");
+    const {data,error}=await supabase.rpc("create_printer_activation_code",{p_tenant_id:tenant.id,p_agent_name:"Cozinha"});
+    if(error){setSetupError("Não foi possível gerar o código. Verifique se a atualização do Supabase foi aplicada.");return}
+    setActivationCode(String(data||""));
   };
   const test=async()=>{
-    const id=Date.now();
-    setJobs(all=>[{id,tenantId:tenant.id,label:`Teste #${String(id).slice(-4)}`,destination:"Cozinha",status:"pending",createdAt:Date.now()},...all]);
-    try{await sendPrinterTest();setJobs(all=>all.map(j=>j.id===id?{...j,status:"printed"}:j));await checkAgent();}
-    catch{setJobs(all=>all.map(j=>j.id===id?{...j,status:"failed"}:j));setAgent({checking:false,online:false,printer:""});}
+    setSetupError("");
+    try{await queuePrinterTest(tenant.id);await refresh();}
+    catch{setSetupError("Não foi possível colocar o teste na fila de impressão.");}
   };
-  return <main className="saas-tenant-page"><div className="saas-page-heading"><div><p>IMPRESSÃO LOCAL</p><h1>Central de impressão</h1><span>Pedidos feitos no telefone chegam pelo Supabase e são impressos neste notebook.</span></div><button className="saas-primary" onClick={test} disabled={!agent.online}><Printer/> Imprimir teste</button></div>
-    <div className={`saas-agent-card ${agent.online?"is-online":""}`}><span className={agent.online?"online":"offline"}><Wifi/></span><div><p>AGENTE WINDOWS</p><h2>{agent.checking?"Verificando agente...":agent.online?"Conectado e pronto":"Agente não instalado ou desconectado"}</h2><small>{agent.online?agent.printer:"Baixe e instale o agente neste notebook conectado à Knup USB."}</small></div><i className={agent.online?"online":"offline"}/></div>
+  return <main className="saas-tenant-page"><div className="saas-page-heading"><div><p>IMPRESSÃO NA NUVEM</p><h1>Central de impressão</h1><span>O agente desta loja recebe somente as impressões vinculadas a {tenant.name}.</span></div><button className="saas-primary" onClick={test} disabled={!agent.online}><Printer/> Imprimir teste</button></div>
+    <div className={`saas-agent-card ${agent.online?"is-online":""}`}><span className={agent.online?"online":"offline"}><Wifi/></span><div><p>AGENTE WINDOWS · {tenant.name.toUpperCase()}</p><h2>{agent.checking?"Verificando agente...":agent.online?"Conectado e pronto":"Agente desconectado"}</h2><small>{agent.online?`${agent.printer||"Impressora USB"} · último sinal às ${agent.lastSeen}`:"Gere um código e instale o agente no notebook conectado à Knup."}</small></div><i className={agent.online?"online":"offline"}/></div>
     <section className="saas-print-setup">
-      <div><b>1</b><span><strong>Instale no notebook</strong><small>Baixe, extraia o arquivo e execute “instalar-impressora.bat” uma única vez.</small></span><a className="saas-primary" href="/print-helper/cardapio-cloud-impressora.zip" download><Download/> Baixar agente Windows</a></div>
-      <div><b>2</b><span><strong>Ative esta estação</strong><small>Mantenha o site aberto neste notebook. Somente esta estação imprimirá os pedidos da loja.</small></span><button className={enabled?"saas-print-toggle active":"saas-print-toggle"} onClick={toggle}><Power/> {enabled?"Impressão automática ativa":"Ativar impressão automática"}</button></div>
+      <div><b>1</b><span><strong>Gere o código desta loja</strong><small>O código expira em 20 minutos e só pode ser usado uma vez.</small>{activationCode&&<code className="saas-activation-code">{activationCode}</code>}</span><button className="saas-print-toggle" onClick={generateCode}><KeyRound/> {activationCode?"Gerar outro código":"Gerar código de ativação"}</button></div>
+      <div><b>2</b><span><strong>Instale no notebook da loja</strong><small>Baixe, extraia e execute “instalar-impressora.bat”. Digite o código quando solicitado.</small></span><a className="saas-primary" href="/print-helper/cardapio-cloud-impressora.zip" download><Download/> Baixar agente Windows</a></div>
     </section>
-    <section className="saas-panel saas-table-panel"><PanelTitle title="Trabalhos recentes" subtitle="A fila evita perda e impressão duplicada"/><JobTable jobs={ownJobs} tenants={[tenant]}/></section>
+    {setupError&&<div className="saas-form-error">{setupError}</div>}
+    <section className="saas-panel saas-table-panel"><PanelTitle title="Trabalhos recentes" subtitle="Fila isolada desta loja, com confirmação e proteção contra duplicidade"/><JobTable jobs={cloudJobs} tenants={[tenant]}/></section>
   </main>;
 }
 
