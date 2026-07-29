@@ -565,11 +565,12 @@ export function RestaurantApp() {
                 {!savedCommands.length ? <p>Nenhuma comanda aberta no momento.</p> :
                   <div className="saved-commands">{savedCommands.map((command) => <div key={command.id}>
                     <div><b>{command.name}</b><small>{command.count} {command.count === 1 ? "item" : "itens"}</small>
-                      <span className={`command-print-status ${printStatuses[command.id]||"pending"}`}>{
+                      <span className={`command-print-status ${printStatuses[command.id]||"checking"}`}>{
                         printStatuses[command.id]==="printed"?"✓ IMPRESSO":
                         printStatuses[command.id]==="failed"?"! FALHA AO IMPRIMIR":
                         printStatuses[command.id]==="processing"?"IMPRIMINDO...":
-                        printStatuses[command.id]==="sending"?"ENVIANDO...":"AGUARDANDO IMPRESSORA"
+                        printStatuses[command.id]==="sending"?"ENVIANDO...":
+                        printStatuses[command.id]==="pending"?"AGUARDANDO IMPRESSORA":"VERIFICANDO IMPRESSÃO..."
                       }</span>
                     </div>
                     <strong>R$ {command.total.toFixed(2).replace(".", ",")}</strong>
