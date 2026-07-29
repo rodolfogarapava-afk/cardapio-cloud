@@ -818,6 +818,36 @@ function IntegratedProducts({products,categories,onChange,onAddCategory,onRename
   const [productError,setProductError]=useState("");
   const [categoryNotice,setCategoryNotice]=useState("");
 
+  const selectLocalImage=(file?:File)=>{
+    if(!file)return;
+    if(!file.type.startsWith("image/")){
+      setProductError("Selecione um arquivo de imagem válido.");
+      return;
+    }
+    if(file.size>8*1024*1024){
+      setProductError("A imagem deve ter no máximo 8 MB.");
+      return;
+    }
+    const reader=new FileReader();
+    reader.onload=()=>{
+      const image=new Image();
+      image.onload=()=>{
+        const maxSize=1000;
+        const scale=Math.min(1,maxSize/Math.max(image.width,image.height));
+        const canvas=document.createElement("canvas");
+        canvas.width=Math.max(1,Math.round(image.width*scale));
+        canvas.height=Math.max(1,Math.round(image.height*scale));
+        canvas.getContext("2d")?.drawImage(image,0,0,canvas.width,canvas.height);
+        setProductError("");
+        setForm((current)=>({...current,image:canvas.toDataURL("image/jpeg",.82)}));
+      };
+      image.onerror=()=>setProductError("Não foi possível abrir essa imagem.");
+      image.src=String(reader.result);
+    };
+    reader.onerror=()=>setProductError("Não foi possível ler o arquivo selecionado.");
+    reader.readAsDataURL(file);
+  };
+
   const visible=products
     .filter((p)=>filter==="Todos"||p.category===filter)
     .filter((p)=>!query.trim()||p.name.toLowerCase().includes(query.trim().toLowerCase())||p.description.toLowerCase().includes(query.trim().toLowerCase()));
@@ -911,7 +941,14 @@ function IntegratedProducts({products,categories,onChange,onAddCategory,onRename
           </div>
           {productError&&<div className="drawer-form-alert" role="alert">{productError}</div>}
           <label className="field">Descrição<textarea rows={3} value={form.description} onChange={(e)=>setForm({...form,description:e.target.value})} placeholder="Ingredientes e detalhes"/></label>
-          <label className="field">Imagem (URL)<input value={form.image} onChange={(e)=>setForm({...form,image:e.target.value})} placeholder="https://..."/></label>
+          <label className="field">Imagem
+            <input value={form.image.startsWith("data:")?"Imagem enviada do dispositivo":form.image} onChange={(e)=>setForm({...form,image:e.target.value})} placeholder="Cole uma URL: https://..."/>
+            <span className="local-image-picker">
+              <input type="file" accept="image/*" onChange={(e)=>selectLocalImage(e.target.files?.[0])}/>
+              <b>ESCOLHER IMAGEM DO DISPOSITIVO</b>
+              <small>JPG, PNG ou WEBP · máximo 8 MB</small>
+            </span>
+          </label>
           <label className="field">Badge<input value={form.tag} onChange={(e)=>setForm({...form,tag:e.target.value})} placeholder="NOVO, DESTAQUE..."/></label>
           <label className="drawer-switch"><input type="checkbox" checked={form.preparationPointEnabled} onChange={(e)=>setForm({...form,preparationPointEnabled:e.target.checked})}/><span/> Permitir escolha do ponto de preparo</label>
           {form.preparationPointEnabled&&<p className="drawer-switch-note">O cliente poderá escolher entre Mal passado, Ao ponto e Bem passado ao adicionar este produto.</p>}
