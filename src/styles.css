@@ -561,6 +561,12 @@ button { cursor:pointer;touch-action:manipulation; }
 .field input,.field select,.field textarea{background:#191b21;border:1px solid #ffffff10;border-radius:9px;padding:11px 12px;color:#fff;font-size:13px;font-family:inherit;letter-spacing:normal;text-transform:none;font-weight:500;outline:none;transition:border-color .15s}
 .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--yellow)}
 .field textarea{resize:vertical;min-height:70px}
+.field-label-with-help{display:flex;align-items:center;gap:6px}
+.field-help{position:relative;display:inline-flex}
+.field-help button{display:grid;place-items:center;width:17px;height:17px;min-height:17px;padding:0;border:1px solid #f5c51880;border-radius:50%;background:#f5c51810;color:var(--yellow);font:800 10px/1 inherit;cursor:help}
+.field-help-tooltip{position:absolute;right:-4px;bottom:calc(100% + 9px);z-index:5;width:230px;padding:9px 11px;border:1px solid #f5c51845;border-radius:8px;background:#252831;color:#e4e5e8;font-size:11px;font-weight:500;line-height:1.45;letter-spacing:normal;text-transform:none;box-shadow:0 10px 30px #0008;opacity:0;visibility:hidden;transform:translateY(3px);transition:.15s;pointer-events:none}
+.field-help-tooltip::after{content:"";position:absolute;right:8px;top:100%;border:5px solid transparent;border-top-color:#f5c51845}
+.field-help:hover .field-help-tooltip,.field-help:focus-within .field-help-tooltip{opacity:1;visibility:visible;transform:none}
 .field-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .drawer-switch{display:flex;align-items:center;gap:10px;color:#ddd;font-size:12px;font-weight:600;cursor:pointer;padding:8px 0}
 .drawer-switch input{display:none}

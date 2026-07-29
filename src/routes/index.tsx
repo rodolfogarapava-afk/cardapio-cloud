@@ -870,7 +870,15 @@ function IntegratedProducts({products,categories,onChange,onAddCategory,onRename
           <label className="drawer-switch"><input type="checkbox" checked={form.trackStock} onChange={(e)=>setForm({...form,trackStock:e.target.checked})}/><span/> Controlar estoque</label>
           {form.trackStock&&<div className="field-row">
             <label className="field">Estoque<input value={form.stock} inputMode="numeric" onChange={(e)=>setForm({...form,stock:e.target.value})}/></label>
-            <label className="field">Mínimo<input value={form.minStock} inputMode="numeric" onChange={(e)=>setForm({...form,minStock:e.target.value})}/></label>
+            <label className="field">
+              <span className="field-label-with-help">Mínimo
+                <span className="field-help">
+                  <button type="button" aria-label="O que significa estoque mínimo?">?</button>
+                  <span className="field-help-tooltip" role="tooltip">Quando o estoque chegar a esta quantidade ou ficar abaixo dela, o sistema mostrará um alerta para reposição.</span>
+                </span>
+              </span>
+              <input value={form.minStock} inputMode="numeric" onChange={(e)=>setForm({...form,minStock:e.target.value})}/>
+            </label>
           </div>}
         </div>
         <footer className="drawer-foot">
