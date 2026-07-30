@@ -328,7 +328,7 @@ export function RestaurantApp() {
           <span className="brand-mark"><Utensils size={24} /></span>
           <span><b>{tenantBrand.main.toUpperCase()}</b><small>{tenantBrand.detail.toUpperCase()}</small></span>
         </div>
-        <div className={`search-box ${searchOpen ? "open" : ""}`}>
+        {(!tenantNavigation||tenantNavigation.page==="operation"&&systemView===null)&&<div className={`search-box ${searchOpen ? "open" : ""}`}>
           <Search size={18} />
           <input
             value={query}
@@ -336,11 +336,11 @@ export function RestaurantApp() {
             placeholder="Buscar no cardápio"
             aria-label="Buscar no cardápio"
           />
-        </div>
+        </div>}
         <nav className="top-actions">
-          <button className="plain search-trigger" onClick={() => setSearchOpen(!searchOpen)}>
+          {(!tenantNavigation||tenantNavigation.page==="operation"&&systemView===null)&&<button className="plain search-trigger" onClick={() => setSearchOpen(!searchOpen)}>
             <Search size={19} /> <span>BUSCAR</span>
-          </button>
+          </button>}
           <button className="plain commands-trigger" onClick={() => setModal("commands")}>
             <ShoppingBag size={18} /><span>COMANDAS</span>
             {!!savedCommands.length && <b className="command-count">{savedCommands.length}</b>}
