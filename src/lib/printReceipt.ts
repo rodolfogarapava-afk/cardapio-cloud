@@ -314,6 +314,10 @@ export function buildOrderTicketBase64(data: { customer: string; items: ReceiptI
   return bytesToBase64(buildOrderTicketEscPos(data));
 }
 
+export function buildReceiptBase64(data: ReceiptData) {
+  return bytesToBase64(buildReceiptEscPos(data));
+}
+
 /**
  * Envia só o bloco de ATUALIZAÇÃO (item removido/adicionado numa edição de
  * comanda já aberta) para a impressora térmica via ponte local.

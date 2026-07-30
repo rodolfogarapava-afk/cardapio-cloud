@@ -29,7 +29,7 @@ import {
 } from "lucide-react";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { sendOrderTicketToPrinter, sendOrderUpdateToPrinter, sendReceiptToPrinter, type OrderChange } from "@/lib/printReceipt";
-import { queueKitchenOrder } from "@/lib/printQueue";
+import { queueCustomerReceipt, queueKitchenOrder } from "@/lib/printQueue";
 import { generateReportPdf } from "@/lib/reportPdf";
 import { initAudioContext, playNotificationSound } from "@/lib/sounds";
 import { useTenantNavigation } from "@/components/SaaSPlatform";
@@ -406,7 +406,7 @@ export function RestaurantApp() {
           {tenantNavigation && tenantNavigation.page !== "operation" ? tenantNavigation.content :
           systemView === "products" ? <IntegratedProducts tenantId={tenantNavigation?.tenantId} products={products} categories={categories} onChange={persistProducts} onAddCategory={(name)=>persistCategories([...categories,name])} onRenameCategory={renameCategory} onDeleteCategory={(name)=>{const next=categories.filter((c)=>c!==name);persistCategories(next);if(activeMain===name)setActiveMain(next[0]||"")}} /> :
           systemView === "stock" ? <IntegratedStock products={products} onChange={persistProducts} /> :
-          systemView === "commands" ? <IntegratedCommands commands={savedCommands} setCommands={setSavedCommands} products={products} adjustStock={adjustStock} onCharge={(command) => { setCustomerName(command.name); setPaymentTotal(command.total); setPaymentItems(command.items); setPaymentCommandId(command.id); setPaymentCommandBackup(command); setModal("payment"); }} /> :
+          systemView === "commands" ? <IntegratedCommands tenantId={tenantNavigation?.tenantId} commands={savedCommands} setCommands={setSavedCommands} products={products} adjustStock={adjustStock} onCharge={(command) => { setCustomerName(command.name); setPaymentTotal(command.total); setPaymentItems(command.items); setPaymentCommandId(command.id); setPaymentCommandBackup(command); setModal("payment"); }} /> :
           systemView === "cash" ? <IntegratedCash sales={salesHistory} expenses={expenses} sync={operationsSync} onAddExpense={(description,amount) => setExpenses((all)=>[...all,{id:Date.now(),description,amount,createdAt:Date.now()}])} onDeleteExpense={(id)=>setExpenses((all)=>all.filter(expense=>expense.id!==id))} /> :
           systemView === "reports" ? <IntegratedReports sales={salesHistory} expenses={expenses} commands={savedCommands} sync={operationsSync} /> : <>
           {!categories.length && <div className="integrated-empty new-store-empty"><Store/><h3>Seu cardápio está vazio</h3><p>Esta é uma loja nova. Cadastre a primeira categoria e os produtos para começar.</p><button className="primary" onClick={()=>setSystemView("products")}>CADASTRAR PRODUTOS</button></div>}
@@ -607,7 +607,16 @@ export function RestaurantApp() {
                   const sale={id:Date.now(),name:customerName,total:paymentTotal,method:paymentMethod,createdAt:Date.now(),items:paymentItems};
                   setSalesHistory((all)=>[...all,sale]);
                   if(paymentCommandId!==null)setSavedCommands((all)=>all.filter((command)=>command.id!==paymentCommandId));
-                  printCustomerReceipt(sale); playNotificationSound("success"); setCart({}); setCartDetails({}); setCashReceived(""); setPaymentCommandId(null); setPaymentCommandBackup(null); setSent(true); setModal(null);
+                  if(tenantNavigation?.tenantId)queueCustomerReceipt({
+                    tenantId:tenantNavigation.tenantId,
+                    saleId:sale.id,
+                    customer:sale.name,
+                    items:toReceiptItems(sale.items),
+                    total:sale.total,
+                    paymentMethod:sale.method,
+                  }).catch((error)=>console.error("Pagamento confirmado, mas o comprovante não entrou na fila de impressão:",error));
+                  else printCustomerReceipt(sale);
+                  playNotificationSound("success"); setCart({}); setCartDetails({}); setCashReceived(""); setPaymentCommandId(null); setPaymentCommandBackup(null); setSent(true); setModal(null);
                 }}>CONFIRMAR PAGAMENTO E IMPRIMIR</button>
               </>
             )}
@@ -1175,7 +1184,7 @@ function IntegratedStock({products,onChange}:{products:Product[];onChange:(produ
   </div>;
 }
 
-function IntegratedCommands({commands,setCommands,onCharge,products,adjustStock}:{commands:IntegratedCommand[];setCommands:React.Dispatch<React.SetStateAction<IntegratedCommand[]>>;onCharge:(command:IntegratedCommand)=>void;products:Product[];adjustStock:(deltas:{name:string;qty:number}[])=>void}) {
+function IntegratedCommands({tenantId,commands,setCommands,onCharge,products,adjustStock}:{tenantId?:string|null;commands:IntegratedCommand[];setCommands:React.Dispatch<React.SetStateAction<IntegratedCommand[]>>;onCharge:(command:IntegratedCommand)=>void;products:Product[];adjustStock:(deltas:{name:string;qty:number}[])=>void}) {
   const [confirmation,setConfirmation]=useState<{action:"print"|"cancel";command:IntegratedCommand}|null>(null);
   const [editing,setEditing]=useState<IntegratedCommand|null>(null);
   const editCategories=useMemo(()=>Array.from(new Set(products.map((product)=>product.category))),[products]);
@@ -1245,6 +1254,20 @@ function IntegratedCommands({commands,setCommands,onCharge,products,adjustStock}
   };
   const setKitchenStatus=(id:number,kitchenStatus:"new"|"preparing"|"ready")=>
     setCommands((all)=>all.map((command)=>command.id===id?{...command,kitchenStatus}:command));
+  const reprintCommand=(command:IntegratedCommand)=>{
+    if(!tenantId){
+      printKitchenTicket(command.name,command.items);
+      return;
+    }
+    queueKitchenOrder({
+      tenantId,
+      commandId:command.id,
+      customer:command.name,
+      items:toReceiptItems(command.items),
+      total:command.total,
+      kind:`reprint_${Date.now()}`,
+    }).catch((error)=>console.error("Não foi possível colocar a reimpressão na fila:",error));
+  };
   const kitchenColumns=[
     {id:"new" as const,title:"NOVAS",description:"Aguardando início",commands:commands.filter((command)=>(command.kitchenStatus||"new")==="new")},
     {id:"preparing" as const,title:"PREPARANDO",description:"Em produção",commands:commands.filter((command)=>command.kitchenStatus==="preparing")},
@@ -1263,7 +1286,7 @@ function IntegratedCommands({commands,setCommands,onCharge,products,adjustStock}
           {column.id==="preparing"&&<><button onClick={()=>setKitchenStatus(command.id,"new")}>VOLTAR</button><button className="flow-main" onClick={()=>setKitchenStatus(command.id,"ready")}>MARCAR PRONTO</button></>}
           {column.id==="ready"&&<><button onClick={()=>setKitchenStatus(command.id,"preparing")}>VOLTAR</button><button className="flow-main" onClick={()=>onCharge(command)}>COBRAR / FINALIZAR</button></>}
         </div>
-        <footer><button onClick={()=>{setEditing(command);setEditCategory((current)=>current||editCategories[0]||"")}}>EDITAR</button><button onClick={()=>setConfirmation({action:"print",command})}>IMPRIMIR</button><button className="danger" onClick={()=>setConfirmation({action:"cancel",command})}>CANCELAR</button></footer>
+        <footer><button onClick={()=>{setEditing(command);setEditCategory((current)=>current||editCategories[0]||"")}}>EDITAR</button><button onClick={()=>reprintCommand(command)}>REIMPRIMIR</button><button className="danger" onClick={()=>setConfirmation({action:"cancel",command})}>CANCELAR</button></footer>
       </article>):<div className="kitchen-column-empty"><ShoppingBag/><span>Nenhuma comanda</span></div>}</div>
     </section>)}</div>}
     {confirmation&&<div className="modal-backdrop" onMouseDown={()=>setConfirmation(null)}><section className="modal confirmation-modal" onMouseDown={(event)=>event.stopPropagation()}>
