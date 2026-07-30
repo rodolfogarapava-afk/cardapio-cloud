@@ -233,7 +233,7 @@ export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog
     const digits = phoneDigits(value);
     setCheckout((current) => ({ ...current, phone: formatted }));
     setCustomerLookupMessage("");
-    if (digits.length < 10) return;
+    if (digits.length < 11) return;
     try {
       const profiles = JSON.parse(localStorage.getItem(customerProfilesKey) || "{}") as Record<string, SavedCustomerProfile>;
       const knownCustomer = profiles[digits];
@@ -252,6 +252,19 @@ export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog
         setCustomerLookupMessage(knownCustomer.street
           ? "Cadastro encontrado: nome e endereço preenchidos."
           : "Cadastro encontrado pelo telefone.");
+      } else {
+        setCheckout((current) => ({
+          ...current,
+          phone: formatted,
+          name: "",
+          street: "",
+          number: "",
+          neighborhood: "",
+          reference: "",
+          latitude: null,
+          longitude: null,
+        }));
+        setCustomerLookupMessage("Telefone não cadastrado neste aparelho. Preencha os dados para salvá-los ao confirmar o pedido.");
       }
     } catch {
       // Mantém o preenchimento manual quando o armazenamento local não está disponível.
