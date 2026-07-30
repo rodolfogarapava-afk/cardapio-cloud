@@ -1367,10 +1367,10 @@ function IntegratedCommands({tenantId,commands,setCommands,onCharge,products,adj
       <header className="kitchen-column-head"><div><b>{column.title}</b><span>{column.commands.length}</span></div><small>{column.description}</small></header>
       <div className="kitchen-column-list">{column.commands.length?column.commands.map((command)=><article className="kitchen-command-card" key={command.id}>
         <header><div><small>COMANDA #{String(command.id).slice(-4)} · HÁ {Math.max(1,Math.round((Date.now()-command.createdAt)/60000))} MIN</small><h2>{command.name}</h2></div><strong>R$ {command.total.toFixed(2).replace(".",",")}</strong></header>
-        {command.delivery&&<div className={`command-delivery ${command.delivery.fulfillment==="delivery"?"is-delivery":"is-pickup"}`}>
-          <b><Truck/>{command.delivery.fulfillment==="delivery"?"ENTREGA · DELIVERY":"RETIRADA NA LOJA"}</b>
+        {command.delivery?.fulfillment==="delivery"&&<div className="command-delivery is-delivery">
+          <b><Truck/>ENTREGA · DELIVERY</b>
           {command.delivery.phone&&<span><Phone/>{command.delivery.phone}</span>}
-          {command.delivery.fulfillment==="delivery"&&deliveryAddress(command.delivery)&&<span><MapPin/>{deliveryAddress(command.delivery)}</span>}
+          {deliveryAddress(command.delivery)&&<span><MapPin/>{deliveryAddress(command.delivery)}</span>}
           {command.delivery.notes&&<small>OBS.: {command.delivery.notes}</small>}
         </div>}
         <div className="command-products">{command.items.map((item,index)=><label key={`${item.name}-${index}`}><input type="checkbox" checked={item.delivered} onChange={()=>setCommands((all)=>all.map((c)=>c.id===command.id?{...c,items:c.items.map((x,i)=>i===index?{...x,delivered:!x.delivered}:x)}:c))}/><span><b>{item.qty}×</b> {item.name}{item.detail&&<small>{item.detail}</small>}</span><em>{item.delivered?"Entregue":column.id==="ready"?"Pronto":column.id==="new"?"Novo":"Preparando"}</em></label>)}</div>
