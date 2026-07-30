@@ -44,6 +44,7 @@ type CheckoutData = {
   coupon: string;
   notes: string;
 };
+type SavedCustomerProfile = Pick<CheckoutData, "name" | "phone" | "street" | "number" | "neighborhood" | "reference" | "latitude" | "longitude">;
 
 const money = (value: number) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const preparationOptions = ["Mal passado", "Ao ponto", "Bem passado"];
@@ -91,10 +92,22 @@ export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog
       const cookieValue = document.cookie.split("; ").find((item) => item.startsWith(`${lastCustomerKey}=`))?.split("=").slice(1).join("=");
       const saved = localStorage.getItem(lastCustomerKey) || (cookieValue ? decodeURIComponent(cookieValue) : "");
       if (!saved) return;
-      const customer = JSON.parse(saved) as { name?: string; phone?: string };
+      const customer = JSON.parse(saved) as Partial<SavedCustomerProfile>;
       if (customer.name && customer.phone) {
-        setCheckout((current) => ({ ...current, name: customer.name || "", phone: formatPhone(customer.phone || "") }));
-        setCustomerLookupMessage("Seus dados foram preenchidos automaticamente.");
+        setCheckout((current) => ({
+          ...current,
+          name: customer.name || "",
+          phone: formatPhone(customer.phone || ""),
+          street: customer.street || current.street,
+          number: customer.number || current.number,
+          neighborhood: customer.neighborhood || current.neighborhood,
+          reference: customer.reference || current.reference,
+          latitude: customer.latitude ?? current.latitude,
+          longitude: customer.longitude ?? current.longitude,
+        }));
+        setCustomerLookupMessage(customer.street
+          ? "Nome e endereço foram preenchidos automaticamente."
+          : "Seus dados foram preenchidos automaticamente.");
       }
     } catch {
       // O cadastro local é opcional; o checkout continua funcionando sem ele.
@@ -175,11 +188,23 @@ export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog
     setCustomerLookupMessage("");
     if (digits.length < 10) return;
     try {
-      const profiles = JSON.parse(localStorage.getItem(customerProfilesKey) || "{}") as Record<string, { name: string; phone: string }>;
+      const profiles = JSON.parse(localStorage.getItem(customerProfilesKey) || "{}") as Record<string, SavedCustomerProfile>;
       const knownCustomer = profiles[digits];
       if (knownCustomer?.name) {
-        setCheckout((current) => ({ ...current, phone: formatted, name: knownCustomer.name }));
-        setCustomerLookupMessage("Cadastro encontrado pelo telefone.");
+        setCheckout((current) => ({
+          ...current,
+          phone: formatted,
+          name: knownCustomer.name,
+          street: knownCustomer.street || current.street,
+          number: knownCustomer.number || current.number,
+          neighborhood: knownCustomer.neighborhood || current.neighborhood,
+          reference: knownCustomer.reference || current.reference,
+          latitude: knownCustomer.latitude ?? current.latitude,
+          longitude: knownCustomer.longitude ?? current.longitude,
+        }));
+        setCustomerLookupMessage(knownCustomer.street
+          ? "Cadastro encontrado: nome e endereço preenchidos."
+          : "Cadastro encontrado pelo telefone.");
       }
     } catch {
       // Mantém o preenchimento manual quando o armazenamento local não está disponível.
@@ -188,15 +213,24 @@ export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog
   const saveCustomerProfile = () => {
     if (!rememberCustomer) return;
     const digits = phoneDigits(checkout.phone);
-    const customer = { name: checkout.name.trim(), phone: digits };
+    const customer: SavedCustomerProfile = {
+      name: checkout.name.trim(),
+      phone: digits,
+      street: checkout.street.trim(),
+      number: checkout.number.trim(),
+      neighborhood: checkout.neighborhood.trim(),
+      reference: checkout.reference.trim(),
+      latitude: checkout.latitude,
+      longitude: checkout.longitude,
+    };
     if (!customer.name || digits.length < 10) return;
     try {
-      const profiles = JSON.parse(localStorage.getItem(customerProfilesKey) || "{}") as Record<string, { name: string; phone: string }>;
+      const profiles = JSON.parse(localStorage.getItem(customerProfilesKey) || "{}") as Record<string, SavedCustomerProfile>;
       profiles[digits] = customer;
       localStorage.setItem(customerProfilesKey, JSON.stringify(profiles));
       localStorage.setItem(lastCustomerKey, JSON.stringify(customer));
       const secure = location.protocol === "https:" ? "; Secure" : "";
-      document.cookie = `${lastCustomerKey}=${encodeURIComponent(JSON.stringify(customer))}; Max-Age=31536000; Path=/; SameSite=Lax${secure}`;
+      document.cookie = `${lastCustomerKey}=${encodeURIComponent(JSON.stringify({ name: customer.name, phone: customer.phone }))}; Max-Age=31536000; Path=/; SameSite=Lax${secure}`;
     } catch {
       // O pedido pode continuar mesmo se o navegador bloquear cookies ou armazenamento.
     }
@@ -277,7 +311,7 @@ export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog
           <label>Nome*<input value={checkout.name} onChange={(event) => updateCheckout("name", event.target.value)} placeholder="Seu nome completo" /></label>
           <label>Telefone*<input value={checkout.phone} onChange={(event) => updateCustomerPhone(event.target.value)} placeholder="(00) 00000-0000" inputMode="tel" autoComplete="tel" /></label>
           {!!customerLookupMessage && <p className="customer-lookup-message">{customerLookupMessage}</p>}
-          <label className="remember-customer"><input type="checkbox" checked={rememberCustomer} onChange={(event) => setRememberCustomer(event.target.checked)} /><span><b>Salvar meus dados neste aparelho</b><small>Na próxima compra, nome e telefone serão preenchidos automaticamente.</small></span></label>
+          <label className="remember-customer"><input type="checkbox" checked={rememberCustomer} onChange={(event) => setRememberCustomer(event.target.checked)} /><span><b>Salvar meus dados neste aparelho</b><small>Na próxima compra, nome, telefone e endereço serão preenchidos automaticamente.</small></span></label>
         </section>
 
         <section className="checkout-card">
