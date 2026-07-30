@@ -824,6 +824,7 @@ function IntegratedProducts({tenantId,products,categories,onChange,onAddCategory
   const [manageOpen,setManageOpen]=useState(false);
   const [newCategory,setNewCategory]=useState("");
   const [categoryToDelete,setCategoryToDelete]=useState<string|null>(null);
+  const [productToDelete,setProductToDelete]=useState<Product|null>(null);
   const [productError,setProductError]=useState("");
   const [categoryNotice,setCategoryNotice]=useState("");
   const [imageUploading,setImageUploading]=useState(false);
@@ -932,7 +933,7 @@ function IntegratedProducts({tenantId,products,categories,onChange,onAddCategory
             <div className="catalog-hover">
               <button onClick={(e)=>{e.stopPropagation();openEdit(product)}} title="Editar"><Utensils size={14}/></button>
               <button onClick={(e)=>{e.stopPropagation();duplicate(product)}} title="Duplicar"><Plus size={14}/></button>
-              <button onClick={(e)=>{e.stopPropagation();remove(product.id)}} title="Remover" className="danger"><X size={14}/></button>
+              <button onClick={(e)=>{e.stopPropagation();setProductToDelete(product)}} title="Remover" className="danger"><X size={14}/></button>
             </div>
           </div>
           <div className="catalog-card-body">
@@ -994,11 +995,24 @@ function IntegratedProducts({tenantId,products,categories,onChange,onAddCategory
           </div>}
         </div>
         <footer className="drawer-foot">
-          {editing&&<button className="danger-btn" onClick={()=>remove(editing!)}>Remover</button>}
+          {editing&&<button className="danger-btn" onClick={()=>setProductToDelete(products.find((product)=>product.id===editing)||null)}>Remover</button>}
           <button className="ghost-btn" onClick={closeDrawer}>Cancelar</button>
           <button className="primary-btn" disabled={imageUploading} onClick={submit}>{imageUploading?"Enviando imagem...":editing?"Salvar":"Adicionar"}</button>
         </footer>
       </aside>
+    </div>}
+
+    {productToDelete&&<div className="modal-backdrop" onMouseDown={()=>setProductToDelete(null)}>
+      <section className="modal confirmation-modal" onMouseDown={(event)=>event.stopPropagation()}>
+        <button className="modal-close" onClick={()=>setProductToDelete(null)} aria-label="Fechar"><X/></button>
+        <span className="modal-icon"><Trash2/></span>
+        <h3>Remover produto</h3>
+        <p>Você tem certeza que deseja remover <b>{productToDelete.name}</b>? Essa ação não poderá ser desfeita.</p>
+        <div className="confirmation-actions">
+          <button onClick={()=>setProductToDelete(null)}>VOLTAR</button>
+          <button className="danger-confirm" onClick={()=>{remove(productToDelete.id);setProductToDelete(null)}}>SIM, REMOVER</button>
+        </div>
+      </section>
     </div>}
 
     {manageOpen&&<div className="modal-backdrop" onMouseDown={()=>{setManageOpen(false);setCategoryNotice("")}}>
