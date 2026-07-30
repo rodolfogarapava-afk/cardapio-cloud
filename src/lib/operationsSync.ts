@@ -54,6 +54,7 @@ export function useOperationsSync(params: Params) {
   const hydrated = useRef(false);
   const applyingRemote = useRef(false);
   const localChangePending = useRef(false);
+  const lastLocalChangeAt = useRef(0);
   const latest = useRef(params);
   latest.current = params;
 
@@ -118,6 +119,7 @@ export function useOperationsSync(params: Params) {
     if (!supabase || !tenantId || !hydrated.current) return;
     if (applyingRemote.current) return;
     localChangePending.current = true;
+    lastLocalChangeAt.current = Date.now();
     const timer = window.setTimeout(async () => {
       if (applyingRemote.current) {
         localChangePending.current = false;
@@ -168,7 +170,7 @@ export function useOperationsSync(params: Params) {
       ]);
       localChangePending.current = false;
       setStatus(deletes.some(result => result.error) ? "error" : "synced");
-    }, 120);
+    }, 0);
     return () => window.clearTimeout(timer);
   }, [params.commands, params.sales, params.expenses, tenantId]);
 
@@ -177,7 +179,7 @@ export function useOperationsSync(params: Params) {
     const refresh = async () => {
       // Não deixa um evento antigo da nuvem desfazer uma movimentação que
       // acabou de acontecer na tela (ex.: PRONTA -> PREPARANDO).
-      if (localChangePending.current) return;
+      if (localChangePending.current || Date.now()-lastLocalChangeAt.current<1200) return;
       const current = latest.current;
       const [commandsResult, salesResult, expensesResult] = await Promise.all([
         supabase!.from("restaurant_commands").select("payload").eq("tenant_id", tenantId),
