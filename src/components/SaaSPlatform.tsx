@@ -328,7 +328,7 @@ function CreateTenantModal({onClose,onCreated}:{onClose:()=>void;onCreated:(tena
       <label>Mensalidade<input required inputMode="decimal" value={form.monthly} onChange={e=>update("monthly",e.target.value)} placeholder="89,90"/></label>
       <label>Próximo vencimento<input required type="date" value={form.due} onChange={e=>update("due",e.target.value)}/></label>
       <label className="saas-delivery-toggle"><span><input type="checkbox" checked={form.deliveryEnabled} onChange={e=>update("deliveryEnabled",e.target.checked)}/> Ativar delivery e cardápio público</span><small>A loja presencial continua funcionando normalmente.</small></label>
-      {form.deliveryEnabled&&<label>Endereço do cardápio<div className="saas-slug-field"><span>/cardapio/</span><input required value={form.slug||normalizeTenantSlug(form.name)} onChange={e=>update("slug",normalizeTenantSlug(e.target.value))} placeholder="nome-da-loja"/></div><small>Link público exclusivo desta loja.</small></label>}
+      {form.deliveryEnabled&&<label>Endereço do delivery<div className="saas-slug-field"><span>/delivery/</span><input required value={form.slug||normalizeTenantSlug(form.name)} onChange={e=>update("slug",normalizeTenantSlug(e.target.value))} placeholder="nome-da-loja"/></div><small>Link público exclusivo desta loja.</small></label>}
     </div>
     {error&&<div className="saas-form-error">{error}</div>}
     <div className="saas-modal-actions"><button type="button" onClick={onClose}>CANCELAR</button><button type="submit" disabled={busy}>{busy?<RefreshCw className="spin"/>:<Plus/>}{busy?"CRIANDO...":"CRIAR CLIENTE E ACESSO"}</button></div>
@@ -385,7 +385,7 @@ function EditTenantModal({tenant,onClose,onUpdated}:{tenant:Tenant;onClose:()=>v
       <label>Mensalidade<input required inputMode="decimal" value={form.monthly} onChange={e=>update("monthly",e.target.value)}/></label>
       <label>Próximo vencimento<input required type="date" value={form.due} onChange={e=>update("due",e.target.value)}/></label>
       <label className="saas-delivery-toggle"><span><input type="checkbox" checked={form.deliveryEnabled} onChange={e=>update("deliveryEnabled",e.target.checked)}/> Ativar delivery e cardápio público</span><small>Desative para manter somente o atendimento presencial.</small></label>
-      {form.deliveryEnabled&&<label>Endereço do cardápio<div className="saas-slug-field"><span>/cardapio/</span><input required value={form.slug} onChange={e=>update("slug",normalizeTenantSlug(e.target.value))} placeholder="nome-da-loja"/></div><small>Link: /cardapio/{form.slug||"nome-da-loja"}</small></label>}
+      {form.deliveryEnabled&&<label>Endereço do delivery<div className="saas-slug-field"><span>/delivery/</span><input required value={form.slug} onChange={e=>update("slug",normalizeTenantSlug(e.target.value))} placeholder="nome-da-loja"/></div><small>Link: /delivery/{form.slug||"nome-da-loja"}</small></label>}
     </div>
     {error&&<div className="saas-form-error">{error}</div>}
     <div className="saas-modal-actions"><button type="button" onClick={onClose}>CANCELAR</button><button type="submit" disabled={busy||accessLoading}>{busy?<RefreshCw className="spin"/>:null}{busy?"SALVANDO...":"SALVAR ALTERAÇÕES"}</button></div>
