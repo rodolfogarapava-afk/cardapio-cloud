@@ -4,6 +4,7 @@ create table if not exists public.tenants (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   slug text not null unique,
+  delivery_enabled boolean not null default false,
   subscription_status text not null default 'trial'
     check (subscription_status in ('trial', 'active', 'past_due', 'blocked', 'canceled')),
   created_at timestamptz not null default now()

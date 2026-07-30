@@ -35,6 +35,8 @@ type SubscriptionStatus = "active" | "past_due" | "blocked" | "trial" | "cancele
 type Tenant = {
   id: string;
   name: string;
+  slug: string;
+  deliveryEnabled: boolean;
   owner: string;
   plan: string;
   monthly: number;
@@ -93,17 +95,26 @@ export default function SaaSPlatform({ children, area = "auto" }: { children: Re
       if(cancelled)return;
       if(profileError){setLoadError("Não foi possível carregar o perfil administrativo.");return}
       const isMaster=profile?.platform_role==="super_admin";
-      let query=supabase.from("tenants").select("id,name,owner_name,plan,monthly_fee,subscription_status,due_date,printer_status");
+      let tenantFilterId="";
+      let query=supabase.from("tenants").select("id,name,slug,delivery_enabled,owner_name,plan,monthly_fee,subscription_status,due_date,printer_status");
       if(!isMaster){
         const {data:membership}=await supabase.from("tenant_memberships").select("tenant_id").eq("user_id",auth.user.id).limit(1).maybeSingle();
         if(!membership?.tenant_id){setLoadError("Este usuário ainda não está vinculado a uma loja.");return}
-        query=query.eq("id",membership.tenant_id);
+        tenantFilterId=membership.tenant_id;
+        query=query.eq("id",tenantFilterId);
       }
-      const {data,error}=await query.order("created_at",{ascending:false});
+      let {data,error}=await query.order("created_at",{ascending:false});
+      if(error?.message.includes("delivery_enabled")){
+        let legacyQuery=supabase.from("tenants").select("id,name,slug,owner_name,plan,monthly_fee,subscription_status,due_date,printer_status");
+        if(tenantFilterId)legacyQuery=legacyQuery.eq("id",tenantFilterId);
+        const legacy=await legacyQuery.order("created_at",{ascending:false});
+        data=legacy.data?.map((row)=>({...row,delivery_enabled:false}))||null;
+        error=legacy.error;
+      }
       if(cancelled)return;
       if(error){setLoadError("Não foi possível carregar as lojas.");return}
       const mapped=(data||[]).map((row)=>({
-        id:row.id,name:row.name,owner:row.owner_name||"Sem responsável",plan:row.plan,
+        id:row.id,name:row.name,slug:row.slug,deliveryEnabled:Boolean(row.delivery_enabled),owner:row.owner_name||"Sem responsável",plan:row.plan,
         monthly:Number(row.monthly_fee),status:row.subscription_status as SubscriptionStatus,
         due:formatDate(row.due_date),orders:0,printer:row.printer_status as "online"|"offline",
       }));
@@ -267,17 +278,19 @@ function MasterConsole({ page, setPage, tenants, jobs, onStatus, onEnterTenant, 
   );
 }
 
+const normalizeTenantSlug=(value:string)=>value.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
+
 function CreateTenantModal({onClose,onCreated}:{onClose:()=>void;onCreated:(tenant:Tenant)=>void}) {
-  const [form,setForm]=useState({name:"",owner:"",email:"",password:"",plan:"Essencial",monthly:"89,90",due:""});
+  const [form,setForm]=useState({name:"",owner:"",email:"",password:"",plan:"Essencial",monthly:"89,90",due:"",slug:"",deliveryEnabled:false});
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
-  const update=(field:string,value:string)=>setForm(current=>({...current,[field]:value}));
+  const update=(field:string,value:string|boolean)=>setForm(current=>({...current,[field]:value}));
   const submit=async(event:React.FormEvent)=>{
     event.preventDefault();setError("");setBusy(true);
     const isolated=createIsolatedSupabaseClient();
     if(!supabase||!isolated){setError("Supabase não configurado.");setBusy(false);return}
-    const slugBase=form.name.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
-    const slug=`${slugBase}-${String(Date.now()).slice(-5)}`;
+    const slug=normalizeTenantSlug(form.slug||form.name);
+    if(form.deliveryEnabled&&!slug){setError("Informe um endereço válido para o cardápio.");setBusy(false);return}
     const monthly=Number(form.monthly.replace(",","."));
     const {data:signup,error:signupError}=await isolated.auth.signUp({email:form.email.trim(),password:form.password,options:{data:{full_name:form.owner.trim()}}});
     if(signupError||!signup.user){
@@ -290,7 +303,7 @@ function CreateTenantModal({onClose,onCreated}:{onClose:()=>void;onCreated:(tena
       setBusy(false);return
     }
     const {data:tenant,error:tenantError}=await supabase.from("tenants").insert({
-      name:form.name.trim(),slug,owner_name:form.owner.trim(),plan:form.plan,monthly_fee:monthly,
+      name:form.name.trim(),slug,delivery_enabled:form.deliveryEnabled,owner_name:form.owner.trim(),plan:form.plan,monthly_fee:monthly,
       due_date:form.due||null,subscription_status:"active",printer_status:"offline",
     }).select("id").single();
     if(tenantError||!tenant){setError(tenantError?.message||"Não foi possível criar a loja.");setBusy(false);return}
@@ -301,7 +314,7 @@ function CreateTenantModal({onClose,onCreated}:{onClose:()=>void;onCreated:(tena
     ]);
     const finalError=profileResult.error||membershipResult.error||confirmationResult.error;
     if(finalError){setError(finalError.message);setBusy(false);return}
-    onCreated({id:tenant.id,name:form.name.trim(),owner:form.owner.trim(),plan:form.plan,monthly,status:"active",due:form.due?new Date(form.due+"T12:00:00").toLocaleDateString("pt-BR"):"—",orders:0,printer:"offline"});
+    onCreated({id:tenant.id,name:form.name.trim(),slug,deliveryEnabled:form.deliveryEnabled,owner:form.owner.trim(),plan:form.plan,monthly,status:"active",due:form.due?new Date(form.due+"T12:00:00").toLocaleDateString("pt-BR"):"—",orders:0,printer:"offline"});
   };
   return <div className="saas-modal-backdrop" onMouseDown={onClose}><form className="saas-client-modal" onMouseDown={event=>event.stopPropagation()} onSubmit={submit}>
     <button type="button" className="saas-modal-close" onClick={onClose} aria-label="Fechar"><XCircle/></button>
@@ -314,6 +327,8 @@ function CreateTenantModal({onClose,onCreated}:{onClose:()=>void;onCreated:(tena
       <label>Plano<select value={form.plan} onChange={e=>update("plan",e.target.value)}><option>Essencial</option><option>Pro</option><option>Premium</option></select></label>
       <label>Mensalidade<input required inputMode="decimal" value={form.monthly} onChange={e=>update("monthly",e.target.value)} placeholder="89,90"/></label>
       <label>Próximo vencimento<input required type="date" value={form.due} onChange={e=>update("due",e.target.value)}/></label>
+      <label className="saas-delivery-toggle"><span><input type="checkbox" checked={form.deliveryEnabled} onChange={e=>update("deliveryEnabled",e.target.checked)}/> Ativar delivery e cardápio público</span><small>A loja presencial continua funcionando normalmente.</small></label>
+      {form.deliveryEnabled&&<label>Endereço do cardápio<div className="saas-slug-field"><span>/cardapio/</span><input required value={form.slug||normalizeTenantSlug(form.name)} onChange={e=>update("slug",normalizeTenantSlug(e.target.value))} placeholder="nome-da-loja"/></div><small>Link público exclusivo desta loja.</small></label>}
     </div>
     {error&&<div className="saas-form-error">{error}</div>}
     <div className="saas-modal-actions"><button type="button" onClick={onClose}>CANCELAR</button><button type="submit" disabled={busy}>{busy?<RefreshCw className="spin"/>:<Plus/>}{busy?"CRIANDO...":"CRIAR CLIENTE E ACESSO"}</button></div>
@@ -325,11 +340,11 @@ function EditTenantModal({tenant,onClose,onUpdated}:{tenant:Tenant;onClose:()=>v
     const parts=value.split("/");
     return parts.length===3?`${parts[2]}-${parts[1]}-${parts[0]}`:"";
   };
-  const [form,setForm]=useState({name:tenant.name,owner:tenant.owner,email:"",password:"",plan:tenant.plan,monthly:tenant.monthly.toFixed(2).replace(".",","),due:toISODate(tenant.due)});
+  const [form,setForm]=useState({name:tenant.name,owner:tenant.owner,email:"",password:"",plan:tenant.plan,monthly:tenant.monthly.toFixed(2).replace(".",","),due:toISODate(tenant.due),slug:tenant.slug,deliveryEnabled:tenant.deliveryEnabled});
   const [busy,setBusy]=useState(false);
   const [accessLoading,setAccessLoading]=useState(true);
   const [error,setError]=useState("");
-  const update=(field:string,value:string)=>setForm(current=>({...current,[field]:value}));
+  const update=(field:string,value:string|boolean)=>setForm(current=>({...current,[field]:value}));
   useEffect(()=>{
     let active=true;
     if(!supabase){setAccessLoading(false);return}
@@ -345,16 +360,18 @@ function EditTenantModal({tenant,onClose,onUpdated}:{tenant:Tenant;onClose:()=>v
     event.preventDefault();setBusy(true);setError("");
     if(!supabase){setError("Supabase não configurado.");setBusy(false);return}
     const monthly=Number(form.monthly.replace(",","."));
+    const slug=normalizeTenantSlug(form.slug||form.name);
+    if(form.deliveryEnabled&&!slug){setError("Informe um endereço válido para o cardápio.");setBusy(false);return}
     const {error:accessError}=await supabase.rpc("update_client_access",{
       client_tenant_id:tenant.id,new_email:form.email.trim(),new_password:form.password||null,
     });
     if(accessError){setError(accessError.message);setBusy(false);return}
     const {error:updateError}=await supabase.from("tenants").update({
       name:form.name.trim(),owner_name:form.owner.trim(),plan:form.plan,
-      monthly_fee:monthly,due_date:form.due||null,
+      monthly_fee:monthly,due_date:form.due||null,slug,delivery_enabled:form.deliveryEnabled,
     }).eq("id",tenant.id);
     if(updateError){setError(updateError.message);setBusy(false);return}
-    onUpdated({...tenant,name:form.name.trim(),owner:form.owner.trim(),plan:form.plan,monthly,due:form.due?new Date(form.due+"T12:00:00").toLocaleDateString("pt-BR"):"—"});
+    onUpdated({...tenant,name:form.name.trim(),slug,deliveryEnabled:form.deliveryEnabled,owner:form.owner.trim(),plan:form.plan,monthly,due:form.due?new Date(form.due+"T12:00:00").toLocaleDateString("pt-BR"):"—"});
   };
   return <div className="saas-modal-backdrop" onMouseDown={onClose}><form className="saas-client-modal" onMouseDown={event=>event.stopPropagation()} onSubmit={submit}>
     <button type="button" className="saas-modal-close" onClick={onClose} aria-label="Fechar"><XCircle/></button>
@@ -367,6 +384,8 @@ function EditTenantModal({tenant,onClose,onUpdated}:{tenant:Tenant;onClose:()=>v
       <label>Plano<select value={form.plan} onChange={e=>update("plan",e.target.value)}><option>Essencial</option><option>Pro</option><option>Premium</option></select></label>
       <label>Mensalidade<input required inputMode="decimal" value={form.monthly} onChange={e=>update("monthly",e.target.value)}/></label>
       <label>Próximo vencimento<input required type="date" value={form.due} onChange={e=>update("due",e.target.value)}/></label>
+      <label className="saas-delivery-toggle"><span><input type="checkbox" checked={form.deliveryEnabled} onChange={e=>update("deliveryEnabled",e.target.checked)}/> Ativar delivery e cardápio público</span><small>Desative para manter somente o atendimento presencial.</small></label>
+      {form.deliveryEnabled&&<label>Endereço do cardápio<div className="saas-slug-field"><span>/cardapio/</span><input required value={form.slug} onChange={e=>update("slug",normalizeTenantSlug(e.target.value))} placeholder="nome-da-loja"/></div><small>Link: /cardapio/{form.slug||"nome-da-loja"}</small></label>}
     </div>
     {error&&<div className="saas-form-error">{error}</div>}
     <div className="saas-modal-actions"><button type="button" onClick={onClose}>CANCELAR</button><button type="submit" disabled={busy||accessLoading}>{busy?<RefreshCw className="spin"/>:null}{busy?"SALVANDO...":"SALVAR ALTERAÇÕES"}</button></div>

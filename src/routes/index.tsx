@@ -55,7 +55,7 @@ export const Route = createFileRoute("/")({
 });
 
 
-type Product = {
+export type Product = {
   id: number;
   category: string;
   name: string;
@@ -111,17 +111,22 @@ const nav = [
   { label: "Bebidas", icon: Wine },
 ];
 
-export function RestaurantApp({ publicMenu = false }: { publicMenu?: boolean }) {
+export function RestaurantApp({ publicMenu = false, publicCatalog }: {
+  publicMenu?: boolean;
+  publicCatalog?: { tenantId: string; tenantName: string; products: Product[]; categories: string[] };
+}) {
   const tenantNavigation = useTenantNavigation();
-  const isOriginalStore = !tenantNavigation || tenantNavigation.tenantName.trim().toLowerCase() === "deus proveu espetinhos";
-  const tenantStoragePrefix = isOriginalStore ? "burguer-house" : `cardapio-cloud-${tenantNavigation.tenantId}`;
-  const tenantInitialProducts = isOriginalStore ? initialProducts : [];
-  const tenantInitialCategories = isOriginalStore ? nav.map((item) => item.label) : [];
+  const effectiveTenantId = publicCatalog?.tenantId || tenantNavigation?.tenantId;
+  const effectiveTenantName = publicCatalog?.tenantName || tenantNavigation?.tenantName;
+  const isOriginalStore = !effectiveTenantName || effectiveTenantName.trim().toLowerCase() === "deus proveu espetinhos";
+  const tenantStoragePrefix = isOriginalStore ? "burguer-house" : `cardapio-cloud-${effectiveTenantId}`;
+  const tenantInitialProducts = publicCatalog?.products || (isOriginalStore ? initialProducts : []);
+  const tenantInitialCategories = publicCatalog?.categories || (isOriginalStore ? nav.map((item) => item.label) : []);
   const tenantBrand = useMemo(() => {
-    const words = (tenantNavigation?.tenantName || "Deus Proveu Espetinhos").trim().split(/\s+/);
+    const words = (effectiveTenantName || "Deus Proveu Espetinhos").trim().split(/\s+/);
     if (words.length === 1) return { main: words[0], detail: "CARDÁPIO DIGITAL" };
     return { main: words.slice(0, -1).join(" "), detail: words.at(-1) || "CARDÁPIO DIGITAL" };
-  }, [tenantNavigation?.tenantName]);
+  }, [effectiveTenantName]);
   const [products, setProducts] = useState<Product[]>(tenantInitialProducts);
   const [categories, setCategories] = useState<string[]>(tenantInitialCategories);
   const [activeMain, setActiveMain] = useState(tenantInitialCategories[0] || "");
@@ -152,6 +157,7 @@ export function RestaurantApp({ publicMenu = false }: { publicMenu?: boolean }) 
 
   useEffect(() => {
     initAudioContext();
+    if(publicCatalog){setStorageReady(true);return}
     const saved = window.localStorage.getItem(`${tenantStoragePrefix}-products`);
     if (saved) {
       try { setProducts(JSON.parse(saved)); } catch {}
@@ -167,25 +173,25 @@ export function RestaurantApp({ publicMenu = false }: { publicMenu?: boolean }) 
       if(savedExpenses)setExpenses(JSON.parse(savedExpenses));
     } catch {}
     setStorageReady(true);
-  }, []);
+  }, [publicCatalog,tenantStoragePrefix]);
   useCatalogSync({
-    tenantId: tenantNavigation?.tenantId,
+    tenantId: publicCatalog ? null : tenantNavigation?.tenantId,
     products,
     categories,
     setProducts,
     setCategories,
-    ready: storageReady,
+    ready: storageReady && !publicCatalog,
     legacyStoragePrefix: tenantStoragePrefix,
   });
   const operationsSync = useOperationsSync({
-    tenantId: tenantNavigation?.tenantId,
+    tenantId: publicCatalog ? null : tenantNavigation?.tenantId,
     commands: savedCommands,
     sales: salesHistory,
     expenses,
     setCommands: setSavedCommands,
     setSales: setSalesHistory,
     setExpenses,
-    localReady: storageReady,
+    localReady: storageReady && !publicCatalog,
     legacyStoragePrefix: tenantStoragePrefix,
   });
   useEffect(()=>{
@@ -324,7 +330,7 @@ export function RestaurantApp({ publicMenu = false }: { publicMenu?: boolean }) 
         <button className="mobile-menu" onClick={() => setMenuOpen(true)} aria-label="Abrir menu">
           <Menu size={22} />
         </button>
-        <div className="brand" aria-label={tenantNavigation?.tenantName || "Deus Proveu Espetinhos"}>
+        <div className="brand" aria-label={effectiveTenantName || "Deus Proveu Espetinhos"}>
           <span className="brand-mark"><Utensils size={24} /></span>
           <span><b>{tenantBrand.main.toUpperCase()}</b><small>{tenantBrand.detail.toUpperCase()}</small></span>
         </div>
