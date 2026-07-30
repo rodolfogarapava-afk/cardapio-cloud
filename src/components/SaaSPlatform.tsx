@@ -325,14 +325,30 @@ function EditTenantModal({tenant,onClose,onUpdated}:{tenant:Tenant;onClose:()=>v
     const parts=value.split("/");
     return parts.length===3?`${parts[2]}-${parts[1]}-${parts[0]}`:"";
   };
-  const [form,setForm]=useState({name:tenant.name,owner:tenant.owner,plan:tenant.plan,monthly:tenant.monthly.toFixed(2).replace(".",","),due:toISODate(tenant.due)});
+  const [form,setForm]=useState({name:tenant.name,owner:tenant.owner,email:"",password:"",plan:tenant.plan,monthly:tenant.monthly.toFixed(2).replace(".",","),due:toISODate(tenant.due)});
   const [busy,setBusy]=useState(false);
+  const [accessLoading,setAccessLoading]=useState(true);
   const [error,setError]=useState("");
   const update=(field:string,value:string)=>setForm(current=>({...current,[field]:value}));
+  useEffect(()=>{
+    let active=true;
+    if(!supabase){setAccessLoading(false);return}
+    supabase.rpc("get_client_access",{client_tenant_id:tenant.id}).single().then(({data,error:accessError})=>{
+      if(!active)return;
+      if(accessError)setError(`Não foi possível carregar o login: ${accessError.message}`);
+      else setForm((current)=>({...current,email:String(data?.email||"")}));
+      setAccessLoading(false);
+    });
+    return()=>{active=false};
+  },[tenant.id]);
   const submit=async(event:React.FormEvent)=>{
     event.preventDefault();setBusy(true);setError("");
     if(!supabase){setError("Supabase não configurado.");setBusy(false);return}
     const monthly=Number(form.monthly.replace(",","."));
+    const {error:accessError}=await supabase.rpc("update_client_access",{
+      client_tenant_id:tenant.id,new_email:form.email.trim(),new_password:form.password||null,
+    });
+    if(accessError){setError(accessError.message);setBusy(false);return}
     const {error:updateError}=await supabase.from("tenants").update({
       name:form.name.trim(),owner_name:form.owner.trim(),plan:form.plan,
       monthly_fee:monthly,due_date:form.due||null,
@@ -346,12 +362,14 @@ function EditTenantModal({tenant,onClose,onUpdated}:{tenant:Tenant;onClose:()=>v
     <div className="saas-client-fields">
       <label>Nome da loja<input required value={form.name} onChange={e=>update("name",e.target.value)}/></label>
       <label>Responsável<input required value={form.owner} onChange={e=>update("owner",e.target.value)}/></label>
+      <label><Mail/> E-mail de acesso<input required type="email" disabled={accessLoading} value={form.email} onChange={e=>update("email",e.target.value)} placeholder={accessLoading?"Carregando...":"cliente@empresa.com"}/></label>
+      <label><KeyRound/> Nova senha<input minLength={6} type="password" value={form.password} onChange={e=>update("password",e.target.value)} placeholder="Deixe vazio para não alterar"/></label>
       <label>Plano<select value={form.plan} onChange={e=>update("plan",e.target.value)}><option>Essencial</option><option>Pro</option><option>Premium</option></select></label>
       <label>Mensalidade<input required inputMode="decimal" value={form.monthly} onChange={e=>update("monthly",e.target.value)}/></label>
       <label>Próximo vencimento<input required type="date" value={form.due} onChange={e=>update("due",e.target.value)}/></label>
     </div>
     {error&&<div className="saas-form-error">{error}</div>}
-    <div className="saas-modal-actions"><button type="button" onClick={onClose}>CANCELAR</button><button type="submit" disabled={busy}>{busy?<RefreshCw className="spin"/>:null}{busy?"SALVANDO...":"SALVAR ALTERAÇÕES"}</button></div>
+    <div className="saas-modal-actions"><button type="button" onClick={onClose}>CANCELAR</button><button type="submit" disabled={busy||accessLoading}>{busy?<RefreshCw className="spin"/>:null}{busy?"SALVANDO...":"SALVAR ALTERAÇÕES"}</button></div>
   </form></div>
 }
 
