@@ -711,7 +711,7 @@
   scroll-snap-stop:always;
 }
 .public-product-dots{
-  height:16px;
+  height:10px;
   display:flex;
   align-items:center;
   justify-content:center;
@@ -727,7 +727,7 @@
   transition:width .18s,background .18s;
 }
 .public-product-dots button.active{
-  width:14px;
+  width:18px;
   background:var(--delivery-yellow);
 }
 @media(max-width:680px){
@@ -741,7 +741,7 @@
     flex-basis:100%;
     min-width:100%;
   }
-  .public-product-dots{height:16px}
+  .public-product-dots{height:10px}
 }
 
 /* Detalhes completos do produto. */
