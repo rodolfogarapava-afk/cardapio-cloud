@@ -783,7 +783,7 @@ function Empty({text}:{text:string}) { return <div className="admin-empty">{text
 function OrderRow({order,total}:{order:OpenOrder;total:number}) { return <div className="order-row"><div><b>{order.customer}</b><small>{order.items.length} {order.items.length===1?"item":"itens"}</small></div><strong>R$ {total.toFixed(2).replace(".", ",")}</strong></div> }
 function foodEmoji(name:string,category:string) { const text=`${name} ${category}`.toLowerCase(); if(text.includes("vinho"))return"🍷";if(text.includes("salada"))return"🥗";if(text.includes("batata"))return"🍟";if(text.includes("onion"))return"🧅";return"🍔" }
 
-type IntegratedCommand = {id:number;name:string;count:number;total:number;createdAt:number;items:{name:string;qty:number;price:number;detail?:string;delivered:boolean}[]};
+type IntegratedCommand = {id:number;name:string;count:number;total:number;createdAt:number;kitchenStatus?:"new"|"preparing"|"ready";items:{name:string;qty:number;price:number;detail?:string;delivered:boolean}[]};
 type IntegratedSale = {id:number;name:string;total:number;method:string;createdAt:number;items:{name:string;qty:number;price:number;detail?:string}[]};
 type IntegratedExpense = {id:number;description:string;amount:number;createdAt:number};
 
@@ -1243,14 +1243,29 @@ function IntegratedCommands({commands,setCommands,onCharge,products,adjustStock}
     if(usesPreparationPoint(product)){setEditDoneness("");setEditMeatNote("");setPendingEditMeat({command,product});return}
     setPendingProduct({command,product});
   };
+  const setKitchenStatus=(id:number,kitchenStatus:"new"|"preparing"|"ready")=>
+    setCommands((all)=>all.map((command)=>command.id===id?{...command,kitchenStatus}:command));
+  const kitchenColumns=[
+    {id:"new" as const,title:"NOVAS",description:"Aguardando início",commands:commands.filter((command)=>(command.kitchenStatus||"new")==="new")},
+    {id:"preparing" as const,title:"PREPARANDO",description:"Em produção",commands:commands.filter((command)=>command.kitchenStatus==="preparing")},
+    {id:"ready" as const,title:"PRONTAS",description:"Finalizadas",commands:commands.filter((command)=>command.kitchenStatus==="ready")},
+  ];
   return <div className="integrated-view">
     <div className="integrated-heading"><div><p>OPERAÇÃO · TEMPO REAL</p><h1>Comandas abertas</h1><span>Acompanhe preparo, entrega, impressão e cobrança sem sair do cardápio.</span></div><b>{commands.length} abertas</b></div>
     {!commands.length ? <div className="integrated-empty"><ShoppingBag/><h3>Nenhuma comanda aberta</h3><p>Adicione itens pelo cardápio e escolha “Salvar comanda”.</p></div> :
-    <div className="integrated-command-grid">{commands.map((command)=><article key={command.id}>
-      <header><div><small>ABERTA HÁ {Math.max(1,Math.round((Date.now()-command.createdAt)/60000))} MIN</small><h2>{command.name}</h2></div><strong>R$ {command.total.toFixed(2).replace(".",",")}</strong></header>
-      <div className="command-products">{command.items.map((item,index)=><label key={`${item.name}-${index}`}><input type="checkbox" checked={item.delivered} onChange={()=>setCommands((all)=>all.map((c)=>c.id===command.id?{...c,items:c.items.map((x,i)=>i===index?{...x,delivered:!x.delivered}:x)}:c))}/><span><b>{item.qty}×</b> {item.name}{item.detail&&<small>{item.detail}</small>}</span><em>{item.delivered?"Entregue":"Preparando"}</em></label>)}</div>
-      <footer><button onClick={()=>{setEditing(command);setEditCategory((current)=>current||editCategories[0]||"")}}>EDITAR</button><button onClick={()=>setConfirmation({action:"print",command})}>IMPRIMIR COZINHA</button><button className="gold" onClick={()=>onCharge(command)}>COBRAR</button><button className="danger" onClick={()=>setConfirmation({action:"cancel",command})}>CANCELAR</button></footer>
-    </article>)}</div>}
+    <div className="kitchen-board">{kitchenColumns.map((column)=><section className={`kitchen-column ${column.id}`} key={column.id}>
+      <header className="kitchen-column-head"><div><b>{column.title}</b><span>{column.commands.length}</span></div><small>{column.description}</small></header>
+      <div className="kitchen-column-list">{column.commands.length?column.commands.map((command)=><article className="kitchen-command-card" key={command.id}>
+        <header><div><small>COMANDA #{String(command.id).slice(-4)} · HÁ {Math.max(1,Math.round((Date.now()-command.createdAt)/60000))} MIN</small><h2>{command.name}</h2></div><strong>R$ {command.total.toFixed(2).replace(".",",")}</strong></header>
+        <div className="command-products">{command.items.map((item,index)=><label key={`${item.name}-${index}`}><input type="checkbox" checked={item.delivered} onChange={()=>setCommands((all)=>all.map((c)=>c.id===command.id?{...c,items:c.items.map((x,i)=>i===index?{...x,delivered:!x.delivered}:x)}:c))}/><span><b>{item.qty}×</b> {item.name}{item.detail&&<small>{item.detail}</small>}</span><em>{item.delivered?"Entregue":column.id==="ready"?"Pronto":column.id==="new"?"Novo":"Preparando"}</em></label>)}</div>
+        <div className="kitchen-flow-actions">
+          {column.id==="new"&&<button className="flow-main" onClick={()=>setKitchenStatus(command.id,"preparing")}>INICIAR PREPARO</button>}
+          {column.id==="preparing"&&<><button onClick={()=>setKitchenStatus(command.id,"new")}>VOLTAR</button><button className="flow-main" onClick={()=>setKitchenStatus(command.id,"ready")}>MARCAR PRONTO</button></>}
+          {column.id==="ready"&&<><button onClick={()=>setKitchenStatus(command.id,"preparing")}>VOLTAR</button><button className="flow-main" onClick={()=>onCharge(command)}>COBRAR / FINALIZAR</button></>}
+        </div>
+        <footer><button onClick={()=>{setEditing(command);setEditCategory((current)=>current||editCategories[0]||"")}}>EDITAR</button><button onClick={()=>setConfirmation({action:"print",command})}>IMPRIMIR</button><button className="danger" onClick={()=>setConfirmation({action:"cancel",command})}>CANCELAR</button></footer>
+      </article>):<div className="kitchen-column-empty"><ShoppingBag/><span>Nenhuma comanda</span></div>}</div>
+    </section>)}</div>}
     {confirmation&&<div className="modal-backdrop" onMouseDown={()=>setConfirmation(null)}><section className="modal confirmation-modal" onMouseDown={(event)=>event.stopPropagation()}>
       <button className="modal-close" onClick={()=>setConfirmation(null)} aria-label="Fechar"><X/></button>
       <span className="modal-icon">{confirmation.action==="print"?<ShoppingBag/>:<X/>}</span>
