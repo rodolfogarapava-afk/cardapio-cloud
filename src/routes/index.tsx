@@ -360,6 +360,7 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
       </header>
 
       <div className={`workspace${publicMenu ? " public-menu-workspace" : ""}`}>
+        {!publicMenu && menuOpen && <button className="sidebar-backdrop" onClick={() => setMenuOpen(false)} aria-label="Fechar menu e voltar para a tela atual" />}
         {!publicMenu && <aside className={`sidebar ${menuOpen ? "open" : ""}`}>
           <button className="close-menu" onClick={() => setMenuOpen(false)} aria-label="Fechar menu"><X /></button>
           <div className="nav-list">
