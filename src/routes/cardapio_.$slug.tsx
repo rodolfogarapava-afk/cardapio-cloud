@@ -2,7 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Store } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { RestaurantApp, type Product } from "./index";
+import PublicDeliveryMenu from "@/components/PublicDeliveryMenu";
+import type { Product } from "./index";
 
 type PublicCatalog = {
   tenantId: string;
@@ -11,7 +12,7 @@ type PublicCatalog = {
   categories: string[];
 };
 
-export const Route = createFileRoute("/cardapio/$slug")({
+export const Route = createFileRoute("/cardapio_/$slug")({
   head: () => ({
     meta: [
       { title: "Cardápio digital" },
@@ -51,5 +52,5 @@ function TenantPublicMenu() {
   if (!catalog) {
     return <main className="public-menu-state"><span className="public-menu-loader"/><h1>Carregando cardápio</h1><p>Aguarde um instante.</p></main>;
   }
-  return <RestaurantApp publicMenu publicCatalog={catalog}/>;
+  return <PublicDeliveryMenu catalog={catalog}/>;
 }
