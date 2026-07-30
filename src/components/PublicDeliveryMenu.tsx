@@ -83,7 +83,9 @@ export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog
   const [rememberCustomer, setRememberCustomer] = useState(true);
   const [customerLookupMessage, setCustomerLookupMessage] = useState("");
   const [productSlide, setProductSlide] = useState(0);
+  const [productCarouselPaused, setProductCarouselPaused] = useState(false);
   const productCarouselRef = useRef<HTMLDivElement>(null);
+  const productCarouselPointerStart = useRef<number | null>(null);
   const [checkout, setCheckout] = useState<CheckoutData>({
     name: "", phone: "", street: "", number: "", neighborhood: "",
     reference: "", latitude: null, longitude: null, payment: "", coupon: "", notes: "",
@@ -132,6 +134,7 @@ export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog
 
   useEffect(() => {
     setProductSlide(0);
+    setProductCarouselPaused(false);
     productCarouselRef.current?.scrollTo({ left: 0, behavior: "smooth" });
   }, [activeCategory, query]);
 
@@ -159,7 +162,7 @@ export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog
     setProductSlide(index);
   };
   useEffect(() => {
-    if (products.length <= 1 || screen !== "menu" || detailProduct) return;
+    if (products.length <= 1 || screen !== "menu" || detailProduct || productCarouselPaused) return;
     const interval = window.setInterval(() => {
       setProductSlide((current) => {
         const next = (current + 1) % products.length;
@@ -170,7 +173,7 @@ export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog
       });
     }, 3000);
     return () => window.clearInterval(interval);
-  }, [products.length, screen, detailProduct]);
+  }, [products.length, screen, detailProduct, productCarouselPaused]);
 
   const changeQuantity = (product: Product, amount: number) => {
     setCart((current) => {
@@ -458,14 +461,26 @@ export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog
     </header>
     <section className="public-menu-content">
       <div className="public-section-title"><i /><h2>{activeCategory || "Produtos"}</h2></div>
-      <div className="public-product-grid" ref={productCarouselRef} onScroll={updateProductSlide}>
+      <div
+        className="public-product-grid"
+        ref={productCarouselRef}
+        onScroll={updateProductSlide}
+        onPointerDown={(event) => { productCarouselPointerStart.current = event.clientX; }}
+        onPointerUp={(event) => {
+          if (productCarouselPointerStart.current !== null && Math.abs(event.clientX - productCarouselPointerStart.current) > 10) {
+            setProductCarouselPaused(true);
+          }
+          productCarouselPointerStart.current = null;
+        }}
+        onPointerCancel={() => { productCarouselPointerStart.current = null; }}
+      >
         {products.map((product) => <article className="public-product-card" key={product.id}>
           <div className="public-product-photo"><img src={productImage(product)} alt={product.name} onClick={() => openProductDetails(product)} />{product.tag && <span>{product.tag}</span>}<strong>{money(product.price)}</strong><button disabled={product.trackStock && Number(product.stock || 0) <= 0} onClick={() => requestAdd(product)} aria-label={`Adicionar ${product.name}`}><Plus /></button></div>
           <div className="public-product-copy" role="button" tabIndex={0} onClick={() => openProductDetails(product)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") openProductDetails(product); }}><h3>{product.name}</h3><p>{product.description}</p>{product.trackStock && <small className={Number(product.stock || 0) <= 0 ? "out" : ""}>{Number(product.stock || 0) <= 0 ? "Esgotado" : "Disponível"}</small>}</div>
         </article>)}
       </div>
       {products.length > 1 && <div className="public-product-dots" aria-label="Navegação dos produtos">
-        {products.map((product, index) => <button key={product.id} className={productSlide === index ? "active" : ""} onClick={() => goToProductSlide(index)} aria-label={`Ver ${product.name}`} />)}
+        {products.map((product, index) => <button key={product.id} className={productSlide === index ? "active" : ""} onClick={() => { setProductCarouselPaused(true); goToProductSlide(index); }} aria-label={`Ver ${product.name}`} />)}
       </div>}
       {!products.length && <div className="public-no-results"><Search /><p>Nenhum produto encontrado.</p></div>}
     </section>
