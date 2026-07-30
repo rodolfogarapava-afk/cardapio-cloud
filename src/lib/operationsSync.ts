@@ -7,6 +7,7 @@ export type CloudCommand = {
   count: number;
   total: number;
   createdAt: number;
+  kitchenStatus?: "new" | "preparing" | "ready";
   items: { name: string; qty: number; price: number; detail?: string; delivered: boolean }[];
 };
 
@@ -52,6 +53,7 @@ export function useOperationsSync(params: Params) {
   const [tenantId, setTenantId] = useState<string | null>(null);
   const hydrated = useRef(false);
   const applyingRemote = useRef(false);
+  const localChangePending = useRef(false);
   const latest = useRef(params);
   latest.current = params;
 
@@ -114,8 +116,13 @@ export function useOperationsSync(params: Params) {
 
   useEffect(() => {
     if (!supabase || !tenantId || !hydrated.current) return;
+    if (applyingRemote.current) return;
+    localChangePending.current = true;
     const timer = window.setTimeout(async () => {
-      if (applyingRemote.current) return;
+      if (applyingRemote.current) {
+        localChangePending.current = false;
+        return;
+      }
       setStatus("loading");
       const current = latest.current;
       const upsertCommands = current.commands.length
@@ -144,6 +151,7 @@ export function useOperationsSync(params: Params) {
       const error = commandsResult.error || salesResult.error || expensesResult.error;
       if (error) {
         console.error("Falha ao sincronizar o financeiro.", error);
+        localChangePending.current = false;
         setStatus("error");
         return;
       }
@@ -158,14 +166,18 @@ export function useOperationsSync(params: Params) {
         deleteMissing("restaurant_sales", current.sales.map(item => item.id)),
         deleteMissing("restaurant_expenses", current.expenses.map(item => item.id)),
       ]);
+      localChangePending.current = false;
       setStatus(deletes.some(result => result.error) ? "error" : "synced");
-    }, 650);
+    }, 120);
     return () => window.clearTimeout(timer);
   }, [params.commands, params.sales, params.expenses, tenantId]);
 
   useEffect(() => {
     if (!supabase || !tenantId) return;
     const refresh = async () => {
+      // Não deixa um evento antigo da nuvem desfazer uma movimentação que
+      // acabou de acontecer na tela (ex.: PRONTA -> PREPARANDO).
+      if (localChangePending.current) return;
       const current = latest.current;
       const [commandsResult, salesResult, expensesResult] = await Promise.all([
         supabase!.from("restaurant_commands").select("payload").eq("tenant_id", tenantId),
