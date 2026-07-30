@@ -308,3 +308,111 @@
   .public-floating-cart{width:calc(100% - 16px);padding:0 13px}
   .public-floating-cart strong{font-size:10px}
 }
+
+/* Tipografia do cardápio público inspirada em aplicativos de delivery. */
+.public-delivery,
+.delivery-cart-page,
+.delivery-checkout,
+.delivery-success{
+  font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  font-synthesis:none;
+  letter-spacing:-.006em;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+.public-delivery button,
+.public-delivery input,
+.public-delivery textarea,
+.delivery-cart-page button,
+.delivery-checkout button,
+.delivery-checkout input,
+.delivery-checkout textarea{
+  font:inherit;
+}
+.store-identity h1{
+  font-size:16px;
+  font-weight:700;
+  line-height:1.18;
+  letter-spacing:-.025em;
+}
+.store-identity small{
+  font-size:9px;
+  font-weight:600;
+  letter-spacing:.11em;
+}
+.store-meta{font-size:11px;font-weight:400;letter-spacing:0}
+.store-meta .open{font-weight:600}
+.public-search input{
+  font-size:15px;
+  font-weight:400;
+  letter-spacing:-.01em;
+}
+.public-search input::placeholder{color:#858992;opacity:1}
+.public-categories button{
+  font-size:12px;
+  font-weight:500;
+  letter-spacing:-.01em;
+}
+.public-categories button.active{font-weight:600}
+.public-section-title h2{
+  font-size:21px;
+  font-weight:700;
+  line-height:1.2;
+  letter-spacing:-.035em;
+}
+.public-product-photo>strong{
+  font-size:18px;
+  font-weight:700;
+  letter-spacing:-.025em;
+}
+.public-product-photo>span{font-weight:700;letter-spacing:.02em}
+.public-product-copy h3{
+  font-size:16px;
+  font-weight:650;
+  line-height:1.3;
+  letter-spacing:-.025em;
+}
+.public-product-copy p{
+  font-size:13px;
+  font-weight:400;
+  line-height:1.55;
+  letter-spacing:-.008em;
+}
+.public-product-copy small{font-weight:600;letter-spacing:.02em}
+.public-floating-cart{font-weight:700;letter-spacing:-.01em}
+.public-floating-cart span,.public-floating-cart strong{font-size:12px}
+.public-preparation-modal>span{font-weight:700}
+.public-preparation-modal h2{
+  font-size:23px;
+  font-weight:700;
+  letter-spacing:-.035em;
+}
+.public-preparation-modal>p{font-size:13px;font-weight:400}
+.public-point-options button,
+.public-preparation-modal .confirm{font-weight:600}
+.cart-page-header h1,
+.delivery-flow-header h1{
+  font-weight:700;
+  letter-spacing:-.035em;
+}
+.cart-page-header .cart-header-eyebrow{font-weight:700}
+.cart-section-heading b,
+.suggestion-heading b,
+.delivery-cart-items h2,
+.cart-total-title>span{font-weight:650}
+.fulfillment-section button b{font-weight:600}
+.cart-item-price strong,
+.cart-totals .total b{font-weight:700}
+.cart-totals>button{font-weight:650}
+.checkout-card-title strong{font-weight:650;letter-spacing:-.018em}
+.checkout-card label{font-size:12px;font-weight:500}
+.checkout-card input,.checkout-card textarea{font-size:14px;font-weight:400}
+.checkout-footer button{font-weight:650}
+.public-bottom-nav button{font-weight:500}
+.public-bottom-nav button.active{font-weight:600}
+@media(max-width:680px){
+  .store-identity h1{font-size:15px}
+  .public-section-title h2{font-size:19px}
+  .public-product-copy h3{font-size:16px}
+  .public-product-copy p{font-size:13px}
+}
