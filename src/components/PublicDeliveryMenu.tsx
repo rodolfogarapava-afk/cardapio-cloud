@@ -263,7 +263,10 @@ export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog
       <div className="public-product-grid">
         {products.map((product) => <article className="public-product-card" key={product.id}>
           <div className="public-product-photo"><img src={productImage(product)} alt={product.name} onClick={() => openProductDetails(product)} />{product.tag && <span>{product.tag}</span>}<strong>{money(product.price)}</strong><button disabled={product.trackStock && Number(product.stock || 0) <= 0} onClick={() => requestAdd(product)} aria-label={`Adicionar ${product.name}`}><Plus /></button></div>
-          <div className="public-product-copy" role="button" tabIndex={0} onClick={() => openProductDetails(product)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") openProductDetails(product); }}><h3>{product.name}</h3><p>{product.description}</p>{product.trackStock && <small className={Number(product.stock || 0) <= 0 ? "out" : ""}>{Number(product.stock || 0) <= 0 ? "Esgotado" : "Disponível"}</small>}</div>
+          <div className="public-product-copy" role="button" tabIndex={0} onClick={() => openProductDetails(product)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") openProductDetails(product); }}>
+            <div><h3>{product.name}</h3><p>{product.description}</p></div>
+            <div className="product-card-meta"><strong>{money(product.price)}</strong>{product.trackStock && <small className={Number(product.stock || 0) <= 0 ? "out" : ""}>{Number(product.stock || 0) <= 0 ? "Esgotado" : "Disponível"}</small>}</div>
+          </div>
         </article>)}
       </div>
       {!products.length && <div className="public-no-results"><Search /><p>Nenhum produto encontrado.</p></div>}
