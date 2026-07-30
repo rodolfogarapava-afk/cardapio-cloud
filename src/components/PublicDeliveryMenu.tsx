@@ -168,7 +168,7 @@ export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog
         if (carousel && card) carousel.scrollTo({ left: card.offsetLeft, behavior: "smooth" });
         return next;
       });
-    }, 1000);
+    }, 3000);
     return () => window.clearInterval(interval);
   }, [products.length, screen, detailProduct]);
 
