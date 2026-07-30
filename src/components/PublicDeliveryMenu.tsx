@@ -158,6 +158,19 @@ export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog
     carousel.scrollTo({ left: card.offsetLeft, behavior: "smooth" });
     setProductSlide(index);
   };
+  useEffect(() => {
+    if (products.length <= 1 || screen !== "menu" || detailProduct) return;
+    const interval = window.setInterval(() => {
+      setProductSlide((current) => {
+        const next = (current + 1) % products.length;
+        const carousel = productCarouselRef.current;
+        const card = carousel?.children[next] as HTMLElement | undefined;
+        if (carousel && card) carousel.scrollTo({ left: card.offsetLeft, behavior: "smooth" });
+        return next;
+      });
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, [products.length, screen, detailProduct]);
 
   const changeQuantity = (product: Product, amount: number) => {
     setCart((current) => {
