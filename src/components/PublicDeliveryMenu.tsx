@@ -59,6 +59,10 @@ export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog
   const [pendingProduct, setPendingProduct] = useState<Product | null>(null);
   const [point, setPoint] = useState("");
   const [itemNote, setItemNote] = useState("");
+  const [detailProduct, setDetailProduct] = useState<Product | null>(null);
+  const [detailQuantity, setDetailQuantity] = useState(1);
+  const [detailPoint, setDetailPoint] = useState("");
+  const [detailNote, setDetailNote] = useState("");
   const [checkout, setCheckout] = useState<CheckoutData>({
     name: "", phone: "", cpf: "", street: "", number: "", neighborhood: "",
     reference: "", payment: "", coupon: "", notes: "",
@@ -105,6 +109,29 @@ export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog
     setPendingProduct(null);
     setPoint("");
     setItemNote("");
+  };
+  const openProductDetails = (product: Product) => {
+    setDetailProduct(product);
+    setDetailQuantity(1);
+    setDetailPoint(details[product.id]?.point || "");
+    setDetailNote(details[product.id]?.note || "");
+  };
+  const closeProductDetails = () => {
+    setDetailProduct(null);
+    setDetailQuantity(1);
+    setDetailPoint("");
+    setDetailNote("");
+  };
+  const addDetailedProduct = () => {
+    if (!detailProduct) return;
+    const needsPoint = detailProduct.preparationPointEnabled ?? detailProduct.category === "Espetinhos";
+    if (needsPoint && !detailPoint) return;
+    setDetails((current) => ({
+      ...current,
+      [detailProduct.id]: { point: needsPoint ? detailPoint : undefined, note: detailNote.trim() },
+    }));
+    changeQuantity(detailProduct, detailQuantity);
+    closeProductDetails();
   };
   const updateCheckout = (field: keyof CheckoutData, value: string) =>
     setCheckout((current) => ({ ...current, [field]: value }));
@@ -235,14 +262,41 @@ export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog
       <div className="public-section-title"><i /><h2>{activeCategory || "Produtos"}</h2></div>
       <div className="public-product-grid">
         {products.map((product) => <article className="public-product-card" key={product.id}>
-          <div className="public-product-photo"><img src={productImage(product)} alt={product.name} />{product.tag && <span>{product.tag}</span>}<strong>{money(product.price)}</strong><button disabled={product.trackStock && Number(product.stock || 0) <= 0} onClick={() => requestAdd(product)} aria-label={`Adicionar ${product.name}`}><Plus /></button></div>
-          <div className="public-product-copy"><h3>{product.name}</h3><p>{product.description}</p>{product.trackStock && <small className={Number(product.stock || 0) <= 0 ? "out" : ""}>{Number(product.stock || 0) <= 0 ? "Esgotado" : "Disponível"}</small>}</div>
+          <div className="public-product-photo"><img src={productImage(product)} alt={product.name} onClick={() => openProductDetails(product)} />{product.tag && <span>{product.tag}</span>}<strong>{money(product.price)}</strong><button disabled={product.trackStock && Number(product.stock || 0) <= 0} onClick={() => requestAdd(product)} aria-label={`Adicionar ${product.name}`}><Plus /></button></div>
+          <div className="public-product-copy" role="button" tabIndex={0} onClick={() => openProductDetails(product)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") openProductDetails(product); }}><h3>{product.name}</h3><p>{product.description}</p>{product.trackStock && <small className={Number(product.stock || 0) <= 0 ? "out" : ""}>{Number(product.stock || 0) <= 0 ? "Esgotado" : "Disponível"}</small>}</div>
         </article>)}
       </div>
       {!products.length && <div className="public-no-results"><Search /><p>Nenhum produto encontrado.</p></div>}
     </section>
     <nav className="public-bottom-nav"><button className="active"><Store />Cardápio</button><button onClick={() => setScreen("cart")}><ShoppingBag />Pedido{!!count && <b>{count}</b>}</button></nav>
     {!!count && <button className="public-floating-cart" onClick={() => setScreen("cart")}><span><ShoppingBag />{count} {count === 1 ? "item" : "itens"}</span><strong>VER PEDIDO · {money(subtotal)}</strong></button>}
+
+    {detailProduct && <div className="public-product-detail-backdrop" onMouseDown={closeProductDetails}>
+      <section className="public-product-detail" onMouseDown={(event) => event.stopPropagation()}>
+        <header><button onClick={closeProductDetails} aria-label="Voltar ao cardápio"><ArrowLeft /></button><h2>{detailProduct.name}</h2></header>
+        <div className="product-detail-scroll">
+          <img className="product-detail-image" src={productImage(detailProduct)} alt={detailProduct.name} />
+          <section className="product-detail-copy">
+            <h1>{detailProduct.name}</h1>
+            <strong>{money(detailProduct.price)}</strong>
+            <p>{detailProduct.description || "Produto preparado especialmente para você."}</p>
+            {detailProduct.tag && <span>{detailProduct.tag}</span>}
+          </section>
+          {(detailProduct.preparationPointEnabled ?? detailProduct.category === "Espetinhos") && <section className="product-detail-section">
+            <h3>Como você prefere o preparo?</h3>
+            <div className="product-detail-points">{preparationOptions.map((option) => <button key={option} className={detailPoint === option ? "active" : ""} onClick={() => setDetailPoint(option)}>{option}</button>)}</div>
+          </section>}
+          <section className="product-detail-section">
+            <h3>Alguma observação?</h3>
+            <textarea value={detailNote} onChange={(event) => setDetailNote(event.target.value)} placeholder="Ex.: sem cebola, ponto da carne..." />
+          </section>
+        </div>
+        <footer>
+          <div className="product-detail-stepper"><button onClick={() => setDetailQuantity((value) => Math.max(1, value - 1))}><Minus /></button><b>{detailQuantity}</b><button onClick={() => setDetailQuantity((value) => Math.min(detailProduct.trackStock ? Number(detailProduct.stock || 1) : 99, value + 1))}><Plus /></button></div>
+          <button className="product-detail-add" disabled={(detailProduct.trackStock && Number(detailProduct.stock || 0) <= 0) || ((detailProduct.preparationPointEnabled ?? detailProduct.category === "Espetinhos") && !detailPoint)} onClick={addDetailedProduct}>Adicionar · {money(detailProduct.price * detailQuantity)}</button>
+        </footer>
+      </section>
+    </div>}
 
     {pendingProduct && <div className="public-modal-backdrop" onMouseDown={() => setPendingProduct(null)}><section className="public-preparation-modal" onMouseDown={(event) => event.stopPropagation()}>
       <button className="close" onClick={() => setPendingProduct(null)}><X /></button>
