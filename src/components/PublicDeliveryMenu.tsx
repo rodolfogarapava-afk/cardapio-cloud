@@ -19,7 +19,7 @@ import {
   WalletCards,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Product } from "@/routes/index";
 import "./public-delivery-menu.css";
 
@@ -82,6 +82,8 @@ export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog
   const [locationMessage, setLocationMessage] = useState("");
   const [rememberCustomer, setRememberCustomer] = useState(true);
   const [customerLookupMessage, setCustomerLookupMessage] = useState("");
+  const [productSlide, setProductSlide] = useState(0);
+  const productCarouselRef = useRef<HTMLDivElement>(null);
   const [checkout, setCheckout] = useState<CheckoutData>({
     name: "", phone: "", street: "", number: "", neighborhood: "",
     reference: "", latitude: null, longitude: null, payment: "", coupon: "", notes: "",
@@ -127,6 +129,35 @@ export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog
   const subtotal = cartProducts.reduce((total, item) => total + item.product.price * item.quantity, 0);
   const deliveryFee = fulfillment === "delivery" ? 3.9 : 0;
   const total = subtotal + deliveryFee;
+
+  useEffect(() => {
+    setProductSlide(0);
+    productCarouselRef.current?.scrollTo({ left: 0, behavior: "smooth" });
+  }, [activeCategory, query]);
+
+  const updateProductSlide = () => {
+    const carousel = productCarouselRef.current;
+    if (!carousel) return;
+    const cards = Array.from(carousel.children) as HTMLElement[];
+    if (!cards.length) return;
+    let nearest = 0;
+    let distance = Number.POSITIVE_INFINITY;
+    cards.forEach((card, index) => {
+      const nextDistance = Math.abs(card.offsetLeft - carousel.scrollLeft);
+      if (nextDistance < distance) {
+        distance = nextDistance;
+        nearest = index;
+      }
+    });
+    setProductSlide(nearest);
+  };
+  const goToProductSlide = (index: number) => {
+    const carousel = productCarouselRef.current;
+    const card = carousel?.children[index] as HTMLElement | undefined;
+    if (!carousel || !card) return;
+    carousel.scrollTo({ left: card.offsetLeft, behavior: "smooth" });
+    setProductSlide(index);
+  };
 
   const changeQuantity = (product: Product, amount: number) => {
     setCart((current) => {
@@ -414,12 +445,15 @@ export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog
     </header>
     <section className="public-menu-content">
       <div className="public-section-title"><i /><h2>{activeCategory || "Produtos"}</h2></div>
-      <div className="public-product-grid">
+      <div className="public-product-grid" ref={productCarouselRef} onScroll={updateProductSlide}>
         {products.map((product) => <article className="public-product-card" key={product.id}>
           <div className="public-product-photo"><img src={productImage(product)} alt={product.name} onClick={() => openProductDetails(product)} />{product.tag && <span>{product.tag}</span>}<strong>{money(product.price)}</strong><button disabled={product.trackStock && Number(product.stock || 0) <= 0} onClick={() => requestAdd(product)} aria-label={`Adicionar ${product.name}`}><Plus /></button></div>
           <div className="public-product-copy" role="button" tabIndex={0} onClick={() => openProductDetails(product)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") openProductDetails(product); }}><h3>{product.name}</h3><p>{product.description}</p>{product.trackStock && <small className={Number(product.stock || 0) <= 0 ? "out" : ""}>{Number(product.stock || 0) <= 0 ? "Esgotado" : "Disponível"}</small>}</div>
         </article>)}
       </div>
+      {products.length > 1 && <div className="public-product-dots" aria-label="Navegação dos produtos">
+        {products.map((product, index) => <button key={product.id} className={productSlide === index ? "active" : ""} onClick={() => goToProductSlide(index)} aria-label={`Ver ${product.name}`} />)}
+      </div>}
       {!products.length && <div className="public-no-results"><Search /><p>Nenhum produto encontrado.</p></div>}
     </section>
     <nav className="public-bottom-nav"><button className="active"><Store />Cardápio</button><button onClick={() => setScreen("cart")}><ShoppingBag />Pedido{!!count && <b>{count}</b>}</button></nav>
