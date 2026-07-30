@@ -29,7 +29,7 @@ import {
 } from "lucide-react";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { sendOrderTicketToPrinter, sendOrderUpdateToPrinter, sendReceiptToPrinter, type OrderChange } from "@/lib/printReceipt";
-import { queueCustomerReceipt, queueKitchenOrder } from "@/lib/printQueue";
+import { queueCustomerReceipt, queueKitchenOrder, queueOrderUpdate } from "@/lib/printQueue";
 import { generateReportPdf } from "@/lib/reportPdf";
 import { initAudioContext, playNotificationSound } from "@/lib/sounds";
 import { useTenantNavigation } from "@/components/SaaSPlatform";
@@ -1205,7 +1205,17 @@ function IntegratedCommands({tenantId,commands,setCommands,onCharge,products,adj
   const [editCategory,setEditCategory]=useState(editCategories[0]||"");
   const confirmAction=()=>{
     if(!confirmation)return;
-    if(confirmation.action==="print")printKitchenTicket(confirmation.command.name,confirmation.command.items);
+    if(confirmation.action==="print"){
+      if(tenantId)queueKitchenOrder({
+        tenantId,
+        commandId:confirmation.command.id,
+        customer:confirmation.command.name,
+        items:toReceiptItems(confirmation.command.items),
+        total:confirmation.command.total,
+        kind:`reprint_${Date.now()}`,
+      }).catch((error)=>console.error("Não foi possível colocar a impressão na fila:",error));
+      else printKitchenTicket(confirmation.command.name,confirmation.command.items);
+    }
     else {
       adjustStock(confirmation.command.items.map((item)=>({name:item.name,qty:item.qty})));
       setCommands((all)=>all.filter((command)=>command.id!==confirmation.command.id));
@@ -1213,6 +1223,8 @@ function IntegratedCommands({tenantId,commands,setCommands,onCharge,products,adj
     setConfirmation(null);
   };
   const [pendingChanges,setPendingChanges]=useState<OrderChange[]>([]);
+  const [printingChanges,setPrintingChanges]=useState(false);
+  const [printChangeError,setPrintChangeError]=useState("");
   
   const [pendingProduct,setPendingProduct]=useState<{command:IntegratedCommand;product:Product}|null>(null);
   const [pendingEditMeat,setPendingEditMeat]=useState<{command:IntegratedCommand;product:Product}|null>(null);
@@ -1223,6 +1235,7 @@ function IntegratedCommands({tenantId,commands,setCommands,onCharge,products,adj
   },[commands,editing]);
   useEffect(()=>{
     setPendingChanges([]);
+    setPrintChangeError("");
   },[editing?.id]);
   const applyEdit=(command:IntegratedCommand,nextItems:IntegratedCommand["items"],change:OrderChange)=>{
     const nextCommand={...command,items:nextItems,count:nextItems.reduce((sum,item)=>sum+item.qty,0),total:nextItems.reduce((sum,item)=>sum+item.qty*item.price,0)};
@@ -1234,10 +1247,25 @@ function IntegratedCommands({tenantId,commands,setCommands,onCharge,products,adj
       return [...current,change];
     });
   };
-  const sendPendingChanges=()=>{
+  const sendPendingChanges=async()=>{
     if(!editing||!pendingChanges.length)return;
-    printOrderChange(editing.name,pendingChanges,editing.total);
-    setPendingChanges([]);
+    setPrintingChanges(true);
+    setPrintChangeError("");
+    try{
+      if(tenantId)await queueOrderUpdate({
+        tenantId,
+        commandId:editing.id,
+        customer:editing.name,
+        changes:pendingChanges,
+        newTotal:editing.total,
+      });
+      else await printOrderChange(editing.name,pendingChanges,editing.total);
+      setPendingChanges([]);
+    }catch(error){
+      setPrintChangeError(`Não foi possível enviar as alterações para impressão: ${error instanceof Error?error.message:"erro desconhecido"}`);
+    }finally{
+      setPrintingChanges(false);
+    }
   };
   const changeItemQty=(command:IntegratedCommand,index:number,delta:number)=>{
     const item=command.items[index];
@@ -1331,10 +1359,11 @@ function IntegratedCommands({tenantId,commands,setCommands,onCharge,products,adj
       <div className="quick-products edit-quick-products">{products.filter((product)=>product.category===editCategory).map((product)=><button key={product.id} onClick={()=>openAddProduct(editing!,product)}><b>{product.name}</b><small>R$ {product.price.toFixed(2).replace(".",",")}</small></button>)}</div>
       <div className="cart-actions">
         <button onClick={()=>setEditing(null)}>FECHAR</button>
-        <button className="primary" disabled={!pendingChanges.length} onClick={sendPendingChanges}>
-          {pendingChanges.length?`IMPRIMIR ALTERAÇÕES (${pendingChanges.length})`:"SEM ALTERAÇÕES PENDENTES"}
+        <button className="primary" disabled={!pendingChanges.length||printingChanges} onClick={sendPendingChanges}>
+          {printingChanges?"ENVIANDO PARA IMPRESSORA...":pendingChanges.length?`IMPRIMIR ALTERAÇÕES (${pendingChanges.length})`:"SEM ALTERAÇÕES PENDENTES"}
         </button>
       </div>
+      {printChangeError&&<div className="drawer-form-alert" role="alert">{printChangeError}</div>}
     </section></div>}
     {pendingProduct&&<div className="modal-backdrop" onMouseDown={()=>setPendingProduct(null)}><section className="modal confirmation-modal" onMouseDown={(event)=>event.stopPropagation()}>
       <button className="modal-close" onClick={()=>setPendingProduct(null)} aria-label="Fechar"><X/></button>

@@ -1,4 +1,4 @@
-import { buildOrderTicketBase64, buildReceiptBase64, type ReceiptItem } from "@/lib/printReceipt";
+import { buildOrderTicketBase64, buildOrderUpdateBase64, buildReceiptBase64, type OrderChange, type ReceiptItem } from "@/lib/printReceipt";
 import { supabase } from "@/lib/supabase";
 
 export async function queueKitchenOrder(input:{
@@ -57,6 +57,28 @@ export async function queueCustomerReceipt(input:{
     p_command_id:input.saleId,
     p_payload:{data,customer:input.customer,total:input.total,paymentMethod:input.paymentMethod,createdAt:Date.now()},
     p_job_kind:"customer_receipt",
+  });
+  if(error)throw error;
+}
+
+export async function queueOrderUpdate(input:{
+  tenantId:string;
+  commandId:number;
+  customer:string;
+  changes:OrderChange[];
+  newTotal:number;
+}) {
+  if(!supabase) throw new Error("Supabase não configurado");
+  const data=buildOrderUpdateBase64({
+    customer:input.customer,
+    changes:input.changes,
+    newTotal:input.newTotal,
+  });
+  const {error}=await supabase.rpc("queue_print_job",{
+    p_tenant_id:input.tenantId,
+    p_command_id:input.commandId,
+    p_payload:{data,customer:input.customer,newTotal:input.newTotal,changes:input.changes,createdAt:Date.now()},
+    p_job_kind:`order_update_${Date.now()}`,
   });
   if(error)throw error;
 }

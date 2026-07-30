@@ -318,6 +318,10 @@ export function buildReceiptBase64(data: ReceiptData) {
   return bytesToBase64(buildReceiptEscPos(data));
 }
 
+export function buildOrderUpdateBase64(data: { customer: string; changes: OrderChange[]; newTotal?: number }) {
+  return bytesToBase64(buildOrderUpdateEscPos(data));
+}
+
 /**
  * Envia só o bloco de ATUALIZAÇÃO (item removido/adicionado numa edição de
  * comanda já aberta) para a impressora térmica via ponte local.
