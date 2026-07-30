@@ -65,13 +65,7 @@ function productImage(product: Product) {
   return product.image?.trim() || "https://images.unsplash.com/photo-1529692236671-f1f6cf9683ba?auto=format&fit=crop&w=900&q=82";
 }
 
-export default function PublicDeliveryMenu({
-  catalog,
-  variant = "default",
-}: {
-  catalog: PublicCatalog;
-  variant?: "default" | "sabor-arte";
-}) {
+export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog }) {
   const [query, setQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState(catalog.categories[0] || "");
   const [cart, setCart] = useState<Record<number, number>>({});
@@ -571,7 +565,7 @@ export default function PublicDeliveryMenu({
     </main>;
   }
 
-  return <main className={`public-delivery${variant === "sabor-arte" ? " sabor-arte-delivery" : ""}`}>
+  return <main className="public-delivery">
     <header className="public-store-header">
       <div className="store-identity">
         <span className="store-avatar"><Store /></span>
