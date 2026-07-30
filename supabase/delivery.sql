@@ -164,6 +164,33 @@ revoke all on function public.submit_public_order(uuid, jsonb, jsonb) from publi
 grant execute on function public.get_public_customer(uuid, text) to anon, authenticated;
 grant execute on function public.submit_public_order(uuid, jsonb, jsonb) to anon, authenticated;
 
+create or replace function public.get_public_order_status(
+  p_tenant_id uuid,
+  p_order_id bigint,
+  p_phone text
+)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select jsonb_build_object(
+    'id', command.id,
+    'kitchenStatus', coalesce(command.payload->>'kitchenStatus', 'new'),
+    'updatedAt', command.updated_at
+  )
+  from public.restaurant_commands command
+  where command.tenant_id = p_tenant_id
+    and command.id = p_order_id
+    and regexp_replace(coalesce(command.payload->'delivery'->>'phone', ''), '\D', '', 'g')
+      = regexp_replace(coalesce(p_phone, ''), '\D', '', 'g')
+  limit 1;
+$$;
+
+revoke all on function public.get_public_order_status(uuid, bigint, text) from public;
+grant execute on function public.get_public_order_status(uuid, bigint, text) to anon, authenticated;
+
 do $$
 begin
   alter publication supabase_realtime add table public.delivery_customers;
