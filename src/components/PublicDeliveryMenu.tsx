@@ -90,6 +90,7 @@ export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog
   const productCarouselRef = useRef<HTMLDivElement>(null);
   const productCarouselPointerStart = useRef<number | null>(null);
   const customerLookupRequest = useRef(0);
+  const customerLookupTimer = useRef<number | null>(null);
   const [checkout, setCheckout] = useState<CheckoutData>({
     name: "", phone: "", street: "", number: "", neighborhood: "",
     reference: "", latitude: null, longitude: null, payment: "", coupon: "", notes: "",
@@ -120,6 +121,9 @@ export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog
     } catch {
       // O cadastro local é opcional; o checkout continua funcionando sem ele.
     }
+  }, []);
+  useEffect(() => () => {
+    if (customerLookupTimer.current !== null) window.clearTimeout(customerLookupTimer.current);
   }, []);
 
   const products = useMemo(() => catalog.products.filter((product) => {
@@ -236,6 +240,7 @@ export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog
     const formatted = formatPhone(value);
     const digits = phoneDigits(value);
     const requestId = ++customerLookupRequest.current;
+    if (customerLookupTimer.current !== null) window.clearTimeout(customerLookupTimer.current);
     setCheckout((current) => ({ ...current, phone: formatted }));
     setCustomerLookupMessage("");
     if (digits.length < 11) return;
@@ -276,9 +281,15 @@ export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog
       // Mantém o preenchimento manual quando o armazenamento local não está disponível.
     }
     if (!supabase) return;
-    setCustomerLookupMessage("Buscando seu cadastro...");
+    customerLookupTimer.current = window.setTimeout(() => {
+      if (requestId === customerLookupRequest.current) setCustomerLookupMessage("Buscando seu cadastro...");
+    }, 600);
     void supabase.rpc("get_public_customer", { p_tenant_id: catalog.tenantId, p_phone: digits }).then(({ data, error }) => {
       if (requestId !== customerLookupRequest.current) return;
+      if (customerLookupTimer.current !== null) {
+        window.clearTimeout(customerLookupTimer.current);
+        customerLookupTimer.current = null;
+      }
       const knownCustomer = data as SavedCustomerProfile | null;
       if (!error && knownCustomer?.name) {
         setCheckout((current) => ({
