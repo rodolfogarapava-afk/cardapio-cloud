@@ -746,6 +746,17 @@
   .public-product-dots{height:14px}
 }
 
+.checkout-footer .checkout-submit-error{
+  margin:0 0 9px;
+  padding:9px 11px;
+  border:1px solid #ff6b7540;
+  border-radius:7px;
+  background:#ff6b7512;
+  color:#ff9299;
+  font-size:10px;
+  text-align:left;
+}
+
 /* Detalhes completos do produto. */
 .public-product-photo img,.public-product-copy{cursor:pointer}
 .public-product-copy:focus-visible{outline:2px solid var(--delivery-yellow);outline-offset:-2px}

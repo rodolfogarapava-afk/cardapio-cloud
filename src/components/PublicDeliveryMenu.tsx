@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Product } from "@/routes/index";
+import { supabase } from "@/lib/supabase";
 import "./public-delivery-menu.css";
 
 type PublicCatalog = {
@@ -82,10 +83,13 @@ export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog
   const [locationMessage, setLocationMessage] = useState("");
   const [rememberCustomer, setRememberCustomer] = useState(true);
   const [customerLookupMessage, setCustomerLookupMessage] = useState("");
+  const [orderSubmissionError, setOrderSubmissionError] = useState("");
+  const [orderSubmitting, setOrderSubmitting] = useState(false);
   const [productSlide, setProductSlide] = useState(0);
   const [productCarouselPaused, setProductCarouselPaused] = useState(false);
   const productCarouselRef = useRef<HTMLDivElement>(null);
   const productCarouselPointerStart = useRef<number | null>(null);
+  const customerLookupRequest = useRef(0);
   const [checkout, setCheckout] = useState<CheckoutData>({
     name: "", phone: "", street: "", number: "", neighborhood: "",
     reference: "", latitude: null, longitude: null, payment: "", coupon: "", notes: "",
@@ -231,6 +235,7 @@ export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog
   const updateCustomerPhone = (value: string) => {
     const formatted = formatPhone(value);
     const digits = phoneDigits(value);
+    const requestId = ++customerLookupRequest.current;
     setCheckout((current) => ({ ...current, phone: formatted }));
     setCustomerLookupMessage("");
     if (digits.length < 11) return;
@@ -252,7 +257,8 @@ export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog
         setCustomerLookupMessage(knownCustomer.street
           ? "Cadastro encontrado: nome e endereço preenchidos."
           : "Cadastro encontrado pelo telefone.");
-      } else {
+        return;
+      } else if (!supabase) {
         setCheckout((current) => ({
           ...current,
           phone: formatted,
@@ -269,6 +275,48 @@ export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog
     } catch {
       // Mantém o preenchimento manual quando o armazenamento local não está disponível.
     }
+    if (!supabase) return;
+    setCustomerLookupMessage("Buscando seu cadastro...");
+    void supabase.rpc("get_public_customer", { p_tenant_id: catalog.tenantId, p_phone: digits }).then(({ data, error }) => {
+      if (requestId !== customerLookupRequest.current) return;
+      const knownCustomer = data as SavedCustomerProfile | null;
+      if (!error && knownCustomer?.name) {
+        setCheckout((current) => ({
+          ...current,
+          phone: formatted,
+          name: knownCustomer.name,
+          street: knownCustomer.street || "",
+          number: knownCustomer.number || "",
+          neighborhood: knownCustomer.neighborhood || "",
+          reference: knownCustomer.reference || "",
+          latitude: knownCustomer.latitude ?? null,
+          longitude: knownCustomer.longitude ?? null,
+        }));
+        setCustomerLookupMessage("Cadastro encontrado na nuvem. Seus dados foram preenchidos.");
+        try {
+          const profiles = JSON.parse(localStorage.getItem(customerProfilesKey) || "{}") as Record<string, SavedCustomerProfile>;
+          profiles[digits] = { ...knownCustomer, phone: digits };
+          localStorage.setItem(customerProfilesKey, JSON.stringify(profiles));
+        } catch {
+          // A busca na nuvem continua funcionando sem o cache local.
+        }
+        return;
+      }
+      setCheckout((current) => ({
+        ...current,
+        phone: formatted,
+        name: "",
+        street: "",
+        number: "",
+        neighborhood: "",
+        reference: "",
+        latitude: null,
+        longitude: null,
+      }));
+      setCustomerLookupMessage(error
+        ? "Não foi possível consultar o cadastro agora. Tente novamente."
+        : "Telefone ainda não cadastrado. Preencha os dados para salvá-los neste pedido.");
+    });
   };
   const saveCustomerProfile = () => {
     if (!rememberCustomer) return;
@@ -295,8 +343,52 @@ export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog
       // O pedido pode continuar mesmo se o navegador bloquear cookies ou armazenamento.
     }
   };
-  const finishOrder = () => {
+  const finishOrder = async () => {
+    if (!supabase || orderSubmitting) return;
+    setOrderSubmitting(true);
+    setOrderSubmissionError("");
     saveCustomerProfile();
+    const orderItems = cartProducts.map(({ product, quantity }) => {
+      const detail = details[product.id];
+      return {
+        name: product.name,
+        qty: quantity,
+        price: product.price,
+        detail: [detail?.point, detail?.note].filter(Boolean).join(" · "),
+        delivered: false,
+      };
+    });
+    const { error } = await supabase.rpc("submit_public_order", {
+      p_tenant_id: catalog.tenantId,
+      p_customer: {
+        name: checkout.name.trim(),
+        phone: phoneDigits(checkout.phone),
+        street: checkout.street.trim(),
+        number: checkout.number.trim(),
+        neighborhood: checkout.neighborhood.trim(),
+        reference: checkout.reference.trim(),
+        latitude: checkout.latitude,
+        longitude: checkout.longitude,
+      },
+      p_order: {
+        items: orderItems,
+        count,
+        subtotal,
+        deliveryFee,
+        total,
+        fulfillment,
+        payment: checkout.payment,
+        coupon: checkout.coupon.trim(),
+        notes: checkout.notes.trim(),
+      },
+    });
+    setOrderSubmitting(false);
+    if (error) {
+      setOrderSubmissionError(`Não foi possível enviar o pedido: ${error.message}`);
+      return;
+    }
+    setCart({});
+    setDetails({});
     setScreen("success");
   };
   const useCurrentLocation = () => {
@@ -348,9 +440,9 @@ export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog
   if (screen === "success") {
     return <main className="delivery-success">
       <span><Check /></span>
-      <p>PEDIDO REVISADO</p>
-      <h1>Seu pedido está pronto para ser enviado.</h1>
-      <small>Na próxima etapa, esta confirmação será conectada às comandas e à impressão automática da loja.</small>
+      <p>PEDIDO ENVIADO</p>
+      <h1>Seu pedido chegou à loja.</h1>
+      <small>A comanda foi registrada em {catalog.tenantName} e já pode ser acompanhada pela equipe.</small>
       <button onClick={() => setScreen("menu")}>VOLTAR AO CARDÁPIO</button>
     </main>;
   }
@@ -410,7 +502,8 @@ export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog
         </section>
       </div>
       <footer className="checkout-footer">
-        <button disabled={!checkoutReady} onClick={finishOrder}>CONFIRMAR · {money(total)}</button>
+        {orderSubmissionError && <p className="checkout-submit-error">{orderSubmissionError}</p>}
+        <button disabled={!checkoutReady || orderSubmitting} onClick={finishOrder}>{orderSubmitting ? "ENVIANDO PEDIDO..." : `CONFIRMAR · ${money(total)}`}</button>
         <small>Ao confirmar, você concorda com os termos da loja e da plataforma.</small>
       </footer>
     </main>;
