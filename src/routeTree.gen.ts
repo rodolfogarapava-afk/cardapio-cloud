@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteImport } from './routes/admin'
+import { Route as CardapioRouteImport } from './routes/cardapio'
 import { Route as ClienteRouteImport } from './routes/cliente'
 
 const IndexRoute = IndexRouteImport.update({
@@ -23,6 +24,11 @@ const AdminRoute = AdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CardapioRoute = CardapioRouteImport.update({
+  id: '/cardapio',
+  path: '/cardapio',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ClienteRoute = ClienteRouteImport.update({
   id: '/cliente',
   path: '/cliente',
@@ -32,30 +38,34 @@ const ClienteRoute = ClienteRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/cardapio': typeof CardapioRoute
   '/cliente': typeof ClienteRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/cardapio': typeof CardapioRoute
   '/cliente': typeof ClienteRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/cardapio': typeof CardapioRoute
   '/cliente': typeof ClienteRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/admin' | '/cliente'
+  fullPaths: '/' | '/admin' | '/cardapio' | '/cliente'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/admin' | '/cliente'
-  id: '__root__' | '/' | '/admin' | '/cliente'
+  to: '/' | '/admin' | '/cardapio' | '/cliente'
+  id: '__root__' | '/' | '/admin' | '/cardapio' | '/cliente'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
+  CardapioRoute: typeof CardapioRoute
   ClienteRoute: typeof ClienteRoute
 }
 
@@ -75,6 +85,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/cardapio': {
+      id: '/cardapio'
+      path: '/cardapio'
+      fullPath: '/cardapio'
+      preLoaderRoute: typeof CardapioRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/cliente': {
       id: '/cliente'
       path: '/cliente'
@@ -88,6 +105,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
+  CardapioRoute: CardapioRoute,
   ClienteRoute: ClienteRoute,
 }
 export const routeTree = rootRouteImport

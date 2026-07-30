@@ -111,7 +111,7 @@ const nav = [
   { label: "Bebidas", icon: Wine },
 ];
 
-export function RestaurantApp() {
+export function RestaurantApp({ publicMenu = false }: { publicMenu?: boolean }) {
   const tenantNavigation = useTenantNavigation();
   const isOriginalStore = !tenantNavigation || tenantNavigation.tenantName.trim().toLowerCase() === "deus proveu espetinhos";
   const tenantStoragePrefix = isOriginalStore ? "burguer-house" : `cardapio-cloud-${tenantNavigation.tenantId}`;
@@ -319,7 +319,7 @@ export function RestaurantApp() {
     });
 
   return (
-    <main className="app-shell">
+    <main className={`app-shell${publicMenu ? " public-menu-shell" : ""}`}>
       <header className="topbar">
         <button className="mobile-menu" onClick={() => setMenuOpen(true)} aria-label="Abrir menu">
           <Menu size={22} />
@@ -341,10 +341,10 @@ export function RestaurantApp() {
           {(!tenantNavigation||tenantNavigation.page==="operation"&&systemView===null)&&<button className="plain search-trigger" onClick={() => setSearchOpen(!searchOpen)}>
             <Search size={19} /> <span>BUSCAR</span>
           </button>}
-          <button className="plain commands-trigger" onClick={() => setModal("commands")}>
+          {!publicMenu && <button className="plain commands-trigger" onClick={() => setModal("commands")}>
             <ShoppingBag size={18} /><span>COMANDAS</span>
             {!!savedCommands.length && <b className="command-count">{savedCommands.length}</b>}
-          </button>
+          </button>}
           <button className="action cart-button" onClick={() => setModal("cart")}>
             <ShoppingBag size={19} />
             <span>CARRINHO<br />DE COMPRAS</span>
@@ -353,8 +353,8 @@ export function RestaurantApp() {
         </nav>
       </header>
 
-      <div className="workspace">
-        <aside className={`sidebar ${menuOpen ? "open" : ""}`}>
+      <div className={`workspace${publicMenu ? " public-menu-workspace" : ""}`}>
+        {!publicMenu && <aside className={`sidebar ${menuOpen ? "open" : ""}`}>
           <button className="close-menu" onClick={() => setMenuOpen(false)} aria-label="Fechar menu"><X /></button>
           <div className="nav-list">
             <button
@@ -400,7 +400,7 @@ export function RestaurantApp() {
           <div className="side-bottom">
             <button className="about" onClick={() => { setModal("about"); setMenuOpen(false); }}><Info size={17} /> Sobre</button>
           </div>
-        </aside>
+        </aside>}
 
         <section className="content">
           {tenantNavigation && tenantNavigation.page !== "operation" ? tenantNavigation.content :
@@ -409,7 +409,7 @@ export function RestaurantApp() {
           systemView === "commands" ? <IntegratedCommands tenantId={tenantNavigation?.tenantId} commands={savedCommands} setCommands={setSavedCommands} products={products} adjustStock={adjustStock} onCharge={(command) => { setCustomerName(command.name); setPaymentTotal(command.total); setPaymentItems(command.items); setPaymentCommandId(command.id); setPaymentCommandBackup(command); setModal("payment"); }} /> :
           systemView === "cash" ? <IntegratedCash sales={salesHistory} expenses={expenses} sync={operationsSync} onAddExpense={(description,amount) => setExpenses((all)=>[...all,{id:Date.now(),description,amount,createdAt:Date.now()}])} onDeleteExpense={(id)=>setExpenses((all)=>all.filter(expense=>expense.id!==id))} /> :
           systemView === "reports" ? <IntegratedReports sales={salesHistory} expenses={expenses} commands={savedCommands} sync={operationsSync} /> : <>
-          {!categories.length && <div className="integrated-empty new-store-empty"><Store/><h3>Seu cardápio está vazio</h3><p>Esta é uma loja nova. Cadastre a primeira categoria e os produtos para começar.</p><button className="primary" onClick={()=>setSystemView("products")}>CADASTRAR PRODUTOS</button></div>}
+          {!categories.length && <div className="integrated-empty new-store-empty"><Store/><h3>{publicMenu ? "Cardápio em preparação" : "Seu cardápio está vazio"}</h3><p>{publicMenu ? "Esta loja ainda não publicou produtos." : "Esta é uma loja nova. Cadastre a primeira categoria e os produtos para começar."}</p>{!publicMenu && <button className="primary" onClick={()=>setSystemView("products")}>CADASTRAR PRODUTOS</button>}</div>}
           <div className="category-strip menu-category-strip" aria-label="Categorias do cardápio">
             {categories.map((category) => (
               <button

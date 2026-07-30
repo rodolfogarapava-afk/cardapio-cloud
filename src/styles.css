@@ -168,6 +168,9 @@ button { cursor:pointer;touch-action:manipulation; }
 .search-box input { width:100%;background:none;border:0;outline:none;color:#fff;font-size:13px; }
 .mobile-menu { display:none;color:white;background:none;border:0; }
 .workspace { display:grid;grid-template-columns:170px 1fr;min-height:calc(100vh - 78px); }
+.public-menu-workspace { grid-template-columns:minmax(0,1fr); }
+.public-menu-shell .content { width:100%;max-width:1240px;margin:0 auto; }
+.public-menu-shell .mobile-menu { display:none!important; }
 .sidebar { background:#20232a;border-right:1px solid #ffffff0a;padding:28px 16px 20px;display:flex;flex-direction:column;position:sticky;top:78px;width:170px;height:calc(100vh - 78px);align-self:start;z-index:20; }
 .nav-list { display:grid;gap:8px; }
 .nav-list button { min-height:82px;border:1px solid transparent;background:transparent;color:#aeb2bc;border-radius:12px;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:8px;font-size:13px;font-weight:600; }
