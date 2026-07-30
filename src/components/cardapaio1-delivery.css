@@ -1,0 +1,110 @@
+.sabor-arte-delivery {
+  --sabor-accent: #ffcc00;
+  --sabor-surface: #17191e;
+  --sabor-card: #202329;
+  --sabor-border: #343841;
+  min-height: 100dvh;
+  background:
+    radial-gradient(circle at 20% -10%, rgba(255, 204, 0, 0.09), transparent 30rem),
+    #0e1014;
+  color: #f5f6f8;
+  font-family: "Manrope", "Inter", system-ui, sans-serif;
+}
+
+.sabor-arte-delivery .public-store-header {
+  background: rgba(23, 25, 30, 0.96);
+  border-color: var(--sabor-border);
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.24);
+}
+
+.sabor-arte-delivery .public-store-title h1,
+.sabor-arte-delivery .public-section-title h2,
+.sabor-arte-delivery .public-product-copy h3 {
+  letter-spacing: -0.035em;
+}
+
+.sabor-arte-delivery .public-store-title h1 {
+  font-weight: 800;
+}
+
+.sabor-arte-delivery .public-store-meta,
+.sabor-arte-delivery .public-product-copy p,
+.sabor-arte-delivery .public-product-copy small {
+  color: #aeb3bf;
+}
+
+.sabor-arte-delivery .public-search {
+  background: #111318;
+  border: 1px solid var(--sabor-border);
+  border-radius: 12px;
+}
+
+.sabor-arte-delivery .public-search input {
+  color: #fff;
+}
+
+.sabor-arte-delivery .public-search input::placeholder {
+  color: #858b98;
+}
+
+.sabor-arte-delivery .public-categories button {
+  border: 1px solid var(--sabor-border);
+  border-radius: 9px;
+  background: var(--sabor-card);
+  color: #c7cad1;
+  font-weight: 700;
+}
+
+.sabor-arte-delivery .public-categories button.active {
+  border-color: var(--sabor-accent);
+  background: var(--sabor-accent);
+  color: #111;
+}
+
+.sabor-arte-delivery .public-section-title i {
+  background: var(--sabor-accent);
+}
+
+.sabor-arte-delivery .public-product-card {
+  overflow: hidden;
+  border: 1px solid var(--sabor-border);
+  border-radius: 15px;
+  background: var(--sabor-card);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.2);
+}
+
+.sabor-arte-delivery .public-product-photo {
+  background: #111318;
+}
+
+.sabor-arte-delivery .public-product-photo > button,
+.sabor-arte-delivery .public-floating-cart,
+.sabor-arte-delivery .public-product-detail-footer > button:last-child,
+.sabor-arte-delivery .public-checkout-submit {
+  background: var(--sabor-accent);
+  color: #111;
+}
+
+.sabor-arte-delivery .public-bottom-nav {
+  border-color: var(--sabor-border);
+  background: rgba(23, 25, 30, 0.97);
+}
+
+.sabor-arte-delivery .public-bottom-nav button {
+  color: #9da2ad;
+}
+
+.sabor-arte-delivery .public-bottom-nav button.active,
+.sabor-arte-delivery .public-bottom-nav button:hover {
+  color: var(--sabor-accent);
+}
+
+@media (min-width: 720px) {
+  .sabor-arte-delivery .public-menu-content {
+    max-width: 1180px;
+  }
+
+  .sabor-arte-delivery .public-product-card {
+    min-height: 100%;
+  }
+}
