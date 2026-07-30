@@ -720,6 +720,8 @@
 .public-product-dots button{
   width:4px;
   height:4px;
+  min-width:0;
+  min-height:0;
   padding:0;
   border:0;
   border-radius:999px;
