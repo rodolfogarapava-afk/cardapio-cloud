@@ -14,6 +14,7 @@ import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AlimentacaoRouteImport } from './routes/alimentacao'
 import { Route as CardapioRouteImport } from './routes/cardapio'
 import { Route as ClienteRouteImport } from './routes/cliente'
+import { Route as Cardapaio1SlugRouteImport } from './routes/cardapaio1.$slug'
 import { Route as CardapioSlugRouteImport } from './routes/cardapio_.$slug'
 
 const IndexRoute = IndexRouteImport.update({
@@ -41,6 +42,11 @@ const ClienteRoute = ClienteRouteImport.update({
   path: '/cliente',
   getParentRoute: () => rootRouteImport,
 } as any)
+const Cardapaio1SlugRoute = Cardapaio1SlugRouteImport.update({
+  id: '/cardapaio1/$slug',
+  path: '/cardapaio1/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CardapioSlugRoute = CardapioSlugRouteImport.update({
   id: '/cardapio_/$slug',
   path: '/cardapio/$slug',
@@ -53,6 +59,7 @@ export interface FileRoutesByFullPath {
   '/alimentacao': typeof AlimentacaoRoute
   '/cardapio': typeof CardapioRoute
   '/cliente': typeof ClienteRoute
+  '/cardapaio1/$slug': typeof Cardapaio1SlugRoute
   '/cardapio/$slug': typeof CardapioSlugRoute
 }
 export interface FileRoutesByTo {
@@ -61,6 +68,7 @@ export interface FileRoutesByTo {
   '/alimentacao': typeof AlimentacaoRoute
   '/cardapio': typeof CardapioRoute
   '/cliente': typeof ClienteRoute
+  '/cardapaio1/$slug': typeof Cardapaio1SlugRoute
   '/cardapio/$slug': typeof CardapioSlugRoute
 }
 export interface FileRoutesById {
@@ -70,6 +78,7 @@ export interface FileRoutesById {
   '/alimentacao': typeof AlimentacaoRoute
   '/cardapio': typeof CardapioRoute
   '/cliente': typeof ClienteRoute
+  '/cardapaio1/$slug': typeof Cardapaio1SlugRoute
   '/cardapio_/$slug': typeof CardapioSlugRoute
 }
 export interface FileRouteTypes {
@@ -80,6 +89,7 @@ export interface FileRouteTypes {
     | '/alimentacao'
     | '/cardapio'
     | '/cliente'
+    | '/cardapaio1/$slug'
     | '/cardapio/$slug'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -88,6 +98,7 @@ export interface FileRouteTypes {
     | '/alimentacao'
     | '/cardapio'
     | '/cliente'
+    | '/cardapaio1/$slug'
     | '/cardapio/$slug'
   id:
     | '__root__'
@@ -96,6 +107,7 @@ export interface FileRouteTypes {
     | '/alimentacao'
     | '/cardapio'
     | '/cliente'
+    | '/cardapaio1/$slug'
     | '/cardapio_/$slug'
   fileRoutesById: FileRoutesById
 }
@@ -105,6 +117,7 @@ export interface RootRouteChildren {
   AlimentacaoRoute: typeof AlimentacaoRoute
   CardapioRoute: typeof CardapioRoute
   ClienteRoute: typeof ClienteRoute
+  Cardapaio1SlugRoute: typeof Cardapaio1SlugRoute
   CardapioSlugRoute: typeof CardapioSlugRoute
 }
 
@@ -145,6 +158,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ClienteRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/cardapaio1/$slug': {
+      id: '/cardapaio1/$slug'
+      path: '/cardapaio1/$slug'
+      fullPath: '/cardapaio1/$slug'
+      preLoaderRoute: typeof Cardapaio1SlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/cardapio_/$slug': {
       id: '/cardapio_/$slug'
       path: '/cardapio/$slug'
@@ -161,6 +181,7 @@ const rootRouteChildren: RootRouteChildren = {
   AlimentacaoRoute: AlimentacaoRoute,
   CardapioRoute: CardapioRoute,
   ClienteRoute: ClienteRoute,
+  Cardapaio1SlugRoute: Cardapaio1SlugRoute,
   CardapioSlugRoute: CardapioSlugRoute,
 }
 export const routeTree = rootRouteImport
