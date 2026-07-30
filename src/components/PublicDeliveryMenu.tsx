@@ -179,17 +179,16 @@ export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog
     return <main className="delivery-cart-page">
       <header className="cart-page-header">
         <div>
-          <span className="cart-header-eyebrow">SEU PEDIDO</span>
-          <h1>Resumo da entrega</h1>
-          <span>{count} {count === 1 ? "item" : "itens"} · {catalog.tenantName}</span>
+          <h1>Resumo do pedido</h1>
+          <span>{catalog.tenantName}</span>
         </div>
-        <button onClick={() => setScreen("menu")} aria-label="Fechar carrinho"><X /></button>
+        <div className="cart-header-actions">
+          {!!count && <button className="clear-cart" onClick={() => setCart({})}>Limpar tudo</button>}
+          <button className="close-cart" onClick={() => setScreen("menu")} aria-label="Fechar carrinho"><X /></button>
+        </div>
       </header>
       <section className="fulfillment-section">
-        <div className="cart-section-heading">
-          <span>1</span>
-          <div><b>Como você quer receber?</b><small>Escolha entrega ou retirada no local</small></div>
-        </div>
+        <p>Como você quer receber?</p>
         <div>
           <button className={fulfillment === "delivery" ? "active" : ""} onClick={() => setFulfillment("delivery")}><Truck /><span><b>Entrega</b><small>A gente leva até você</small></span></button>
           <button className={fulfillment === "pickup" ? "active" : ""} onClick={() => setFulfillment("pickup")}><Store /><span><b>Retirada</b><small>Você retira na loja</small></span></button>
