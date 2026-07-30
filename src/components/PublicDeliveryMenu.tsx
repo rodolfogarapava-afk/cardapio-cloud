@@ -355,9 +355,9 @@ export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog
       <div className="checkout-sections">
         <section className="checkout-card">
           <div className="checkout-card-title"><b>1</b><span><strong><UserRound /> Seus dados</strong><small>Para identificar seu pedido</small></span></div>
-          <label>Nome*<input value={checkout.name} onChange={(event) => updateCheckout("name", event.target.value)} placeholder="Seu nome completo" /></label>
           <label>Telefone*<input value={checkout.phone} onChange={(event) => updateCustomerPhone(event.target.value)} placeholder="(00) 00000-0000" inputMode="tel" autoComplete="tel" /></label>
           {!!customerLookupMessage && <p className="customer-lookup-message">{customerLookupMessage}</p>}
+          <label>Nome*<input value={checkout.name} onChange={(event) => updateCheckout("name", event.target.value)} placeholder="Seu nome completo" /></label>
           <label className="remember-customer"><input type="checkbox" checked={rememberCustomer} onChange={(event) => setRememberCustomer(event.target.checked)} /><span><b>Salvar meus dados neste aparelho</b><small>Na próxima compra, nome, telefone e endereço serão preenchidos automaticamente.</small></span></label>
         </section>
 
