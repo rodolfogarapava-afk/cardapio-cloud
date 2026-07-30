@@ -653,6 +653,45 @@
 .checkout-location-box>a:hover{text-decoration:underline}
 .checkout-location-box .spin{animation:location-spin .8s linear infinite}
 @keyframes location-spin{to{transform:rotate(360deg)}}
+.customer-lookup-message{
+  margin:9px 0 0;
+  padding:8px 10px;
+  border:1px solid #35d8a340;
+  border-radius:7px;
+  background:#35d8a30b;
+  color:#61dbae;
+  font-size:9px;
+  line-height:1.4;
+}
+.checkout-card .remember-customer{
+  margin-top:14px;
+  padding:11px;
+  border:1px solid #343842;
+  border-radius:9px;
+  background:#111318;
+  display:flex;
+  align-items:flex-start;
+  gap:9px;
+  cursor:pointer;
+}
+.checkout-card .remember-customer>input{
+  width:16px;
+  height:16px;
+  min-height:0;
+  margin:1px 0 0;
+  padding:0;
+  flex:0 0 16px;
+  accent-color:var(--delivery-yellow);
+}
+.remember-customer span{min-width:0}
+.remember-customer b{display:block;font-size:10px;font-weight:600}
+.remember-customer small{
+  display:block;
+  margin-top:3px;
+  color:#858a94;
+  font-size:8px;
+  line-height:1.45;
+}
 
 /* Detalhes completos do produto. */
 .public-product-photo img,.public-product-copy{cursor:pointer}

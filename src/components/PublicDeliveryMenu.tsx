@@ -19,7 +19,7 @@ import {
   WalletCards,
   X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Product } from "@/routes/index";
 import "./public-delivery-menu.css";
 
@@ -34,7 +34,6 @@ type CartDetail = { point?: string; note?: string };
 type CheckoutData = {
   name: string;
   phone: string;
-  cpf: string;
   street: string;
   number: string;
   neighborhood: string;
@@ -48,6 +47,17 @@ type CheckoutData = {
 
 const money = (value: number) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const preparationOptions = ["Mal passado", "Ao ponto", "Bem passado"];
+const customerProfilesKey = "cardapio_cloud_customer_profiles";
+const lastCustomerKey = "cardapio_cloud_last_customer";
+
+const phoneDigits = (value: string) => value.replace(/\D/g, "").slice(0, 11);
+const formatPhone = (value: string) => {
+  const digits = phoneDigits(value);
+  if (digits.length <= 2) return digits ? `(${digits}` : "";
+  if (digits.length <= 7) return digits.replace(/^(\d{2})(\d+)/, "($1) $2");
+  if (digits.length <= 10) return digits.replace(/^(\d{2})(\d{4})(\d+)/, "($1) $2-$3");
+  return digits.replace(/^(\d{2})(\d{5})(\d+)/, "($1) $2-$3");
+};
 
 function productImage(product: Product) {
   return product.image?.trim() || "https://images.unsplash.com/photo-1529692236671-f1f6cf9683ba?auto=format&fit=crop&w=900&q=82";
@@ -69,10 +79,27 @@ export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog
   const [detailNote, setDetailNote] = useState("");
   const [locationStatus, setLocationStatus] = useState<"idle" | "requesting" | "success" | "error">("idle");
   const [locationMessage, setLocationMessage] = useState("");
+  const [rememberCustomer, setRememberCustomer] = useState(true);
+  const [customerLookupMessage, setCustomerLookupMessage] = useState("");
   const [checkout, setCheckout] = useState<CheckoutData>({
-    name: "", phone: "", cpf: "", street: "", number: "", neighborhood: "",
+    name: "", phone: "", street: "", number: "", neighborhood: "",
     reference: "", latitude: null, longitude: null, payment: "", coupon: "", notes: "",
   });
+
+  useEffect(() => {
+    try {
+      const cookieValue = document.cookie.split("; ").find((item) => item.startsWith(`${lastCustomerKey}=`))?.split("=").slice(1).join("=");
+      const saved = localStorage.getItem(lastCustomerKey) || (cookieValue ? decodeURIComponent(cookieValue) : "");
+      if (!saved) return;
+      const customer = JSON.parse(saved) as { name?: string; phone?: string };
+      if (customer.name && customer.phone) {
+        setCheckout((current) => ({ ...current, name: customer.name || "", phone: formatPhone(customer.phone || "") }));
+        setCustomerLookupMessage("Seus dados foram preenchidos automaticamente.");
+      }
+    } catch {
+      // O cadastro local é opcional; o checkout continua funcionando sem ele.
+    }
+  }, []);
 
   const products = useMemo(() => catalog.products.filter((product) => {
     const matchesCategory = !activeCategory || product.category === activeCategory;
@@ -141,6 +168,43 @@ export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog
   };
   const updateCheckout = (field: keyof CheckoutData, value: string) =>
     setCheckout((current) => ({ ...current, [field]: value }));
+  const updateCustomerPhone = (value: string) => {
+    const formatted = formatPhone(value);
+    const digits = phoneDigits(value);
+    setCheckout((current) => ({ ...current, phone: formatted }));
+    setCustomerLookupMessage("");
+    if (digits.length < 10) return;
+    try {
+      const profiles = JSON.parse(localStorage.getItem(customerProfilesKey) || "{}") as Record<string, { name: string; phone: string }>;
+      const knownCustomer = profiles[digits];
+      if (knownCustomer?.name) {
+        setCheckout((current) => ({ ...current, phone: formatted, name: knownCustomer.name }));
+        setCustomerLookupMessage("Cadastro encontrado pelo telefone.");
+      }
+    } catch {
+      // Mantém o preenchimento manual quando o armazenamento local não está disponível.
+    }
+  };
+  const saveCustomerProfile = () => {
+    if (!rememberCustomer) return;
+    const digits = phoneDigits(checkout.phone);
+    const customer = { name: checkout.name.trim(), phone: digits };
+    if (!customer.name || digits.length < 10) return;
+    try {
+      const profiles = JSON.parse(localStorage.getItem(customerProfilesKey) || "{}") as Record<string, { name: string; phone: string }>;
+      profiles[digits] = customer;
+      localStorage.setItem(customerProfilesKey, JSON.stringify(profiles));
+      localStorage.setItem(lastCustomerKey, JSON.stringify(customer));
+      const secure = location.protocol === "https:" ? "; Secure" : "";
+      document.cookie = `${lastCustomerKey}=${encodeURIComponent(JSON.stringify(customer))}; Max-Age=31536000; Path=/; SameSite=Lax${secure}`;
+    } catch {
+      // O pedido pode continuar mesmo se o navegador bloquear cookies ou armazenamento.
+    }
+  };
+  const finishOrder = () => {
+    saveCustomerProfile();
+    setScreen("success");
+  };
   const useCurrentLocation = () => {
     if (!navigator.geolocation) {
       setLocationStatus("error");
@@ -184,7 +248,7 @@ export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog
         : "Não conseguimos identificar sua localização. Digite o endereço manualmente.");
     }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
   };
-  const checkoutReady = checkout.name.trim() && checkout.phone.trim() && checkout.payment &&
+  const checkoutReady = checkout.name.trim() && phoneDigits(checkout.phone).length >= 10 && checkout.payment &&
     (fulfillment === "pickup" || (checkout.street.trim() && checkout.number.trim() && checkout.neighborhood.trim()));
 
   if (screen === "success") {
@@ -211,10 +275,9 @@ export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog
         <section className="checkout-card">
           <div className="checkout-card-title"><b>1</b><span><strong><UserRound /> Seus dados</strong><small>Para identificar seu pedido</small></span></div>
           <label>Nome*<input value={checkout.name} onChange={(event) => updateCheckout("name", event.target.value)} placeholder="Seu nome completo" /></label>
-          <div className="checkout-row">
-            <label>Telefone*<input value={checkout.phone} onChange={(event) => updateCheckout("phone", event.target.value)} placeholder="(00) 00000-0000" inputMode="tel" /></label>
-            <label>CPF (opcional)<input value={checkout.cpf} onChange={(event) => updateCheckout("cpf", event.target.value)} placeholder="000.000.000-00" inputMode="numeric" /></label>
-          </div>
+          <label>Telefone*<input value={checkout.phone} onChange={(event) => updateCustomerPhone(event.target.value)} placeholder="(00) 00000-0000" inputMode="tel" autoComplete="tel" /></label>
+          {!!customerLookupMessage && <p className="customer-lookup-message">{customerLookupMessage}</p>}
+          <label className="remember-customer"><input type="checkbox" checked={rememberCustomer} onChange={(event) => setRememberCustomer(event.target.checked)} /><span><b>Salvar meus dados neste aparelho</b><small>Na próxima compra, nome e telefone serão preenchidos automaticamente.</small></span></label>
         </section>
 
         <section className="checkout-card">
@@ -253,7 +316,7 @@ export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog
         </section>
       </div>
       <footer className="checkout-footer">
-        <button disabled={!checkoutReady} onClick={() => setScreen("success")}>CONFIRMAR · {money(total)}</button>
+        <button disabled={!checkoutReady} onClick={finishOrder}>CONFIRMAR · {money(total)}</button>
         <small>Ao confirmar, você concorda com os termos da loja e da plataforma.</small>
       </footer>
     </main>;
