@@ -178,11 +178,18 @@ export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog
   if (screen === "cart") {
     return <main className="delivery-cart-page">
       <header className="cart-page-header">
-        <div><h1>Resumo do pedido</h1><span>{catalog.tenantName}</span></div>
+        <div>
+          <span className="cart-header-eyebrow">SEU PEDIDO</span>
+          <h1>Resumo da entrega</h1>
+          <span>{count} {count === 1 ? "item" : "itens"} · {catalog.tenantName}</span>
+        </div>
         <button onClick={() => setScreen("menu")} aria-label="Fechar carrinho"><X /></button>
       </header>
       <section className="fulfillment-section">
-        <p>Como você quer receber?</p>
+        <div className="cart-section-heading">
+          <span>1</span>
+          <div><b>Como você quer receber?</b><small>Escolha entrega ou retirada no local</small></div>
+        </div>
         <div>
           <button className={fulfillment === "delivery" ? "active" : ""} onClick={() => setFulfillment("delivery")}><Truck /><span><b>Entrega</b><small>A gente leva até você</small></span></button>
           <button className={fulfillment === "pickup" ? "active" : ""} onClick={() => setFulfillment("pickup")}><Store /><span><b>Retirada</b><small>Você retira na loja</small></span></button>
@@ -191,23 +198,25 @@ export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog
       <section className="delivery-cart-items">
         {cartProducts.map(({ product, quantity }) => <article key={product.id}>
           <img src={productImage(product)} alt={product.name} />
-          <div><h2>{quantity}x {product.name}</h2><p>{details[product.id]?.point}{details[product.id]?.note ? ` · ${details[product.id]?.note}` : ""}</p>
+          <div className="cart-item-copy"><h2>{product.name}</h2><p>{details[product.id]?.point}{details[product.id]?.note ? ` · ${details[product.id]?.note}` : ""}</p>
             <div className="cart-item-stepper"><button onClick={() => changeQuantity(product, -1)}><Minus /></button><b>{quantity}</b><button onClick={() => changeQuantity(product, 1)}><Plus /></button></div>
           </div>
-          <strong>{money(product.price * quantity)}</strong>
+          <div className="cart-item-price"><strong>{money(product.price * quantity)}</strong>{quantity > 1 && <small>{money(product.price)} cada</small>}</div>
           <button className="remove-cart-item" onClick={() => changeQuantity(product, -quantity)} aria-label={`Remover ${product.name}`}><Trash2 /></button>
         </article>)}
         {!cartProducts.length && <div className="empty-public-cart"><ShoppingBag /><h2>Seu carrinho está vazio</h2><button onClick={() => setScreen("menu")}>ESCOLHER PRODUTOS</button></div>}
       </section>
       {!!cartProducts.length && <section className="cart-suggestions">
-        <p>PEÇA TAMBÉM</p>
+        <div className="suggestion-heading"><span>+</span><div><b>Que tal completar?</b><small>Adicione algo ao seu pedido</small></div></div>
         <div>{catalog.products.filter((product) => !cart[product.id]).slice(0, 5).map((product) => <button key={product.id} onClick={() => requestAdd(product)}><img src={productImage(product)} alt="" /><span>{product.name}</span><small>{money(product.price)}</small></button>)}</div>
       </section>}
       {!!cartProducts.length && <footer className="cart-totals">
+        <div className="cart-total-title"><span>Resumo de valores</span><small>{count} {count === 1 ? "item selecionado" : "itens selecionados"}</small></div>
         <p><span>Subtotal</span><b>{money(subtotal)}</b></p>
         <p><span>Taxa de entrega</span><b>{fulfillment === "delivery" ? money(deliveryFee) : "Grátis"}</b></p>
         <p className="total"><span>Total</span><b>{money(total)}</b></p>
-        <button onClick={() => setScreen("checkout")}>CONTINUAR PEDIDO</button>
+        <button onClick={() => setScreen("checkout")}><span>CONTINUAR</span><b>{money(total)}</b></button>
+        <small className="cart-secure-note">Você poderá revisar os dados antes de confirmar</small>
       </footer>}
     </main>;
   }
