@@ -4,6 +4,8 @@ import {
   ChevronDown,
   Clock3,
   CreditCard,
+  Loader2,
+  LocateFixed,
   MapPin,
   Minus,
   Plus,
@@ -37,6 +39,8 @@ type CheckoutData = {
   number: string;
   neighborhood: string;
   reference: string;
+  latitude: number | null;
+  longitude: number | null;
   payment: string;
   coupon: string;
   notes: string;
@@ -63,9 +67,11 @@ export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog
   const [detailQuantity, setDetailQuantity] = useState(1);
   const [detailPoint, setDetailPoint] = useState("");
   const [detailNote, setDetailNote] = useState("");
+  const [locationStatus, setLocationStatus] = useState<"idle" | "requesting" | "success" | "error">("idle");
+  const [locationMessage, setLocationMessage] = useState("");
   const [checkout, setCheckout] = useState<CheckoutData>({
     name: "", phone: "", cpf: "", street: "", number: "", neighborhood: "",
-    reference: "", payment: "", coupon: "", notes: "",
+    reference: "", latitude: null, longitude: null, payment: "", coupon: "", notes: "",
   });
 
   const products = useMemo(() => catalog.products.filter((product) => {
@@ -135,6 +141,49 @@ export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog
   };
   const updateCheckout = (field: keyof CheckoutData, value: string) =>
     setCheckout((current) => ({ ...current, [field]: value }));
+  const useCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      setLocationStatus("error");
+      setLocationMessage("Este aparelho não oferece localização automática.");
+      return;
+    }
+    setLocationStatus("requesting");
+    setLocationMessage("Confirme a permissão de localização no navegador.");
+    navigator.geolocation.getCurrentPosition(async ({ coords }) => {
+      const latitude = coords.latitude;
+      const longitude = coords.longitude;
+      setCheckout((current) => ({ ...current, latitude, longitude }));
+      try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&lat=${latitude}&lon=${longitude}`, {
+          headers: { "Accept-Language": "pt-BR" },
+        });
+        if (!response.ok) throw new Error("reverse-geocode");
+        const result = await response.json() as {
+          display_name?: string;
+          address?: { road?: string; pedestrian?: string; house_number?: string; suburb?: string; neighbourhood?: string; quarter?: string };
+        };
+        const address = result.address || {};
+        setCheckout((current) => ({
+          ...current,
+          street: address.road || address.pedestrian || current.street,
+          number: address.house_number || current.number,
+          neighborhood: address.suburb || address.neighbourhood || address.quarter || current.neighborhood,
+          reference: current.reference || result.display_name || "",
+          latitude,
+          longitude,
+        }));
+        setLocationMessage("Localização encontrada. Confira o número e os dados do endereço.");
+      } catch {
+        setLocationMessage("Localização encontrada. Complete os dados do endereço abaixo.");
+      }
+      setLocationStatus("success");
+    }, (error) => {
+      setLocationStatus("error");
+      setLocationMessage(error.code === error.PERMISSION_DENIED
+        ? "Permissão negada. Ative a localização do navegador ou preencha o endereço."
+        : "Não conseguimos identificar sua localização. Digite o endereço manualmente.");
+    }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
+  };
   const checkoutReady = checkout.name.trim() && checkout.phone.trim() && checkout.payment &&
     (fulfillment === "pickup" || (checkout.street.trim() && checkout.number.trim() && checkout.neighborhood.trim()));
 
@@ -171,6 +220,14 @@ export default function PublicDeliveryMenu({ catalog }: { catalog: PublicCatalog
         <section className="checkout-card">
           <div className="checkout-card-title"><b>2</b><span><strong><MapPin /> {fulfillment === "delivery" ? "Endereço de entrega" : "Retirada no local"}</strong><small>{fulfillment === "delivery" ? "Onde devemos entregar?" : "Retire seu pedido no estabelecimento"}</small></span></div>
           {fulfillment === "delivery" ? <>
+            <div className={`checkout-location-box ${locationStatus}`}>
+              <div><LocateFixed /><span><strong>Não sabe o endereço?</strong><small>Use a localização do aparelho para preencher automaticamente.</small></span></div>
+              <button type="button" disabled={locationStatus === "requesting"} onClick={useCurrentLocation}>
+                {locationStatus === "requesting" ? <><Loader2 className="spin" /> LOCALIZANDO</> : <><LocateFixed /> USAR MINHA LOCALIZAÇÃO</>}
+              </button>
+              {!!locationMessage && <p>{locationMessage}</p>}
+              {locationStatus === "success" && checkout.latitude !== null && checkout.longitude !== null && <a href={`https://www.google.com/maps?q=${checkout.latitude},${checkout.longitude}`} target="_blank" rel="noreferrer">Conferir ponto no Google Maps</a>}
+            </div>
             <label>Rua/Avenida*<input value={checkout.street} onChange={(event) => updateCheckout("street", event.target.value)} placeholder="Rua das Flores" /></label>
             <div className="checkout-row address-row">
               <label>Número*<input value={checkout.number} onChange={(event) => updateCheckout("number", event.target.value)} placeholder="123" inputMode="numeric" /></label>
