@@ -1225,6 +1225,7 @@ function IntegratedCommands({tenantId,commands,setCommands,onCharge,products,adj
   const [pendingChanges,setPendingChanges]=useState<OrderChange[]>([]);
   const [printingChanges,setPrintingChanges]=useState(false);
   const [printChangeError,setPrintChangeError]=useState("");
+  const [printChangeSent,setPrintChangeSent]=useState(false);
   
   const [pendingProduct,setPendingProduct]=useState<{command:IntegratedCommand;product:Product}|null>(null);
   const [pendingEditMeat,setPendingEditMeat]=useState<{command:IntegratedCommand;product:Product}|null>(null);
@@ -1236,8 +1237,11 @@ function IntegratedCommands({tenantId,commands,setCommands,onCharge,products,adj
   useEffect(()=>{
     setPendingChanges([]);
     setPrintChangeError("");
+    setPrintChangeSent(false);
   },[editing?.id]);
   const applyEdit=(command:IntegratedCommand,nextItems:IntegratedCommand["items"],change:OrderChange)=>{
+    setPrintChangeSent(false);
+    setPrintChangeError("");
     const nextCommand={...command,items:nextItems,count:nextItems.reduce((sum,item)=>sum+item.qty,0),total:nextItems.reduce((sum,item)=>sum+item.qty*item.price,0)};
     setCommands((all)=>all.map((c)=>c.id===command.id?nextCommand:c));
     setEditing(nextCommand);
@@ -1248,19 +1252,31 @@ function IntegratedCommands({tenantId,commands,setCommands,onCharge,products,adj
     });
   };
   const sendPendingChanges=async()=>{
-    if(!editing||!pendingChanges.length)return;
+    if(!editing)return;
     setPrintingChanges(true);
     setPrintChangeError("");
+    setPrintChangeSent(false);
     try{
-      if(tenantId)await queueOrderUpdate({
-        tenantId,
-        commandId:editing.id,
-        customer:editing.name,
-        changes:pendingChanges,
-        newTotal:editing.total,
-      });
-      else await printOrderChange(editing.name,pendingChanges,editing.total);
+      if(tenantId){
+        if(pendingChanges.length)await queueOrderUpdate({
+          tenantId,
+          commandId:editing.id,
+          customer:editing.name,
+          changes:pendingChanges,
+          newTotal:editing.total,
+        });
+        else await queueKitchenOrder({
+          tenantId,
+          commandId:editing.id,
+          customer:editing.name,
+          items:toReceiptItems(editing.items),
+          total:editing.total,
+          kind:`reprint_${Date.now()}`,
+        });
+      }else if(pendingChanges.length)await printOrderChange(editing.name,pendingChanges,editing.total);
+      else await printKitchenTicket(editing.name,editing.items);
       setPendingChanges([]);
+      setPrintChangeSent(true);
     }catch(error){
       setPrintChangeError(`Não foi possível enviar as alterações para impressão: ${error instanceof Error?error.message:"erro desconhecido"}`);
     }finally{
@@ -1359,8 +1375,8 @@ function IntegratedCommands({tenantId,commands,setCommands,onCharge,products,adj
       <div className="quick-products edit-quick-products">{products.filter((product)=>product.category===editCategory).map((product)=><button key={product.id} onClick={()=>openAddProduct(editing!,product)}><b>{product.name}</b><small>R$ {product.price.toFixed(2).replace(".",",")}</small></button>)}</div>
       <div className="cart-actions">
         <button onClick={()=>setEditing(null)}>FECHAR</button>
-        <button className="primary" disabled={!pendingChanges.length||printingChanges} onClick={sendPendingChanges}>
-          {printingChanges?"ENVIANDO PARA IMPRESSORA...":pendingChanges.length?`IMPRIMIR ALTERAÇÕES (${pendingChanges.length})`:"SEM ALTERAÇÕES PENDENTES"}
+        <button className="primary" disabled={printingChanges} onClick={sendPendingChanges}>
+          {printingChanges?"ENVIANDO PARA IMPRESSORA...":printChangeSent?"ENVIADO PARA IMPRESSÃO":pendingChanges.length?`IMPRIMIR ALTERAÇÕES (${pendingChanges.length})`:"REIMPRIMIR COMANDA"}
         </button>
       </div>
       {printChangeError&&<div className="drawer-form-alert" role="alert">{printChangeError}</div>}
