@@ -535,7 +535,7 @@ export function RestaurantApp() {
                       <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="35" inputMode="numeric" />
                     </label>
                     <div className="cart-total"><span>Total</span><strong>R$ {total.toFixed(2).replace(".", ",")}</strong></div>
-                    <div className="cart-actions">
+                    <div className="cart-actions save-command-actions">
                       <button className="primary" disabled={!customerName.trim()} onClick={() => {
                         const name=customerName.trim();
                         const newItems=currentCartItems.map((item)=>({...item,delivered:false}));
