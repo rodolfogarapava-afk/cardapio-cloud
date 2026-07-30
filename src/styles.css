@@ -770,3 +770,28 @@ button { cursor:pointer;touch-action:manipulation; }
   .stepper button { width:30px;height:34px; }
   .stepper b { width:26px; }
 }
+
+/* /cardapio: layout sem a coluna administrativa */
+.app-shell .public-menu-workspace {
+  display:block;
+  width:100%;
+}
+.public-menu-shell .public-menu-workspace > .content {
+  width:min(100%, 1240px);
+  max-width:1240px;
+  margin:0 auto;
+}
+
+@media (max-width: 640px) {
+  .public-menu-shell .topbar {
+    padding-left:14px;
+  }
+  .public-menu-shell .brand {
+    min-width:0;
+  }
+  .public-menu-shell .public-menu-workspace > .content {
+    width:100%;
+    padding-left:14px;
+    padding-right:14px;
+  }
+}
