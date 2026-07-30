@@ -26,6 +26,9 @@ import {
   Cloud,
   CloudOff,
   Trash2,
+  MapPin,
+  Phone,
+  Truck,
 } from "lucide-react";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { sendOrderTicketToPrinter, sendOrderUpdateToPrinter, sendReceiptToPrinter, type OrderChange } from "@/lib/printReceipt";
@@ -799,15 +802,25 @@ function Empty({text}:{text:string}) { return <div className="admin-empty">{text
 function OrderRow({order,total}:{order:OpenOrder;total:number}) { return <div className="order-row"><div><b>{order.customer}</b><small>{order.items.length} {order.items.length===1?"item":"itens"}</small></div><strong>R$ {total.toFixed(2).replace(".", ",")}</strong></div> }
 function foodEmoji(name:string,category:string) { const text=`${name} ${category}`.toLowerCase(); if(text.includes("vinho"))return"🍷";if(text.includes("salada"))return"🥗";if(text.includes("batata"))return"🍟";if(text.includes("onion"))return"🧅";return"🍔" }
 
-type IntegratedCommand = {id:number;name:string;count:number;total:number;createdAt:number;kitchenStatus?:"new"|"preparing"|"ready";items:{name:string;qty:number;price:number;detail?:string;delivered:boolean}[]};
+type CommandDelivery = {
+  phone?:string;
+  fulfillment?:"delivery"|"pickup";
+  payment?:string;
+  street?:string;
+  number?:string;
+  neighborhood?:string;
+  reference?:string;
+  notes?:string;
+};
+type IntegratedCommand = {id:number;name:string;count:number;total:number;createdAt:number;kitchenStatus?:"new"|"preparing"|"ready";delivery?:CommandDelivery;items:{name:string;qty:number;price:number;detail?:string;delivered:boolean}[]};
 type IntegratedSale = {id:number;name:string;total:number;method:string;createdAt:number;items:{name:string;qty:number;price:number;detail?:string}[]};
 type IntegratedExpense = {id:number;description:string;amount:number;createdAt:number};
 
 function mergeOpenCommands(commands:IntegratedCommand[]){
   const merged:IntegratedCommand[]=[];
   commands.forEach((command)=>{
-    const key=command.name.normalize("NFD").replace(/\p{Diacritic}/gu,"").replace(/\s+/g," ").trim().toLowerCase();
-    const existing=merged.find((item)=>item.name.normalize("NFD").replace(/\p{Diacritic}/gu,"").replace(/\s+/g," ").trim().toLowerCase()===key);
+    const key=command.delivery?`delivery-${command.id}`:command.name.normalize("NFD").replace(/\p{Diacritic}/gu,"").replace(/\s+/g," ").trim().toLowerCase();
+    const existing=merged.find((item)=>(item.delivery?`delivery-${item.id}`:item.name.normalize("NFD").replace(/\p{Diacritic}/gu,"").replace(/\s+/g," ").trim().toLowerCase())===key);
     if(!existing){merged.push({...command,items:[...command.items]});return}
     existing.count+=command.count;
     existing.total+=command.total;
@@ -819,6 +832,15 @@ function mergeOpenCommands(commands:IntegratedCommand[]){
     });
   });
   return merged;
+}
+
+function deliveryAddress(delivery?:CommandDelivery){
+  if(!delivery)return"";
+  return [
+    [delivery.street,delivery.number].filter(Boolean).join(", "),
+    delivery.neighborhood,
+    delivery.reference,
+  ].filter(Boolean).join(" · ");
 }
 
 function IntegratedProducts({tenantId,products,categories,onChange,onAddCategory,onRenameCategory,onDeleteCategory}:{tenantId?:string|null;products:Product[];categories:string[];onChange:(products:Product[])=>void;onAddCategory:(name:string)=>void;onRenameCategory:(oldName:string,newName:string)=>void;onDeleteCategory:(name:string)=>void}) {
@@ -1345,6 +1367,12 @@ function IntegratedCommands({tenantId,commands,setCommands,onCharge,products,adj
       <header className="kitchen-column-head"><div><b>{column.title}</b><span>{column.commands.length}</span></div><small>{column.description}</small></header>
       <div className="kitchen-column-list">{column.commands.length?column.commands.map((command)=><article className="kitchen-command-card" key={command.id}>
         <header><div><small>COMANDA #{String(command.id).slice(-4)} · HÁ {Math.max(1,Math.round((Date.now()-command.createdAt)/60000))} MIN</small><h2>{command.name}</h2></div><strong>R$ {command.total.toFixed(2).replace(".",",")}</strong></header>
+        {command.delivery&&<div className={`command-delivery ${command.delivery.fulfillment==="delivery"?"is-delivery":"is-pickup"}`}>
+          <b><Truck/>{command.delivery.fulfillment==="delivery"?"ENTREGA · DELIVERY":"RETIRADA NA LOJA"}</b>
+          {command.delivery.phone&&<span><Phone/>{command.delivery.phone}</span>}
+          {command.delivery.fulfillment==="delivery"&&deliveryAddress(command.delivery)&&<span><MapPin/>{deliveryAddress(command.delivery)}</span>}
+          {command.delivery.notes&&<small>OBS.: {command.delivery.notes}</small>}
+        </div>}
         <div className="command-products">{command.items.map((item,index)=><label key={`${item.name}-${index}`}><input type="checkbox" checked={item.delivered} onChange={()=>setCommands((all)=>all.map((c)=>c.id===command.id?{...c,items:c.items.map((x,i)=>i===index?{...x,delivered:!x.delivered}:x)}:c))}/><span><b>{item.qty}×</b> {item.name}{item.detail&&<small>{item.detail}</small>}</span><em>{item.delivered?"Entregue":column.id==="ready"?"Pronto":column.id==="new"?"Novo":"Preparando"}</em></label>)}</div>
         <div className="kitchen-flow-actions">
           {column.id==="new"&&<button className="flow-main" onClick={()=>setKitchenStatus(command.id,"preparing")}>INICIAR PREPARO</button>}
