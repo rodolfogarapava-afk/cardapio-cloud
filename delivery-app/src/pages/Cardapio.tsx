@@ -133,7 +133,7 @@ function LoyaltyModal({ open, onClose }: { open: boolean; onClose: () => void })
 export default function Cardapio() {
   const { vendorSlug } = useParams<{ vendorSlug: string }>();
   const navigate = useNavigate();
-  const { cart, itemCount, setDeliveryFee, deliveryMode } = useCart();
+  const { cart, itemCount, setDeliveryFee, deliveryMode, setDeliveryAddress } = useCart();
   const { user, isAuthenticated, logout } = useAuth();
   const [authOpen, setAuthOpen] = useState(false);
   const [authStep, setAuthStep] = useState<'identify' | 'register'>('identify');
@@ -182,12 +182,13 @@ export default function Cardapio() {
       const digits = (access?.phone || '').replace(/\D/g, '');
       if (digits.length < 10) return;
       setDeliveryPhone(digits);
-      const profile = JSON.parse(localStorage.getItem(`cardapio_delivery_profile_${digits}`) || 'null') as { name?: string } | null;
+      const profile = JSON.parse(localStorage.getItem(`cardapio_delivery_profile_${digits}`) || 'null') as { name?: string; address?: Address } | null;
       setDeliveryName(profile?.name?.trim() || 'Cliente');
+      if (profile?.address) setDeliveryAddress(profile.address);
     } catch {
       localStorage.removeItem('cardapio_delivery_access');
     }
-  }, []);
+  }, [setDeliveryAddress]);
 
   const onlyDigits = (s: string) => s.replace(/\D/g, '');
   // Heurística: 11 dígitos com 3º dígito = 9 → celular; 10 dígitos → fixo; 11 dígitos sem 9 na 3ª pos → CPF.
@@ -224,12 +225,13 @@ export default function Cardapio() {
     setAuthErr(''); setAuthLoading(false);
   };
 
-  const connectCustomer = (phone: string, name: string, token = '') => {
+  const connectCustomer = (phone: string, name: string, token = '', address?: Address) => {
     localStorage.setItem('cardapio_delivery_access', JSON.stringify({
       phone, tenantId: cloudCatalog?.tenantId, vendorSlug, token, updatedAt: Date.now(),
     }));
     setDeliveryPhone(phone);
     setDeliveryName(name);
+    if (address) setDeliveryAddress(address);
     setIdentifiedName(name);
     setAuthOpen(false);
     resetAuth();
@@ -255,15 +257,16 @@ export default function Cardapio() {
         if (data?.name?.trim()) customer = data;
       }
       if (customer?.name?.trim()) {
+        let savedAddress = localProfile?.address;
         if (!localProfile?.name) {
-          const address: Address = {
+          savedAddress = {
             id: `address-${Date.now()}`, label: 'Endereço cadastrado', isDefault: true,
             street: customer.street || '', number: customer.number || '', neighborhood: customer.neighborhood || '',
             complement: customer.reference || '', city: '', state: '', zipCode: '',
           };
-          localStorage.setItem(`cardapio_delivery_profile_${d}`, JSON.stringify({ name: customer.name.trim(), phone: d, address, updatedAt: Date.now() }));
+          localStorage.setItem(`cardapio_delivery_profile_${d}`, JSON.stringify({ name: customer.name.trim(), phone: d, address: savedAddress, updatedAt: Date.now() }));
         }
-        connectCustomer(d, customer.name.trim(), access?.phone === d ? access.token || '' : '');
+        connectCustomer(d, customer.name.trim(), access?.phone === d ? access.token || '' : '', savedAddress);
       } else {
         setAuthStep('register');
       }
@@ -289,7 +292,7 @@ export default function Cardapio() {
     localStorage.setItem(`cardapio_delivery_profile_${phone}`, JSON.stringify({
       name: registerName.trim(), phone, address, updatedAt: Date.now(),
     }));
-    connectCustomer(phone, registerName.trim());
+    connectCustomer(phone, registerName.trim(), '', address);
   };
 
   const customerConnected = isAuthenticated || deliveryPhone.length >= 10;
