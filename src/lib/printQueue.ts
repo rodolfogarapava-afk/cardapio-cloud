@@ -5,16 +5,17 @@ export async function queueKitchenOrder(input:{
   tenantId:string;
   commandId:number;
   customer:string;
+  waiter?:string;
   items:ReceiptItem[];
   total:number;
   kind?:string;
 }) {
   if(!supabase) throw new Error("Supabase não configurado");
-  const data=buildOrderTicketBase64({customer:input.customer,items:input.items,total:input.total});
+  const data=buildOrderTicketBase64({customer:input.customer,waiter:input.waiter,items:input.items,total:input.total});
   const {error}=await supabase.rpc("queue_print_job",{
     p_tenant_id:input.tenantId,
     p_command_id:input.commandId,
-    p_payload:{data,customer:input.customer,total:input.total,createdAt:Date.now()},
+    p_payload:{data,customer:input.customer,waiter:input.waiter,total:input.total,createdAt:Date.now()},
     p_job_kind:input.kind||"new_order",
   });
   if(error)throw error;
@@ -65,19 +66,21 @@ export async function queueOrderUpdate(input:{
   tenantId:string;
   commandId:number;
   customer:string;
+  waiter?:string;
   changes:OrderChange[];
   newTotal:number;
 }) {
   if(!supabase) throw new Error("Supabase não configurado");
   const data=buildOrderUpdateBase64({
     customer:input.customer,
+    waiter:input.waiter,
     changes:input.changes,
     newTotal:input.newTotal,
   });
   const {error}=await supabase.rpc("queue_print_job",{
     p_tenant_id:input.tenantId,
     p_command_id:input.commandId,
-    p_payload:{data,customer:input.customer,newTotal:input.newTotal,changes:input.changes,createdAt:Date.now()},
+    p_payload:{data,customer:input.customer,waiter:input.waiter,newTotal:input.newTotal,changes:input.changes,createdAt:Date.now()},
     p_job_kind:`order_update_${Date.now()}`,
   });
   if(error)throw error;

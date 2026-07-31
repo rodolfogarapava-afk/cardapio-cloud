@@ -28,7 +28,9 @@ export interface ReceiptData {
 const COMBINING_DIACRITICS = new RegExp('[̀-ͯ]', 'g');
 
 function stripAccents(value: string) {
-  return value.normalize('NFD').replace(COMBINING_DIACRITICS, '');
+  return value.normalize('NFD').replace(COMBINING_DIACRITICS, '')
+    .replace(/[×·•–—]/g, (character) => character === '×' ? 'x' : character === '·' || character === '•' ? '-' : '-')
+    .replace(/[^\x20-\x7E\n\r\t]/g, '');
 }
 
 function padLine(left: string, right: string, width = PAPER_WIDTH_CHARS) {
@@ -149,10 +151,12 @@ export interface OrderChange {
 // Serve para o preparo sair certo e reduzir erro/retorno do cliente.
 function buildOrderTicketEscPos({
   customer,
+  waiter,
   items,
   total,
 }: {
   customer: string;
+  waiter?: string;
   items: ReceiptItem[];
   /** Total da comanda (soma dos itens deste pedido inicial). */
   total?: number;
@@ -176,6 +180,7 @@ function buildOrderTicketEscPos({
   b.line(`Mesa: ${customer}`);
   b.doubleSize(false);
   b.bold(false);
+  if (waiter) b.line(`Garcom: ${waiter}`);
   b.divider();
 
   for (const item of items) {
@@ -203,10 +208,12 @@ function buildOrderTicketEscPos({
 // física, com só a mudança desta edição.
 function buildOrderUpdateEscPos({
   customer,
+  waiter,
   changes,
   newTotal,
 }: {
   customer: string;
+  waiter?: string;
   changes: OrderChange[];
   /** Novo total da comanda já com a mudança aplicada. */
   newTotal?: number;
@@ -228,6 +235,7 @@ function buildOrderUpdateEscPos({
   b.bold(true);
   b.line(`Mesa: ${customer}`);
   b.bold(false);
+  if (waiter) b.line(`Garcom: ${waiter}`);
 
   const removed = changes.filter((c) => c.type === 'removido');
   const added = changes.filter((c) => c.type === 'adicionado');
@@ -305,12 +313,12 @@ export async function sendReceiptToPrinter(data: ReceiptData) {
  * Envia a via de PEDIDO (cozinha) — sem preços, com foco em produto + ponto +
  * observação — para a impressora térmica via ponte local.
  */
-export async function sendOrderTicketToPrinter(data: { customer: string; items: ReceiptItem[]; total?: number }) {
+export async function sendOrderTicketToPrinter(data: { customer: string; waiter?: string; items: ReceiptItem[]; total?: number }) {
   const bytes = buildOrderTicketEscPos(data);
   await sendToPrintHelper(bytes);
 }
 
-export function buildOrderTicketBase64(data: { customer: string; items: ReceiptItem[]; total?: number }) {
+export function buildOrderTicketBase64(data: { customer: string; waiter?: string; items: ReceiptItem[]; total?: number }) {
   return bytesToBase64(buildOrderTicketEscPos(data));
 }
 
@@ -318,7 +326,7 @@ export function buildReceiptBase64(data: ReceiptData) {
   return bytesToBase64(buildReceiptEscPos(data));
 }
 
-export function buildOrderUpdateBase64(data: { customer: string; changes: OrderChange[]; newTotal?: number }) {
+export function buildOrderUpdateBase64(data: { customer: string; waiter?: string; changes: OrderChange[]; newTotal?: number }) {
   return bytesToBase64(buildOrderUpdateEscPos(data));
 }
 
@@ -326,7 +334,7 @@ export function buildOrderUpdateBase64(data: { customer: string; changes: OrderC
  * Envia só o bloco de ATUALIZAÇÃO (item removido/adicionado numa edição de
  * comanda já aberta) para a impressora térmica via ponte local.
  */
-export async function sendOrderUpdateToPrinter(data: { customer: string; changes: OrderChange[]; newTotal?: number }) {
+export async function sendOrderUpdateToPrinter(data: { customer: string; waiter?: string; changes: OrderChange[]; newTotal?: number }) {
   const bytes = buildOrderUpdateEscPos(data);
   await sendToPrintHelper(bytes);
 }

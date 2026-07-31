@@ -598,7 +598,8 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
                         if(tenantNavigation?.tenantId)queueKitchenOrder({
                           tenantId:tenantNavigation.tenantId,
                           commandId,
-                          customer:`${name} · Garçom: ${waiter}`,
+                          customer:name,
+                          waiter,
                           items:newItems.map((item)=>({name:item.name,qty:item.qty,unitPrice:item.price,total:item.price*item.qty,notes:item.detail})),
                           total,
                         }).then(()=>setPrintStatuses((current)=>({...current,[commandId]:"pending"})))
@@ -607,7 +608,7 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
                             console.error("Comanda salva, mas não foi possível entrar na fila de impressão:",error);
                           });
                         playNotificationSound("sale");
-                        setCart({}); setCartDetails({}); setModal("commands");
+                        setCart({}); setCartDetails({}); setCustomerName(""); setModal("commands");
                       }}>SALVAR COMANDA</button>
                     </div>
                   </>
@@ -644,7 +645,7 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
                       setPrintStatuses((current)=>({...current,[command.id]:"sending"}));
                       queueKitchenOrder({
                         tenantId:tenantNavigation.tenantId!,commandId:command.id,
-                        customer:`${command.tableLabel||command.name}${command.waiterName?` · Garçom: ${command.waiterName}`:""}`,
+                        customer:command.tableLabel||command.name,waiter:command.waiterName,
                         items:toReceiptItems(command.items),total:command.total,kind:`retry_${Date.now()}`,
                       }).then(()=>setPrintStatuses((current)=>({...current,[command.id]:"pending"})))
                         .catch(()=>setPrintStatuses((current)=>({...current,[command.id]:"failed"})));
@@ -886,9 +887,6 @@ function deliveryPaymentLabel(method?:string){
 type IntegratedCommand = {id:number;name:string;tableLabel?:string;waiterName?:string;source?:"waiter"|"delivery";count:number;total:number;createdAt:number;kitchenStatus?:"new"|"preparing"|"ready"|"cancelled";cancelledBy?:"customer"|"store";cancelledAt?:string;delivery?:CommandDelivery;items:{name:string;qty:number;price:number;detail?:string;delivered:boolean}[]};
 type IntegratedSale = {id:number;name:string;total:number;method:string;createdAt:number;items:{name:string;qty:number;price:number;detail?:string}[]};
 type IntegratedExpense = {id:number;description:string;amount:number;createdAt:number};
-
-const commandTicketName=(command:IntegratedCommand)=>
-  `${command.tableLabel||command.name}${command.waiterName?` · Garçom: ${command.waiterName}`:""}`;
 
 function mergeOpenCommands(commands:IntegratedCommand[]){
   const merged:IntegratedCommand[]=[];
@@ -1311,12 +1309,13 @@ function IntegratedCommands({tenantId,commands,setCommands,onCharge,products,adj
       if(tenantId)queueKitchenOrder({
         tenantId,
         commandId:confirmation.command.id,
-        customer:commandTicketName(confirmation.command),
+        customer:confirmation.command.tableLabel||confirmation.command.name,
+        waiter:confirmation.command.waiterName,
         items:toReceiptItems(confirmation.command.items),
         total:confirmation.command.total,
         kind:`reprint_${Date.now()}`,
       }).catch((error)=>console.error("Não foi possível colocar a impressão na fila:",error));
-      else printKitchenTicket(confirmation.command.name,confirmation.command.items);
+      else printKitchenTicket(confirmation.command.name,confirmation.command.items,confirmation.command.waiterName);
     }
     else {
       if(tenantId&&supabase){
@@ -1372,20 +1371,22 @@ function IntegratedCommands({tenantId,commands,setCommands,onCharge,products,adj
         if(pendingChanges.length)await queueOrderUpdate({
           tenantId,
           commandId:editing.id,
-          customer:commandTicketName(editing),
+          customer:editing.tableLabel||editing.name,
+          waiter:editing.waiterName,
           changes:pendingChanges,
           newTotal:editing.total,
         });
         else await queueKitchenOrder({
           tenantId,
           commandId:editing.id,
-          customer:commandTicketName(editing),
+          customer:editing.tableLabel||editing.name,
+          waiter:editing.waiterName,
           items:toReceiptItems(editing.items),
           total:editing.total,
           kind:`reprint_${Date.now()}`,
         });
-      }else if(pendingChanges.length)await printOrderChange(editing.name,pendingChanges,editing.total);
-      else await printKitchenTicket(editing.name,editing.items);
+      }else if(pendingChanges.length)await printOrderChange(editing.name,pendingChanges,editing.total,editing.waiterName);
+      else await printKitchenTicket(editing.name,editing.items,editing.waiterName);
       setPendingChanges([]);
       setPrintChangeSent(true);
     }catch(error){
@@ -1425,13 +1426,14 @@ function IntegratedCommands({tenantId,commands,setCommands,onCharge,products,adj
     setCommands((all)=>all.map((command)=>command.id===id?{...command,kitchenStatus}:command));
   const reprintCommand=(command:IntegratedCommand)=>{
     if(!tenantId){
-      printKitchenTicket(command.name,command.items);
+      printKitchenTicket(command.name,command.items,command.waiterName);
       return;
     }
     queueKitchenOrder({
       tenantId,
       commandId:command.id,
-      customer:commandTicketName(command),
+      customer:command.tableLabel||command.name,
+      waiter:command.waiterName,
       items:toReceiptItems(command.items),
       total:command.total,
       kind:`reprint_${Date.now()}`,
@@ -1692,9 +1694,9 @@ function toReceiptItems(items:{name:string;qty:number;price:number;detail?:strin
 }
 // Tenta imprimir na impressora térmica via ponte local (print-helper); se a
 // ponte não estiver rodando, cai para a impressão pelo navegador.
-async function printKitchenTicket(customer:string,items:{name:string;qty:number;price:number;detail?:string}[]){
+async function printKitchenTicket(customer:string,items:{name:string;qty:number;price:number;detail?:string}[],waiter?:string){
   try{
-    await sendOrderTicketToPrinter({customer,items:toReceiptItems(items)});
+    await sendOrderTicketToPrinter({customer,waiter,items:toReceiptItems(items)});
   }catch(error){
     console.error("Impressão térmica indisponível, usando impressão do navegador:",error);
     openPrintDocument(receiptHtml("PEDIDO DA COZINHA",customer,items));
@@ -1717,9 +1719,9 @@ function orderChangeHtml(customer:string,changes:OrderChange[],newTotal?:number)
 }
 // Imprime só a MUDANÇA (item adicionado/removido numa comanda já aberta) — continua
 // na mesma via física, sem repetir o pedido inteiro.
-async function printOrderChange(customer:string,changes:OrderChange[],newTotal?:number){
+async function printOrderChange(customer:string,changes:OrderChange[],newTotal?:number,waiter?:string){
   try{
-    await sendOrderUpdateToPrinter({customer,changes,newTotal});
+    await sendOrderUpdateToPrinter({customer,waiter,changes,newTotal});
   }catch(error){
     console.error("Impressão térmica indisponível, usando impressão do navegador:",error);
     openPrintDocument(orderChangeHtml(customer,changes,newTotal));
