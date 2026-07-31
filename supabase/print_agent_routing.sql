@@ -38,9 +38,18 @@ begin
     from public.print_jobs jobs
     where jobs.tenant_id=v_tenant
       and (jobs.status='pending' or (jobs.status='failed' and jobs.attempts<5))
+      and not exists (
+        select 1 from public.print_jobs active
+        where active.tenant_id=v_tenant and active.status='processing'
+      )
+      and not exists (
+        select 1 from public.print_jobs recent
+        where recent.tenant_id=v_tenant
+          and recent.printed_at > now()-interval '5 seconds'
+      )
     order by jobs.created_at
     for update skip locked
-    limit greatest(1,least(coalesce(p_limit,5),20))
+    limit 1
   ), claimed as (
     update public.print_jobs jobs set
       status='processing',
@@ -78,12 +87,6 @@ begin
   if v_agent is null then
     return false;
   end if;
-
-  update public.print_jobs
-  set status='printed',printed_at=now(),error_message=null
-  where claimed_by=v_agent
-    and status='processing'
-    and claimed_at < now()-interval '5 seconds';
 
   update public.tenants set printer_status='online' where id=v_tenant;
   return true;

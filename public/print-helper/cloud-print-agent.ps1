@@ -79,6 +79,7 @@ if (-not (Test-Path $ConfigPath)) { exit 2 }
 $Config = Get-Content $ConfigPath -Raw | ConvertFrom-Json
 $Token = $Config.agentToken
 $LastHeartbeat = [DateTime]::MinValue
+$InterJobDelaySeconds = 5
 
 while ($true) {
   try {
@@ -112,6 +113,11 @@ while ($true) {
           }
         }
         if (-not $confirmed) { throw "A impressao saiu, mas o servidor nao confirmou o status" }
+
+        # Impressoras termicas USB pequenas possuem um buffer limitado. Mesmo
+        # depois de o Windows aceitar o RAW, o papel ainda pode estar saindo.
+        # Aguarde antes de reivindicar a proxima comanda para manter a ordem.
+        Start-Sleep -Seconds $InterJobDelaySeconds
       } catch {
         Invoke-AgentRpc "complete_print_job" @{ p_token=$Token; p_job_id=$job.job_id; p_success=$false; p_error=$_.Exception.Message } | Out-Null
       }
