@@ -69,7 +69,17 @@ begin
   set status='cancelled',completed_at=now(),updated_at=now()
   where tenant_id=p_tenant_id and id=p_order_id;
 
-  delete from public.restaurant_commands
+  -- Mantém a comanda visível para o estabelecimento e o realtime atualiza
+  -- automaticamente a tela /cliente da loja correta.
+  update public.restaurant_commands
+  set payload=jsonb_set(
+        jsonb_set(
+          jsonb_set(coalesce(payload,v_payload),'{kitchenStatus}','"cancelled"'::jsonb,true),
+          '{cancelledBy}','"customer"'::jsonb,true
+        ),
+        '{cancelledAt}',to_jsonb(now()::text),true
+      ),
+      updated_at=now()
   where tenant_id=p_tenant_id and id=p_order_id;
 
   update public.print_jobs

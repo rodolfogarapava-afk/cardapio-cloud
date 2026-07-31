@@ -7,7 +7,9 @@ export type CloudCommand = {
   count: number;
   total: number;
   createdAt: number;
-  kitchenStatus?: "new" | "preparing" | "ready";
+  kitchenStatus?: "new" | "preparing" | "ready" | "cancelled";
+  cancelledBy?: "customer" | "store";
+  cancelledAt?: string;
   items: { name: string; qty: number; price: number; detail?: string; delivered: boolean }[];
 };
 
