@@ -1,12 +1,11 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
-import { Clock, Star, Search, ShoppingCart, GalleryHorizontal, Coins, X, ArrowUp, User as UserIcon, LogIn, LogOut, MapPin, ArrowRight, UtensilsCrossed, Tag, ClipboardList, Info } from 'lucide-react';
+import { Clock, Star, Search, ShoppingCart, GalleryHorizontal, X, ArrowUp, User as UserIcon, LogIn, LogOut, MapPin, ArrowRight, UtensilsCrossed, Tag, ClipboardList, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { CategoryNav } from '@/components/client/CategoryNav';
 import { ProductCard } from '@/components/client/ProductCard';
@@ -27,28 +26,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { motion, AnimatePresence } from 'framer-motion';
-
-// Mock fidelidade
-const mockLoyalty = {
-  balance: 1200,
-  level: 'Ouro',
-  nextLevel: 'Diamante',
-  pointsToNext: 800,
-  history: [
-    { date: '2026-01-28', desc: 'Pedido ORD-123456', points: +50 },
-    { date: '2026-01-25', desc: 'Resgate desconto', points: -100 },
-    { date: '2026-01-20', desc: 'Pedido ORD-123453', points: +60 },
-    { date: '2026-01-15', desc: 'Pedido ORD-123452', points: +140 },
-    { date: '2025-12-20', desc: 'Bônus boas-vindas', points: +1000 },
-  ],
-};
-
-const levelColors: Record<string, string> = {
-  Bronze: 'bg-tier-bronze/10 text-tier-bronze',
-  Prata: 'bg-tier-silver/10 text-tier-silver',
-  Ouro: 'bg-tier-gold/10 text-tier-gold',
-  Diamante: 'bg-tier-diamond/10 text-tier-diamond',
-};
 
 type CloudProduct = {
   id: number;
@@ -74,56 +51,27 @@ type CloudCatalog = {
 const categoryKey = (name: string) =>
   `deus-proveu-${name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}`;
 
-function LoyaltyModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+function LoyaltyModal({ open, onClose, name, phone, onLogout }: { open: boolean; onClose: () => void; name: string; phone: string; onLogout: () => void }) {
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Coins className="h-5 w-5 text-warning" /> Programa de Fidelidade
+            <UserIcon className="h-5 w-5 text-primary" /> Minha conta
           </DialogTitle>
         </DialogHeader>
-
-        <div className="space-y-4">
-          {/* Saldo e Nível */}
-          <div className="rounded-lg bg-gradient-to-br from-primary/10 to-primary/5 border p-4 text-center">
-                <Badge className={`${levelColors[mockLoyalty.level]} mb-2 inline-flex items-center gap-1`}>
-                  <Star className="h-3 w-3 fill-current" /> Nível {mockLoyalty.level}
-                </Badge>
-                <p className="text-3xl font-bold">{mockLoyalty.balance.toLocaleString('pt-BR')}</p>
-                <p className="text-xs text-muted-foreground mt-1">pontos disponíveis</p>
-                <div className="mt-3">
-                  <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                    <span>{mockLoyalty.level}</span>
-                    <span>{mockLoyalty.nextLevel}</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-muted overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-primary transition-all"
-                      style={{ width: `${((2000 - mockLoyalty.pointsToNext) / 2000) * 100}%` }}
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">Faltam {mockLoyalty.pointsToNext} pts para {mockLoyalty.nextLevel}</p>
-                </div>
-              </div>
-
-              {/* Histórico */}
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Últimas movimentações</p>
-                <div className="space-y-1.5 max-h-40 overflow-y-auto">
-                  {mockLoyalty.history.map((h, i) => (
-                    <div key={i} className="flex items-center justify-between text-sm rounded-md border px-3 py-2">
-                      <div>
-                        <p className="text-xs font-medium">{h.desc}</p>
-                        <p className="text-[10px] text-muted-foreground">{new Date(h.date).toLocaleDateString('pt-BR')}</p>
-                      </div>
-                      <span className={`text-sm font-semibold ${h.points > 0 ? 'text-success' : 'text-destructive'}`}>
-                        {h.points > 0 ? '+' : ''}{h.points}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+        <div className="space-y-3">
+          <div className="rounded-xl border bg-muted/20 p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Nome</p>
+            <p className="mt-1 font-semibold text-foreground">{name || 'Cliente'}</p>
+          </div>
+          <div className="rounded-xl border bg-muted/20 p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Telefone</p>
+            <p className="mt-1 font-semibold text-foreground">{phone}</p>
+          </div>
+          <Button type="button" variant="outline" className="w-full border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={onLogout}>
+            <LogOut className="mr-2 h-4 w-4" /> Sair da conta
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
@@ -515,6 +463,15 @@ export default function Cardapio() {
     else setAuthOpen(true);
   }, [customerConnected]);
 
+  const handleCustomerLogout = useCallback(() => {
+    logout();
+    localStorage.removeItem('cardapio_delivery_access');
+    setDeliveryPhone('');
+    setDeliveryName('');
+    setDeliveryAddress(null);
+    setLoyaltyOpen(false);
+  }, [logout, setDeliveryAddress]);
+
   if (catalogError) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-6 text-center">
@@ -639,7 +596,7 @@ export default function Cardapio() {
                 {isAuthenticated ? (
                   <>
                     <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => setLoyaltyOpen(true)}>
-                      <Coins className="h-3.5 w-3.5 text-warning" /> Meus Pontos
+                      <UserIcon className="h-3.5 w-3.5 text-primary" /> Minha conta
                     </Button>
                     <Link to={`/historico/${restaurant.slug}`}>
                       <Button variant="outline" size="sm" className="gap-1.5 text-xs"><ClipboardList className="h-3.5 w-3.5" /> Meus Pedidos</Button>
@@ -862,7 +819,13 @@ export default function Cardapio() {
         <ComplementsModal product={selectedProduct} restaurantId={restaurant.id} restaurantName={restaurant.name} restaurantSlug={restaurant.slug} restaurantAddress={restaurant.address} open={!!selectedProduct} onClose={() => { setSelectedProduct(null); setEditingCartItem(undefined); }} editingItem={editingCartItem} />
       )}
 
-      <LoyaltyModal open={loyaltyOpen} onClose={() => setLoyaltyOpen(false)} />
+      <LoyaltyModal
+        open={loyaltyOpen}
+        onClose={() => setLoyaltyOpen(false)}
+        name={deliveryName || user?.name || 'Cliente'}
+        phone={formatIdentifier(deliveryPhone || user?.phone || '')}
+        onLogout={handleCustomerLogout}
+      />
 
       {/* Barra inferior fixa (mobile) */}
       <MobileBottomNav
