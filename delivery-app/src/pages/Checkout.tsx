@@ -176,8 +176,14 @@ export default function Checkout() {
     setCustomerLookupMessage('');
     setLookupAddress(null);
     if (digits.length >= 10) {
+      let currentToken = '';
+      try {
+        const currentAccess = JSON.parse(localStorage.getItem('cardapio_delivery_access') || 'null') as { phone?: string; token?: string } | null;
+        if (currentAccess?.phone === digits) currentToken = currentAccess.token || '';
+      } catch { /* armazenamento inválido será substituído */ }
       localStorage.setItem('cardapio_delivery_access', JSON.stringify({
         phone: digits,
+        token: currentToken,
         updatedAt: Date.now(),
       }));
       try {
@@ -203,6 +209,7 @@ export default function Checkout() {
       void (supabase as any).rpc('get_public_customer', {
         p_tenant_id: tenantId,
         p_phone: digits,
+        p_access_token: currentToken,
       }).then(({ data, error }: { data: any; error: { message?: string } | null }) => {
         if (requestId !== lookupRequest.current) return;
         if (error || !data) {
@@ -238,6 +245,7 @@ export default function Checkout() {
     try {
       const access = JSON.parse(localStorage.getItem('cardapio_delivery_access') || 'null') as {
         phone?: string;
+        token?: string;
       } | null;
       const digits = phoneDigits(access?.phone || '');
       if (digits.length >= 10) {
@@ -337,6 +345,11 @@ export default function Checkout() {
       ].filter(Boolean).join(' · '),
       delivered: false,
     }));
+    let currentAccessToken = '';
+    try {
+      const access = JSON.parse(localStorage.getItem('cardapio_delivery_access') || 'null') as { phone?: string; token?: string } | null;
+      if (access?.phone === phoneDigits(phone)) currentAccessToken = access.token || '';
+    } catch { /* um novo token será emitido após o pedido */ }
     const { data: orderResult, error: orderError } = await (supabase as any).rpc('submit_public_order', {
       p_tenant_id: tenantId,
       p_customer: {
@@ -348,6 +361,7 @@ export default function Checkout() {
         reference: [selectedAddress?.complement, selectedAddress?.city, selectedAddress?.state].filter(Boolean).join(' · '),
         latitude: null,
         longitude: null,
+        accessToken: currentAccessToken,
       },
       p_order: {
         requestId: orderRequestId.current,
@@ -390,6 +404,7 @@ export default function Checkout() {
     localStorage.setItem('cardapio_delivery_access', JSON.stringify({
       phone: phoneDigits(phone),
       tenantId,
+      token: orderResult?.customerToken || currentAccessToken,
       updatedAt: Date.now(),
     }));
     localStorage.setItem(`cardapio_tracked_order_${publicOrderNumber}`, JSON.stringify(trackingState));

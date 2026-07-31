@@ -13,17 +13,12 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 export const useAppAuth = () => useContext(AuthContext);
 
-const demoStorageKey = "cardapio-cloud-demo-session";
-
 export default function AuthGate({ children, area = "sistema" }: { children: ReactNode; area?: "admin" | "cliente" | "sistema" }) {
   const [user, setUser] = useState<AuthContextValue["user"] | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!supabase) {
-      if (sessionStorage.getItem(demoStorageKey) === "active") {
-        setUser({ id: "demo-admin", email: "admin@cardapiocloud.com" });
-      }
       setLoading(false);
       return;
     }
@@ -40,26 +35,22 @@ export default function AuthGate({ children, area = "sistema" }: { children: Rea
 
   const signOut = async () => {
     if (supabase) await supabase.auth.signOut();
-    sessionStorage.removeItem(demoStorageKey);
     setUser(null);
   };
 
   if (loading) return <AuthLoading />;
   if (!user) {
-    return <LoginScreen area={area} onDemoLogin={(email) => {
-      sessionStorage.setItem(demoStorageKey, "active");
-      setUser({ id: "demo-admin", email });
-    }} />;
+    return <LoginScreen area={area} />;
   }
 
-  return <AuthContext.Provider value={{ user, signOut, isDemo: !isSupabaseConfigured }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, signOut, isDemo: false }}>{children}</AuthContext.Provider>;
 }
 
 function AuthLoading() {
   return <main className="auth-screen"><div className="auth-loading"><span><ChefHat /></span><p>Verificando acesso...</p></div></main>;
 }
 
-function LoginScreen({ onDemoLogin, area }: { onDemoLogin: (email: string) => void; area: "admin" | "cliente" | "sistema" }) {
+function LoginScreen({ area }: { area: "admin" | "cliente" | "sistema" }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -73,11 +64,7 @@ function LoginScreen({ onDemoLogin, area }: { onDemoLogin: (email: string) => vo
     setError("");
     setMessage("");
     if (!supabase) {
-      if (email.toLowerCase() === "admin@cardapiocloud.com" && password === "demo1234") {
-        onDemoLogin(email);
-      } else {
-        setError("Use o acesso de demonstração indicado abaixo.");
-      }
+      setError("A autenticação está indisponível. Verifique a configuração do servidor.");
       setBusy(false);
       return;
     }
@@ -94,7 +81,7 @@ function LoginScreen({ onDemoLogin, area }: { onDemoLogin: (email: string) => vo
       return;
     }
     if (!supabase) {
-      setMessage("No modo de demonstração, use a senha informada abaixo.");
+      setError("A autenticação está indisponível. Verifique a configuração do servidor.");
       return;
     }
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
@@ -127,7 +114,7 @@ function LoginScreen({ onDemoLogin, area }: { onDemoLogin: (email: string) => vo
           {error && <div className="auth-message error">{error}</div>}
           {message && <div className="auth-message success">{message}</div>}
           <button className="auth-submit" type="submit" disabled={busy}>{busy ? "ENTRANDO..." : <>ENTRAR <ArrowRight /></>}</button>
-          {!isSupabaseConfigured && <div className="auth-demo"><b>ACESSO DE DEMONSTRAÇÃO</b><span>admin@cardapiocloud.com</span><span>Senha: demo1234</span><button type="button" onClick={() => { setEmail("admin@cardapiocloud.com"); setPassword("demo1234"); }}>PREENCHER DADOS</button></div>}
+          {!isSupabaseConfigured && <div className="auth-message error">A autenticação precisa ser configurada para liberar o acesso.</div>}
           <small className="auth-footnote">Ao entrar, você concorda com os termos de uso e a política de privacidade.</small>
         </form>
       </section>

@@ -24,40 +24,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Mock users para simular autenticação
-const mockUsers: Record<string, { user: User; password: string }> = {
-  'cliente@email.com': {
-    user: {
-      id: 'user-001',
-      name: 'Maria Silva',
-      email: 'cliente@email.com',
-      phone: '(11) 99999-1234',
-      role: 'client',
-    },
-    password: '123456',
-  },
-  'vendor@email.com': {
-    user: {
-      id: 'vendor-001',
-      name: 'João Santos',
-      email: 'vendor@email.com',
-      phone: '(11) 3333-4444',
-      role: 'vendor',
-    },
-    password: '123456',
-  },
-  'admin@email.com': {
-    user: {
-      id: 'admin-001',
-      name: 'Carlos Admin',
-      email: 'admin@email.com',
-      phone: '(11) 2222-3333',
-      role: 'admin',
-    },
-    password: '123456',
-  },
-};
-
 // Mock addresses
 const mockAddresses: Address[] = [
   {
@@ -94,31 +60,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [addresses, setAddresses] = useState<Address[]>(mockAddresses);
 
-  const login = useCallback(async (email: string, password: string, role?: UserRole): Promise<boolean> => {
-    // Simula delay de rede
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    const mockUser = mockUsers[email];
-    if (mockUser && mockUser.password === password) {
-      // Se um role específico foi solicitado, verifica
-      if (role && mockUser.user.role !== role) {
-        return false;
-      }
-      setUser(mockUser.user);
-      return true;
-    }
-
-    // Login genérico para demo - cria usuário com role solicitado
-    if (password === '123456') {
-      setUser({
-        id: generateId(),
-        name: email.split('@')[0],
-        email,
-        role: role || 'client',
-      });
-      return true;
-    }
-
+  const login = useCallback(async (_email: string, _password: string, _role?: UserRole): Promise<boolean> => {
+    // O delivery público usa a sessão vinculada ao telefone/dispositivo.
+    // Credenciais simuladas no frontend não podem liberar áreas internas.
     return false;
   }, []);
 

@@ -41,7 +41,7 @@ export default function PedidoConfirmado() {
   let savedState: LocationState | null = null;
   if (!navigationState && routeOrderNumber) {
     try {
-      const access = JSON.parse(localStorage.getItem('cardapio_delivery_access') || 'null') as { phone?: string } | null;
+      const access = JSON.parse(localStorage.getItem('cardapio_delivery_access') || 'null') as { phone?: string; token?: string } | null;
       const order = JSON.parse(localStorage.getItem(`cardapio_tracked_order_${routeOrderNumber}`) || 'null') as LocationState | null;
       if (access?.phone && order?.customerPhone === access.phone) savedState = order;
     } catch {
@@ -56,10 +56,12 @@ export default function PedidoConfirmado() {
     let active = true;
 
     const refreshStatus = async () => {
+      const access = JSON.parse(localStorage.getItem('cardapio_delivery_access') || 'null') as { phone?: string; token?: string } | null;
       const { data, error } = await (supabase as any).rpc('get_public_order_status', {
         p_tenant_id: state.tenantId,
         p_order_id: state.orderId,
         p_phone: state.customerPhone,
+        p_access_token: access?.phone === state.customerPhone ? access.token || '' : '',
       });
       if (!active || error || !data) return;
       const next = data.kitchenStatus;

@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Store } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -13,6 +13,9 @@ type PublicCatalog = {
 };
 
 export const Route = createFileRoute("/cardapio_/$slug")({
+  beforeLoad: ({ params }) => {
+    throw redirect({ to: "/delivery/$slug", params: { slug: params.slug }, replace: true });
+  },
   head: () => ({
     meta: [
       { title: "Cardápio digital" },

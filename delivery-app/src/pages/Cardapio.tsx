@@ -174,7 +174,7 @@ export default function Cardapio() {
 
   useEffect(() => {
     try {
-      const access = JSON.parse(localStorage.getItem('cardapio_delivery_access') || 'null') as { phone?: string } | null;
+      const access = JSON.parse(localStorage.getItem('cardapio_delivery_access') || 'null') as { phone?: string; token?: string } | null;
       const digits = (access?.phone || '').replace(/\D/g, '');
       if (digits.length < 10) return;
       setDeliveryPhone(digits);
@@ -236,15 +236,19 @@ export default function Cardapio() {
       const localProfile = JSON.parse(localStorage.getItem(`cardapio_delivery_profile_${d}`) || 'null') as { name?: string } | null;
       let customerName = localProfile?.name?.trim() || 'Cliente';
       if (cloudCatalog?.tenantId) {
+        const access = JSON.parse(localStorage.getItem('cardapio_delivery_access') || 'null') as { phone?: string; token?: string } | null;
         const { data } = await (supabase as any).rpc('get_public_customer', {
           p_tenant_id: cloudCatalog.tenantId,
           p_phone: d,
+          p_access_token: access?.phone === d ? access.token || '' : '',
         });
         customerName = data?.name?.trim() || customerName;
       }
+      const previousAccess = JSON.parse(localStorage.getItem('cardapio_delivery_access') || 'null') as { phone?: string; token?: string } | null;
       localStorage.setItem('cardapio_delivery_access', JSON.stringify({
         phone: d,
         tenantId: cloudCatalog?.tenantId,
+        token: previousAccess?.phone === d ? previousAccess.token || '' : '',
         updatedAt: Date.now(),
       }));
       setDeliveryPhone(d);

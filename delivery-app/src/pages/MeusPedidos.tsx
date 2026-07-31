@@ -39,10 +39,12 @@ export default function MeusPedidos() {
   const confirmCancellation = async () => {
     if (!cancelOrder?.orderId || !cancelOrder.tenantId || !cancelOrder.customerPhone) return;
     setCancelling(true);
+    const access = JSON.parse(localStorage.getItem('cardapio_delivery_access') || 'null') as { phone?: string; token?: string } | null;
     const { data, error } = await (supabase as any).rpc('cancel_public_order', {
       p_tenant_id: cancelOrder.tenantId,
       p_order_id: cancelOrder.orderId,
       p_phone: cancelOrder.customerPhone,
+      p_access_token: access?.phone === cancelOrder.customerPhone ? access.token || '' : '',
     });
     setCancelling(false);
     if (error || !data?.cancelled) {
@@ -62,12 +64,12 @@ export default function MeusPedidos() {
     let active = true;
     const refresh = async () => {
       try {
-        const access = JSON.parse(localStorage.getItem('cardapio_delivery_access') || 'null') as { phone?: string } | null;
-        if (!access?.phone) return;
+        const access = JSON.parse(localStorage.getItem('cardapio_delivery_access') || 'null') as { phone?: string; token?: string } | null;
+        if (!access?.phone || !access.token) return;
         const { data: menu } = await (supabase as any).rpc('get_public_menu', { p_slug: vendorSlug });
         if (!menu?.tenantId) return;
         const { data } = await (supabase as any).rpc('get_public_customer_orders', {
-          p_tenant_id: menu.tenantId, p_phone: access.phone,
+          p_tenant_id: menu.tenantId, p_phone: access.phone, p_access_token: access.token,
         });
         if (!active || !Array.isArray(data)) return;
         const loaded: SavedOrder[] = data.map((row: any) => {
