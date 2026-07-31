@@ -50,6 +50,8 @@ type CloudCatalog = {
 
 const categoryKey = (name: string) =>
   `deus-proveu-${name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}`;
+const deviceTokenKey = (tenantId: string | undefined, phone: string) =>
+  `cardapio_delivery_device_token_${tenantId || 'unknown'}_${phone}`;
 
 function LoyaltyModal({ open, onClose, name, phone, onLogout }: { open: boolean; onClose: () => void; name: string; phone: string; onLogout: () => void }) {
   return (
@@ -129,6 +131,7 @@ export default function Cardapio() {
       const access = JSON.parse(localStorage.getItem('cardapio_delivery_access') || 'null') as { phone?: string; token?: string } | null;
       const digits = (access?.phone || '').replace(/\D/g, '');
       if (digits.length < 10) return;
+      if (access?.token) localStorage.setItem(deviceTokenKey(cloudCatalog?.tenantId, digits), access.token);
       setDeliveryPhone(digits);
       const profile = JSON.parse(localStorage.getItem(`cardapio_delivery_profile_${digits}`) || 'null') as { name?: string; address?: Address } | null;
       setDeliveryName(profile?.name?.trim() || 'Cliente');
@@ -136,7 +139,7 @@ export default function Cardapio() {
     } catch {
       localStorage.removeItem('cardapio_delivery_access');
     }
-  }, [setDeliveryAddress]);
+  }, [cloudCatalog?.tenantId, setDeliveryAddress]);
 
   const onlyDigits = (s: string) => s.replace(/\D/g, '');
   // Heurística: 11 dígitos com 3º dígito = 9 → celular; 10 dígitos → fixo; 11 dígitos sem 9 na 3ª pos → CPF.
@@ -174,9 +177,11 @@ export default function Cardapio() {
   };
 
   const connectCustomer = (phone: string, name: string, token = '', address?: Address) => {
+    const rememberedToken = token || localStorage.getItem(deviceTokenKey(cloudCatalog?.tenantId, phone)) || '';
     localStorage.setItem('cardapio_delivery_access', JSON.stringify({
-      phone, tenantId: cloudCatalog?.tenantId, vendorSlug, token, updatedAt: Date.now(),
+      phone, tenantId: cloudCatalog?.tenantId, vendorSlug, token: rememberedToken, updatedAt: Date.now(),
     }));
+    if (rememberedToken) localStorage.setItem(deviceTokenKey(cloudCatalog?.tenantId, phone), rememberedToken);
     setDeliveryPhone(phone);
     setDeliveryName(name);
     if (address) setDeliveryAddress(address);
@@ -196,11 +201,12 @@ export default function Cardapio() {
       const localProfile = JSON.parse(localStorage.getItem(`cardapio_delivery_profile_${d}`) || 'null') as { name?: string; address?: Address } | null;
       let customer: any = localProfile?.name ? { name: localProfile.name, ...(localProfile.address || {}) } : null;
       const access = JSON.parse(localStorage.getItem('cardapio_delivery_access') || 'null') as { phone?: string; token?: string } | null;
+      const rememberedToken = (access?.phone === d ? access.token || '' : '') || localStorage.getItem(deviceTokenKey(cloudCatalog?.tenantId, d)) || '';
       if (cloudCatalog?.tenantId) {
         const { data } = await (supabase as any).rpc('get_public_customer', {
           p_tenant_id: cloudCatalog.tenantId,
           p_phone: d,
-          p_access_token: access?.phone === d ? access.token || '' : '',
+          p_access_token: rememberedToken,
         });
         if (data?.name?.trim()) customer = data;
       }
@@ -214,7 +220,7 @@ export default function Cardapio() {
           };
           localStorage.setItem(`cardapio_delivery_profile_${d}`, JSON.stringify({ name: customer.name.trim(), phone: d, address: savedAddress, updatedAt: Date.now() }));
         }
-        connectCustomer(d, customer.name.trim(), access?.phone === d ? access.token || '' : '', savedAddress);
+        connectCustomer(d, customer.name.trim(), rememberedToken, savedAddress);
       } else {
         setAuthStep('register');
       }
@@ -464,6 +470,10 @@ export default function Cardapio() {
   }, [customerConnected]);
 
   const handleCustomerLogout = useCallback(() => {
+    try {
+      const access = JSON.parse(localStorage.getItem('cardapio_delivery_access') || 'null') as { phone?: string; token?: string; tenantId?: string } | null;
+      if (access?.phone && access.token) localStorage.setItem(deviceTokenKey(access.tenantId, access.phone), access.token);
+    } catch { /* a sessão inválida será descartada */ }
     logout();
     localStorage.removeItem('cardapio_delivery_access');
     setDeliveryPhone('');

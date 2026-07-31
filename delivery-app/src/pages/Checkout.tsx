@@ -401,13 +401,15 @@ export default function Checkout() {
         cpf: cpf.trim() || undefined,
         items: orderItems,
       };
+    const issuedToken = orderResult?.customerToken || currentAccessToken;
     localStorage.setItem('cardapio_delivery_access', JSON.stringify({
       phone: phoneDigits(phone),
       tenantId,
       vendorSlug: vendorSlug || 'proveu-espeto',
-      token: orderResult?.customerToken || currentAccessToken,
+      token: issuedToken,
       updatedAt: Date.now(),
     }));
+    if (issuedToken) localStorage.setItem(`cardapio_delivery_device_token_${tenantId}_${phoneDigits(phone)}`, issuedToken);
     if (selectedAddress) saveCustomerProfileOnDevice(selectedAddress);
     clearCart();
     navigate(`/pedido/${savedOrderId}?loja=${encodeURIComponent(vendorSlug || 'proveu-espeto')}`, { state: trackingState });
