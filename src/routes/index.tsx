@@ -1330,7 +1330,15 @@ function IntegratedCommands({tenantId,commands,setCommands,onCharge,products,adj
       }
       setCommands((all)=>all.filter((command)=>command.id!==confirmation.command.id));
     }
-    else setCommands((all)=>all.filter((command)=>command.id!==confirmation.command.id));
+    else {
+      if(!tenantId||!supabase)return;
+      const {data,error}=await supabase.rpc("dismiss_cancelled_command",{p_command_id:confirmation.command.id});
+      if(error||!data){
+        console.error("Não foi possível remover a comanda cancelada da fila:",error);
+        return;
+      }
+      setCommands((all)=>all.filter((command)=>command.id!==confirmation.command.id));
+    }
     setConfirmation(null);
   };
   const [pendingChanges,setPendingChanges]=useState<OrderChange[]>([]);
