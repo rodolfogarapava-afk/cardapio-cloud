@@ -4,6 +4,9 @@ import { supabase } from "@/lib/supabase";
 export type CloudCommand = {
   id: number;
   name: string;
+  tableLabel?: string;
+  waiterName?: string;
+  source?: "waiter" | "delivery";
   count: number;
   total: number;
   createdAt: number;

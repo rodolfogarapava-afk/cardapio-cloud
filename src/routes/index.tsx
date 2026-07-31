@@ -145,6 +145,7 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
   const [stars, setStars] = useState(0);
   const [sent, setSent] = useState(false);
   const [customerName, setCustomerName] = useState("");
+  const [waiterName, setWaiterName] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("PIX");
   const [cashReceived, setCashReceived] = useState("");
   const [paymentTotal, setPaymentTotal] = useState(0);
@@ -152,13 +153,20 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
   const [paymentCommandId, setPaymentCommandId] = useState<number | null>(null);
   const [paymentProcessing, setPaymentProcessing] = useState(false);
   const [paymentError, setPaymentError] = useState("");
-  const [paymentCommandBackup, setPaymentCommandBackup] = useState<{id:number;name:string;count:number;total:number;createdAt:number;items:{name:string;qty:number;price:number;delivered:boolean}[]}|null>(null);
+  const [paymentCommandBackup, setPaymentCommandBackup] = useState<IntegratedCommand|null>(null);
   const [systemView, setSystemView] = useState<"products" | "stock" | "commands" | "cash" | "reports" | null>(null);
-  const [savedCommands, setSavedCommands] = useState<{id:number;name:string;count:number;total:number;createdAt:number;items:{name:string;qty:number;price:number;detail?:string;delivered:boolean}[]}[]>([]);
+  const [savedCommands, setSavedCommands] = useState<IntegratedCommand[]>([]);
   const [salesHistory, setSalesHistory] = useState<{id:number;name:string;total:number;method:string;createdAt:number;items:{name:string;qty:number;price:number;detail?:string}[]}[]>([]);
   const [expenses, setExpenses] = useState<{id:number;description:string;amount:number;createdAt:number}[]>([]);
   const [printStatuses, setPrintStatuses] = useState<Record<number,"sending"|"pending"|"processing"|"printed"|"failed">>({});
   const [storageReady, setStorageReady] = useState(false);
+  const knownCommandIds = useRef<Set<number>>(new Set());
+  const commandNotificationsReady = useRef(false);
+
+  useEffect(() => {
+    if (publicCatalog) return;
+    setWaiterName(window.localStorage.getItem(`${tenantStoragePrefix}-waiter-name`) || "");
+  }, [publicCatalog, tenantStoragePrefix]);
 
   useEffect(() => {
     initAudioContext();
@@ -230,6 +238,23 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
     if(!storageReady)return;
     const merged=mergeOpenCommands(savedCommands);
     if(JSON.stringify(merged)!==JSON.stringify(savedCommands))setSavedCommands(merged);
+  },[savedCommands,storageReady]);
+  useEffect(()=>{
+    if(!storageReady)return;
+    const currentIds=new Set(savedCommands.map((command)=>command.id));
+    if(!commandNotificationsReady.current){
+      knownCommandIds.current=currentIds;
+      commandNotificationsReady.current=true;
+      return;
+    }
+    const incoming=savedCommands.filter((command)=>!knownCommandIds.current.has(command.id));
+    knownCommandIds.current=currentIds;
+    if(!incoming.length)return;
+    playNotificationSound("alert");
+    if(document.visibilityState!=="visible"&&"Notification" in window&&Notification.permission==="granted"){
+      const newest=incoming.at(-1)!;
+      new Notification("Nova comanda recebida",{body:`${newest.name} · ${newest.count} ${newest.count===1?"item":"itens"}`});
+    }
   },[savedCommands,storageReady]);
   const persistProducts = (next: Product[]) => {
     setProducts(next);
@@ -419,7 +444,7 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
           {tenantNavigation && tenantNavigation.page !== "operation" ? tenantNavigation.content :
           systemView === "products" ? <IntegratedProducts tenantId={tenantNavigation?.tenantId} products={products} categories={categories} onChange={persistProducts} onAddCategory={(name)=>persistCategories([...categories,name])} onRenameCategory={renameCategory} onDeleteCategory={(name)=>{const next=categories.filter((c)=>c!==name);persistCategories(next);if(activeMain===name)setActiveMain(next[0]||"")}} /> :
           systemView === "stock" ? <IntegratedStock products={products} onChange={persistProducts} /> :
-          systemView === "commands" ? <IntegratedCommands tenantId={tenantNavigation?.tenantId} commands={savedCommands} setCommands={setSavedCommands} products={products} adjustStock={adjustStock} onCharge={(command) => { setCustomerName(command.name); setPaymentTotal(command.total); setPaymentItems(command.items); setPaymentMethod(deliveryPaymentLabel(command.delivery?.payment)); setPaymentCommandId(command.id); setPaymentCommandBackup(command); setPaymentError(""); setModal("payment"); }} /> :
+          systemView === "commands" ? <IntegratedCommands tenantId={tenantNavigation?.tenantId} commands={savedCommands} setCommands={setSavedCommands} products={products} adjustStock={adjustStock} printStatuses={printStatuses} onCharge={(command) => { setCustomerName(command.name); setPaymentTotal(command.total); setPaymentItems(command.items); setPaymentMethod(deliveryPaymentLabel(command.delivery?.payment)); setPaymentCommandId(command.id); setPaymentCommandBackup(command); setPaymentError(""); setModal("payment"); }} /> :
           systemView === "cash" ? <IntegratedCash sales={salesHistory} expenses={expenses} sync={operationsSync} onAddExpense={(description,amount) => setExpenses((all)=>[...all,{id:Date.now(),description,amount,createdAt:Date.now()}])} onDeleteExpense={(id)=>setExpenses((all)=>all.filter(expense=>expense.id!==id))} /> :
           systemView === "reports" ? <IntegratedReports sales={salesHistory} expenses={expenses} commands={savedCommands} sync={operationsSync} /> : <>
           {!categories.length && <div className="integrated-empty new-store-empty"><Store/><h3>{publicMenu ? "Cardápio em preparação" : "Seu cardápio está vazio"}</h3><p>{publicMenu ? "Esta loja ainda não publicou produtos." : "Esta é uma loja nova. Cadastre a primeira categoria e os produtos para começar."}</p>{!publicMenu && <button className="primary" onClick={()=>setSystemView("products")}>CADASTRAR PRODUTOS</button>}</div>}
@@ -544,22 +569,32 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
                         </div>;
                       })}
                     </div>
-                    <label className="customer-field">Mesa
-                      <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="35" inputMode="numeric" />
+                    <label className="customer-field">Mesa ou cliente
+                      <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Ex.: Mesa 35" />
+                    </label>
+                    <label className="customer-field">Garçom responsável
+                      <input value={waiterName} onChange={(e) => {
+                        const value=e.target.value;
+                        setWaiterName(value);
+                        window.localStorage.setItem(`${tenantStoragePrefix}-waiter-name`,value);
+                      }} placeholder="Nome do garçom" autoComplete="name" />
                     </label>
                     <div className="cart-total"><span>Total</span><strong>R$ {total.toFixed(2).replace(".", ",")}</strong></div>
                     <div className="cart-actions save-command-actions">
-                      <button className="primary" disabled={!customerName.trim()} onClick={() => {
+                      <button className="primary" disabled={!customerName.trim()||!waiterName.trim()} onClick={() => {
                         const name=customerName.trim();
+                        const waiter=waiterName.trim();
                         const newItems=currentCartItems.map((item)=>({...item,delivered:false}));
-                        const commandId=Date.now();
+                        const createdAt=Date.now();
+                        const randomPart=crypto.getRandomValues(new Uint16Array(1))[0]%1000;
+                        const commandId=createdAt*1000+randomPart;
                         setPrintStatuses((current)=>({...current,[commandId]:"sending"}));
-                        setSavedCommands((current)=>mergeOpenCommands([...current,{id:commandId,name,count,total,createdAt:commandId,items:newItems}]));
+                        setSavedCommands((current)=>mergeOpenCommands([...current,{id:commandId,name,tableLabel:name,waiterName:waiter,source:"waiter",count,total,createdAt,items:newItems}]));
                         adjustStock(newItems.map((item)=>({name:item.name,qty:-item.qty})));
                         if(tenantNavigation?.tenantId)queueKitchenOrder({
                           tenantId:tenantNavigation.tenantId,
                           commandId,
-                          customer:name,
+                          customer:`${name} · Garçom: ${waiter}`,
                           items:newItems.map((item)=>({name:item.name,qty:item.qty,unitPrice:item.price,total:item.price*item.qty,notes:item.detail})),
                           total,
                         }).then(()=>setPrintStatuses((current)=>({...current,[commandId]:"pending"})))
@@ -583,12 +618,13 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
                   <div className="saved-commands">{savedCommands.map((command) => <div key={command.id}>
                     <div><b>{command.name}</b><small>{command.count} {command.count === 1 ? "item" : "itens"}</small>
                       <span className={`command-print-status ${printStatuses[command.id]||"checking"}`}>{
-                        printStatuses[command.id]==="printed"?"✓ ENVIADO À IMPRESSORA":
+                        printStatuses[command.id]==="printed"?"✓ IMPRESSA COM SUCESSO":
                         printStatuses[command.id]==="failed"?"! FALHA AO IMPRIMIR":
                         printStatuses[command.id]==="processing"?"IMPRIMINDO...":
                         printStatuses[command.id]==="sending"?"ENVIANDO...":
                         printStatuses[command.id]==="pending"?"AGUARDANDO IMPRESSORA":"VERIFICANDO IMPRESSÃO..."
                       }</span>
+                      {command.waiterName&&<small>Garçom: {command.waiterName}</small>}
                     </div>
                     <strong>R$ {command.total.toFixed(2).replace(".", ",")}</strong>
                     <button onClick={() => {
@@ -600,6 +636,15 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
                       setPaymentCommandBackup(command);
                       setModal("payment");
                     }}>COBRAR</button>
+                    {printStatuses[command.id]==="failed"&&tenantNavigation?.tenantId&&<button onClick={()=>{
+                      setPrintStatuses((current)=>({...current,[command.id]:"sending"}));
+                      queueKitchenOrder({
+                        tenantId:tenantNavigation.tenantId!,commandId:command.id,
+                        customer:`${command.tableLabel||command.name}${command.waiterName?` · Garçom: ${command.waiterName}`:""}`,
+                        items:toReceiptItems(command.items),total:command.total,kind:`retry_${Date.now()}`,
+                      }).then(()=>setPrintStatuses((current)=>({...current,[command.id]:"pending"})))
+                        .catch(()=>setPrintStatuses((current)=>({...current,[command.id]:"failed"})));
+                    }}>TENTAR NOVAMENTE</button>}
                   </div>)}</div>
                 }
               </>
@@ -832,15 +877,17 @@ function deliveryPaymentLabel(method?:string){
   if(value==="debit"||value==="debito"||value==="débito")return"Cartão Débito";
   return"PIX";
 }
-type IntegratedCommand = {id:number;name:string;count:number;total:number;createdAt:number;kitchenStatus?:"new"|"preparing"|"ready"|"cancelled";cancelledBy?:"customer"|"store";cancelledAt?:string;delivery?:CommandDelivery;items:{name:string;qty:number;price:number;detail?:string;delivered:boolean}[]};
+type IntegratedCommand = {id:number;name:string;tableLabel?:string;waiterName?:string;source?:"waiter"|"delivery";count:number;total:number;createdAt:number;kitchenStatus?:"new"|"preparing"|"ready"|"cancelled";cancelledBy?:"customer"|"store";cancelledAt?:string;delivery?:CommandDelivery;items:{name:string;qty:number;price:number;detail?:string;delivered:boolean}[]};
 type IntegratedSale = {id:number;name:string;total:number;method:string;createdAt:number;items:{name:string;qty:number;price:number;detail?:string}[]};
 type IntegratedExpense = {id:number;description:string;amount:number;createdAt:number};
+
+const commandTicketName=(command:IntegratedCommand)=>
+  `${command.tableLabel||command.name}${command.waiterName?` · Garçom: ${command.waiterName}`:""}`;
 
 function mergeOpenCommands(commands:IntegratedCommand[]){
   const merged:IntegratedCommand[]=[];
   commands.forEach((command)=>{
-    const key=command.delivery?`delivery-${command.id}`:command.name.normalize("NFD").replace(/\p{Diacritic}/gu,"").replace(/\s+/g," ").trim().toLowerCase();
-    const existing=merged.find((item)=>(item.delivery?`delivery-${item.id}`:item.name.normalize("NFD").replace(/\p{Diacritic}/gu,"").replace(/\s+/g," ").trim().toLowerCase())===key);
+    const existing=merged.find((item)=>item.id===command.id);
     if(!existing){merged.push({...command,items:[...command.items]});return}
     existing.count+=command.count;
     existing.total+=command.total;
@@ -1247,7 +1294,7 @@ function IntegratedStock({products,onChange}:{products:Product[];onChange:(produ
   </div>;
 }
 
-function IntegratedCommands({tenantId,commands,setCommands,onCharge,products,adjustStock}:{tenantId?:string|null;commands:IntegratedCommand[];setCommands:React.Dispatch<React.SetStateAction<IntegratedCommand[]>>;onCharge:(command:IntegratedCommand)=>void;products:Product[];adjustStock:(deltas:{name:string;qty:number}[])=>void}) {
+function IntegratedCommands({tenantId,commands,setCommands,onCharge,products,adjustStock,printStatuses}:{tenantId?:string|null;commands:IntegratedCommand[];setCommands:React.Dispatch<React.SetStateAction<IntegratedCommand[]>>;onCharge:(command:IntegratedCommand)=>void;products:Product[];adjustStock:(deltas:{name:string;qty:number}[])=>void;printStatuses:Record<number,"sending"|"pending"|"processing"|"printed"|"failed">}) {
   const [confirmation,setConfirmation]=useState<{action:"print"|"cancel";command:IntegratedCommand}|null>(null);
   const [editing,setEditing]=useState<IntegratedCommand|null>(null);
   const editCategories=useMemo(()=>Array.from(new Set(products.map((product)=>product.category))),[products]);
@@ -1258,7 +1305,7 @@ function IntegratedCommands({tenantId,commands,setCommands,onCharge,products,adj
       if(tenantId)queueKitchenOrder({
         tenantId,
         commandId:confirmation.command.id,
-        customer:confirmation.command.name,
+        customer:commandTicketName(confirmation.command),
         items:toReceiptItems(confirmation.command.items),
         total:confirmation.command.total,
         kind:`reprint_${Date.now()}`,
@@ -1319,14 +1366,14 @@ function IntegratedCommands({tenantId,commands,setCommands,onCharge,products,adj
         if(pendingChanges.length)await queueOrderUpdate({
           tenantId,
           commandId:editing.id,
-          customer:editing.name,
+          customer:commandTicketName(editing),
           changes:pendingChanges,
           newTotal:editing.total,
         });
         else await queueKitchenOrder({
           tenantId,
           commandId:editing.id,
-          customer:editing.name,
+          customer:commandTicketName(editing),
           items:toReceiptItems(editing.items),
           total:editing.total,
           kind:`reprint_${Date.now()}`,
@@ -1378,7 +1425,7 @@ function IntegratedCommands({tenantId,commands,setCommands,onCharge,products,adj
     queueKitchenOrder({
       tenantId,
       commandId:command.id,
-      customer:command.name,
+      customer:commandTicketName(command),
       items:toReceiptItems(command.items),
       total:command.total,
       kind:`reprint_${Date.now()}`,
@@ -1397,7 +1444,13 @@ function IntegratedCommands({tenantId,commands,setCommands,onCharge,products,adj
     <div className="kitchen-board">{kitchenColumns.map((column)=><section className={`kitchen-column ${column.id}`} key={column.id}>
       <header className="kitchen-column-head"><div><b>{column.title}</b><span>{column.commands.length}</span></div><small>{column.description}</small></header>
       <div className="kitchen-column-list">{column.commands.length?column.commands.map((command)=><article className="kitchen-command-card" key={command.id}>
-        <header><div><small>COMANDA #{String(command.id).slice(-4)} · HÁ {Math.max(1,Math.round((Date.now()-command.createdAt)/60000))} MIN</small><h2>{command.name}</h2></div><strong>R$ {command.total.toFixed(2).replace(".",",")}</strong></header>
+        <header><div><small>COMANDA #{String(command.id).slice(-6)} · HÁ {Math.max(1,Math.round((Date.now()-command.createdAt)/60000))} MIN</small><h2>{command.name}</h2>{command.waiterName&&<small>GARÇOM: {command.waiterName}</small>}</div><strong>R$ {command.total.toFixed(2).replace(".",",")}</strong></header>
+        <span className={`command-print-status ${printStatuses[command.id]||"checking"}`}>{
+          printStatuses[command.id]==="printed"?"✓ IMPRESSA":
+          printStatuses[command.id]==="failed"?"! FALHA NA IMPRESSÃO":
+          printStatuses[command.id]==="processing"?"IMPRIMINDO":
+          printStatuses[command.id]==="pending"?"NA FILA DA IMPRESSORA":"VERIFICANDO IMPRESSÃO"
+        }</span>
         {column.id==="cancelled"&&<div className="command-cancelled-notice"><X/> <b>{command.cancelledBy==="customer"?"CANCELADO PELO CLIENTE":"PEDIDO CANCELADO"}</b></div>}
         {command.delivery?.fulfillment==="delivery"&&<div className="command-delivery is-delivery">
           <b><Truck/>ENTREGA · DELIVERY</b>
