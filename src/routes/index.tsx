@@ -1299,7 +1299,7 @@ function IntegratedStock({products,onChange}:{products:Product[];onChange:(produ
 }
 
 function IntegratedCommands({tenantId,commands,setCommands,onCharge,products,adjustStock,printStatuses}:{tenantId?:string|null;commands:IntegratedCommand[];setCommands:React.Dispatch<React.SetStateAction<IntegratedCommand[]>>;onCharge:(command:IntegratedCommand)=>void;products:Product[];adjustStock:(deltas:{name:string;qty:number}[])=>void;printStatuses:Record<number,"sending"|"pending"|"processing"|"printed"|"failed">}) {
-  const [confirmation,setConfirmation]=useState<{action:"print"|"cancel";command:IntegratedCommand}|null>(null);
+  const [confirmation,setConfirmation]=useState<{action:"print"|"cancel"|"dismiss";command:IntegratedCommand}|null>(null);
   const [editing,setEditing]=useState<IntegratedCommand|null>(null);
   const editCategories=useMemo(()=>Array.from(new Set(products.map((product)=>product.category))),[products]);
   const [editCategory,setEditCategory]=useState(editCategories[0]||"");
@@ -1317,7 +1317,7 @@ function IntegratedCommands({tenantId,commands,setCommands,onCharge,products,adj
       }).catch((error)=>console.error("Não foi possível colocar a impressão na fila:",error));
       else printKitchenTicket(confirmation.command.name,confirmation.command.items,confirmation.command.waiterName);
     }
-    else {
+    else if(confirmation.action==="cancel") {
       if(tenantId&&supabase){
         const {data,error}=await supabase.rpc("cancel_restaurant_command",{p_command_id:confirmation.command.id});
         if(error||!data){
@@ -1330,6 +1330,7 @@ function IntegratedCommands({tenantId,commands,setCommands,onCharge,products,adj
       }
       setCommands((all)=>all.filter((command)=>command.id!==confirmation.command.id));
     }
+    else setCommands((all)=>all.filter((command)=>command.id!==confirmation.command.id));
     setConfirmation(null);
   };
   const [pendingChanges,setPendingChanges]=useState<OrderChange[]>([]);
@@ -1472,15 +1473,15 @@ function IntegratedCommands({tenantId,commands,setCommands,onCharge,products,adj
           {column.id==="preparing"&&<><button onClick={()=>setKitchenStatus(command.id,"new")}>VOLTAR</button><button className="flow-main" onClick={()=>setKitchenStatus(command.id,"ready")}>MARCAR PRONTO</button></>}
           {column.id==="ready"&&<><button onClick={()=>setKitchenStatus(command.id,"preparing")}>VOLTAR</button><button className="flow-main" onClick={()=>onCharge(command)}>COBRAR / FINALIZAR</button></>}
         </div>
-        {column.id!=="cancelled"&&<footer><button onClick={()=>{setEditing(command);setEditCategory((current)=>current||editCategories[0]||"")}}>EDITAR</button><button onClick={()=>reprintCommand(command)}>REIMPRIMIR</button><button className="danger" onClick={()=>setConfirmation({action:"cancel",command})}>CANCELAR</button></footer>}
+        {column.id!=="cancelled"?<footer><button onClick={()=>{setEditing(command);setEditCategory((current)=>current||editCategories[0]||"")}}>EDITAR</button><button onClick={()=>reprintCommand(command)}>REIMPRIMIR</button><button className="danger" onClick={()=>setConfirmation({action:"cancel",command})}>CANCELAR</button></footer>:<footer><button className="danger" onClick={()=>setConfirmation({action:"dismiss",command})}>REMOVER DA LISTA</button></footer>}
       </article>):<div className="kitchen-column-empty"><ShoppingBag/><span>Nenhuma comanda</span></div>}</div>
     </section>)}</div>}
     {confirmation&&<div className="modal-backdrop" onMouseDown={()=>setConfirmation(null)}><section className="modal confirmation-modal" onMouseDown={(event)=>event.stopPropagation()}>
       <button className="modal-close" onClick={()=>setConfirmation(null)} aria-label="Fechar"><X/></button>
       <span className="modal-icon">{confirmation.action==="print"?<ShoppingBag/>:<X/>}</span>
-      <h3>{confirmation.action==="print"?"Confirmar impressão":"Cancelar comanda"}</h3>
-      <p>{confirmation.action==="print"?`Você tem certeza que deseja imprimir a comanda de ${confirmation.command.name}?`:`Você tem certeza que deseja cancelar a comanda de ${confirmation.command.name}? Esta ação não poderá ser desfeita.`}</p>
-      <div className="confirmation-actions"><button onClick={()=>setConfirmation(null)}>VOLTAR</button><button className={confirmation.action==="cancel"?"danger-confirm":"primary"} onClick={confirmAction}>{confirmation.action==="print"?"SIM, IMPRIMIR":"SIM, CANCELAR"}</button></div>
+      <h3>{confirmation.action==="print"?"Confirmar impressão":confirmation.action==="dismiss"?"Remover da lista":"Cancelar comanda"}</h3>
+      <p>{confirmation.action==="print"?`Você tem certeza que deseja imprimir a comanda de ${confirmation.command.name}?`:confirmation.action==="dismiss"?`Remover o cartão cancelado de ${confirmation.command.name}? O pedido continuará salvo no histórico.`:`Você tem certeza que deseja cancelar a comanda de ${confirmation.command.name}? Esta ação não poderá ser desfeita.`}</p>
+      <div className="confirmation-actions"><button onClick={()=>setConfirmation(null)}>VOLTAR</button><button className={confirmation.action==="print"?"primary":"danger-confirm"} onClick={confirmAction}>{confirmation.action==="print"?"SIM, IMPRIMIR":confirmation.action==="dismiss"?"SIM, REMOVER":"SIM, CANCELAR"}</button></div>
     </section></div>}
     {editing&&<div className="modal-backdrop" onMouseDown={()=>setEditing(null)}><section className="modal edit-command-modal" onMouseDown={(event)=>event.stopPropagation()}>
       <button className="modal-close" onClick={()=>setEditing(null)} aria-label="Fechar"><X/></button>
