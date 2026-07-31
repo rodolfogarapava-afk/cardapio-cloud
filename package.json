@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
+    "build:delivery": "npm --prefix delivery-app ci && npm --prefix delivery-app run build && node scripts/sync-delivery-build.mjs",
     "build": "vite build && node scripts/stage-sites-build.mjs",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",

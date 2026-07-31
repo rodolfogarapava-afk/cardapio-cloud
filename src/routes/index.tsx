@@ -150,6 +150,8 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
   const [paymentTotal, setPaymentTotal] = useState(0);
   const [paymentItems, setPaymentItems] = useState<{name:string;qty:number;price:number;detail?:string}[]>([]);
   const [paymentCommandId, setPaymentCommandId] = useState<number | null>(null);
+  const [paymentProcessing, setPaymentProcessing] = useState(false);
+  const [paymentError, setPaymentError] = useState("");
   const [paymentCommandBackup, setPaymentCommandBackup] = useState<{id:number;name:string;count:number;total:number;createdAt:number;items:{name:string;qty:number;price:number;delivered:boolean}[]}|null>(null);
   const [systemView, setSystemView] = useState<"products" | "stock" | "commands" | "cash" | "reports" | null>(null);
   const [savedCommands, setSavedCommands] = useState<{id:number;name:string;count:number;total:number;createdAt:number;items:{name:string;qty:number;price:number;detail?:string;delivered:boolean}[]}[]>([]);
@@ -202,9 +204,10 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
     let active=true;
     const refresh=async()=>{
       const {data,error}=await supabase.from("print_jobs")
-        .select("command_id,status")
+        .select("command_id,status,created_at")
         .eq("tenant_id",tenantNavigation.tenantId)
-        .in("command_id",savedCommands.map((command)=>command.id));
+        .in("command_id",savedCommands.map((command)=>command.id))
+        .order("created_at",{ascending:true});
       if(error||!active)return;
       setPrintStatuses((current)=>{
         const next={...current};
@@ -416,7 +419,7 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
           {tenantNavigation && tenantNavigation.page !== "operation" ? tenantNavigation.content :
           systemView === "products" ? <IntegratedProducts tenantId={tenantNavigation?.tenantId} products={products} categories={categories} onChange={persistProducts} onAddCategory={(name)=>persistCategories([...categories,name])} onRenameCategory={renameCategory} onDeleteCategory={(name)=>{const next=categories.filter((c)=>c!==name);persistCategories(next);if(activeMain===name)setActiveMain(next[0]||"")}} /> :
           systemView === "stock" ? <IntegratedStock products={products} onChange={persistProducts} /> :
-          systemView === "commands" ? <IntegratedCommands tenantId={tenantNavigation?.tenantId} commands={savedCommands} setCommands={setSavedCommands} products={products} adjustStock={adjustStock} onCharge={(command) => { setCustomerName(command.name); setPaymentTotal(command.total); setPaymentItems(command.items); setPaymentCommandId(command.id); setPaymentCommandBackup(command); setModal("payment"); }} /> :
+          systemView === "commands" ? <IntegratedCommands tenantId={tenantNavigation?.tenantId} commands={savedCommands} setCommands={setSavedCommands} products={products} adjustStock={adjustStock} onCharge={(command) => { setCustomerName(command.name); setPaymentTotal(command.total); setPaymentItems(command.items); setPaymentMethod(deliveryPaymentLabel(command.delivery?.payment)); setPaymentCommandId(command.id); setPaymentCommandBackup(command); setPaymentError(""); setModal("payment"); }} /> :
           systemView === "cash" ? <IntegratedCash sales={salesHistory} expenses={expenses} sync={operationsSync} onAddExpense={(description,amount) => setExpenses((all)=>[...all,{id:Date.now(),description,amount,createdAt:Date.now()}])} onDeleteExpense={(id)=>setExpenses((all)=>all.filter(expense=>expense.id!==id))} /> :
           systemView === "reports" ? <IntegratedReports sales={salesHistory} expenses={expenses} commands={savedCommands} sync={operationsSync} /> : <>
           {!categories.length && <div className="integrated-empty new-store-empty"><Store/><h3>{publicMenu ? "Cardápio em preparação" : "Seu cardápio está vazio"}</h3><p>{publicMenu ? "Esta loja ainda não publicou produtos." : "Esta é uma loja nova. Cadastre a primeira categoria e os produtos para começar."}</p>{!publicMenu && <button className="primary" onClick={()=>setSystemView("products")}>CADASTRAR PRODUTOS</button>}</div>}
@@ -592,7 +595,7 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
                       setCustomerName(command.name);
                       setPaymentTotal(command.total);
                       setPaymentItems(command.items);
-                      setPaymentMethod("PIX");
+                      setPaymentMethod(deliveryPaymentLabel(command.delivery?.payment));
                       setPaymentCommandId(command.id);
                       setPaymentCommandBackup(command);
                       setModal("payment");
@@ -607,15 +610,25 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
                 <h3>Finalizar {customerName}</h3>
                 <div className="checkout-total">R$ {paymentTotal.toFixed(2).replace(".", ",")}</div>
                 <div className="payment-methods">{["PIX","Dinheiro","Cartão Débito","Cartão Crédito"].map((method) =>
-                  <button key={method} className={paymentMethod === method ? "active" : ""} onClick={() => setPaymentMethod(method)}>{method}</button>)}
+                  <button key={method} className={paymentMethod === method ? "active" : ""} onClick={() => {setPaymentMethod(method);setPaymentError("")}}>{method}</button>)}
                 </div>
                 {paymentMethod === "Dinheiro" && <>
                   <input className="cash-input" value={cashReceived} onChange={(e) => setCashReceived(e.target.value)} inputMode="decimal" placeholder="Valor recebido" />
                   {!!cashReceived && <p className="change">{Number.isFinite(cashAmount) ? cashAmount >= paymentTotal ? `Troco: R$ ${(cashAmount-paymentTotal).toFixed(2).replace(".", ",")}` : `Faltam R$ ${(paymentTotal-cashAmount).toFixed(2).replace(".", ",")}` : "Informe um valor válido"}</p>}
                 </>}
-                <button className="primary" disabled={!cashPaymentValid} onClick={() => {
-                  const sale={id:Date.now(),name:customerName,total:paymentTotal,method:paymentMethod,createdAt:Date.now(),items:paymentItems};
-                  setSalesHistory((all)=>[...all,sale]);
+                {paymentError&&<p className="form-error">{paymentError}</p>}
+                <button className="primary" disabled={!cashPaymentValid||paymentProcessing} onClick={async() => {
+                  setPaymentProcessing(true);setPaymentError("");
+                  if(paymentCommandId!==null&&supabase){
+                    const {data,error}=await supabase.rpc("finalize_restaurant_command",{p_command_id:paymentCommandId,p_payment_method:paymentMethod});
+                    if(error||!data){
+                      setPaymentError(error?.message||"Não foi possível finalizar esta comanda.");
+                      setPaymentProcessing(false);
+                      return;
+                    }
+                  }
+                  const sale={id:paymentCommandId??Date.now(),name:customerName,total:paymentTotal,method:paymentMethod,createdAt:Date.now(),items:paymentItems};
+                  setSalesHistory((all)=>[...all.filter((item)=>item.id!==sale.id),sale]);
                   if(paymentCommandId!==null)setSavedCommands((all)=>all.filter((command)=>command.id!==paymentCommandId));
                   if(tenantNavigation?.tenantId)queueCustomerReceipt({
                     tenantId:tenantNavigation.tenantId,
@@ -626,8 +639,8 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
                     paymentMethod:sale.method,
                   }).catch((error)=>console.error("Pagamento confirmado, mas o comprovante não entrou na fila de impressão:",error));
                   else printCustomerReceipt(sale);
-                  playNotificationSound("success"); setCart({}); setCartDetails({}); setCashReceived(""); setPaymentCommandId(null); setPaymentCommandBackup(null); setSent(true); setModal(null);
-                }}>CONFIRMAR PAGAMENTO E IMPRIMIR</button>
+                  playNotificationSound("success"); setCart({}); setCartDetails({}); setCashReceived(""); setPaymentCommandId(null); setPaymentCommandBackup(null); setSent(true); setModal(null);setPaymentProcessing(false);
+                }}>{paymentProcessing?"FINALIZANDO...":"CONFIRMAR PAGAMENTO E IMPRIMIR"}</button>
               </>
             )}
             {modal === "about" && (
@@ -812,6 +825,13 @@ type CommandDelivery = {
   reference?:string;
   notes?:string;
 };
+function deliveryPaymentLabel(method?:string){
+  const value=(method||"").toLowerCase();
+  if(value==="cash"||value==="dinheiro")return"Dinheiro";
+  if(value==="credit"||value==="credito"||value==="crédito")return"Cartão Crédito";
+  if(value==="debit"||value==="debito"||value==="débito")return"Cartão Débito";
+  return"PIX";
+}
 type IntegratedCommand = {id:number;name:string;count:number;total:number;createdAt:number;kitchenStatus?:"new"|"preparing"|"ready";delivery?:CommandDelivery;items:{name:string;qty:number;price:number;detail?:string;delivered:boolean}[]};
 type IntegratedSale = {id:number;name:string;total:number;method:string;createdAt:number;items:{name:string;qty:number;price:number;detail?:string}[]};
 type IntegratedExpense = {id:number;description:string;amount:number;createdAt:number};
@@ -1232,7 +1252,7 @@ function IntegratedCommands({tenantId,commands,setCommands,onCharge,products,adj
   const [editing,setEditing]=useState<IntegratedCommand|null>(null);
   const editCategories=useMemo(()=>Array.from(new Set(products.map((product)=>product.category))),[products]);
   const [editCategory,setEditCategory]=useState(editCategories[0]||"");
-  const confirmAction=()=>{
+  const confirmAction=async()=>{
     if(!confirmation)return;
     if(confirmation.action==="print"){
       if(tenantId)queueKitchenOrder({
@@ -1246,7 +1266,16 @@ function IntegratedCommands({tenantId,commands,setCommands,onCharge,products,adj
       else printKitchenTicket(confirmation.command.name,confirmation.command.items);
     }
     else {
-      adjustStock(confirmation.command.items.map((item)=>({name:item.name,qty:item.qty})));
+      if(tenantId&&supabase){
+        const {data,error}=await supabase.rpc("cancel_restaurant_command",{p_command_id:confirmation.command.id});
+        if(error||!data){
+          console.error("Não foi possível cancelar a comanda:",error);
+          return;
+        }
+      }
+      if(!confirmation.command.delivery){
+        adjustStock(confirmation.command.items.map((item)=>({name:item.name,qty:item.qty})));
+      }
       setCommands((all)=>all.filter((command)=>command.id!==confirmation.command.id));
     }
     setConfirmation(null);
