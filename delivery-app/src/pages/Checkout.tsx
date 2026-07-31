@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, MapPin, Plus, Edit2, Trash2, X, Banknote,
-  ShieldCheck, Clock, Lock, Tag, ChevronDown, User, CreditCard, FileText, CheckCircle2,
+  ShieldCheck, Clock, Lock, Tag, ChevronDown, User, CreditCard, FileText, CheckCircle2, Navigation, Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -134,6 +134,8 @@ export default function Checkout() {
   const [tenantId, setTenantId] = useState('');
   const [customerLookupMessage, setCustomerLookupMessage] = useState('');
   const [lookupAddress, setLookupAddress] = useState<Address | null>(null);
+  const [locating, setLocating] = useState(false);
+  const [locationError, setLocationError] = useState('');
   const lookupRequest = useRef(0);
   const lookupTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const restoredAccess = useRef(false);
@@ -284,6 +286,49 @@ export default function Checkout() {
   };
 
   const handleAddNew = () => { setEditingAddress(null); setAddressDialogOpen(true); };
+  const useCurrentLocation = () => {
+    setLocationError('');
+    if (!navigator.geolocation) {
+      setLocationError('Este aparelho não oferece localização automática. Digite o endereço manualmente.');
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(async ({ coords }) => {
+      try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&lat=${coords.latitude}&lon=${coords.longitude}`, {
+          headers: { 'Accept-Language': 'pt-BR' },
+        });
+        if (!response.ok) throw new Error('reverse-geocode');
+        const result = await response.json() as {
+          display_name?: string;
+          address?: { road?: string; pedestrian?: string; house_number?: string; suburb?: string; neighbourhood?: string; quarter?: string; city?: string; town?: string; village?: string; municipality?: string; state?: string; postcode?: string };
+        };
+        const found = result.address || {};
+        const located: Address = {
+          id: `gps-${Date.now()}`, label: 'Localização atual',
+          street: found.road || found.pedestrian || result.display_name || 'Localização via GPS',
+          number: found.house_number || 'S/N',
+          neighborhood: found.suburb || found.neighbourhood || found.quarter || '',
+          city: found.city || found.town || found.village || found.municipality || '',
+          state: found.state || '', zipCode: found.postcode || '', isDefault: true,
+          lat: coords.latitude, lng: coords.longitude,
+        };
+        setLookupAddress(located);
+        setSelectedAddress(located);
+        saveCustomerProfileOnDevice(located);
+        toast({ title: 'Localização encontrada!', description: 'Confira o endereço antes de confirmar o pedido.' });
+      } catch {
+        setLocationError('Localização encontrada, mas não foi possível identificar o endereço. Cadastre-o manualmente.');
+      } finally {
+        setLocating(false);
+      }
+    }, (error) => {
+      setLocating(false);
+      setLocationError(error.code === error.PERMISSION_DENIED
+        ? 'Permissão de localização negada. Autorize o GPS no navegador ou digite o endereço manualmente.'
+        : 'Não foi possível identificar sua localização. Tente novamente.');
+    }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
+  };
   const handleEdit = (addr: Address) => { setEditingAddress(addr); setAddressDialogOpen(true); };
   const handleDelete = (addr: Address) => {
     const remaining = checkoutAddressList.filter(item => item.id !== addr.id);
@@ -359,8 +404,8 @@ export default function Checkout() {
         number: selectedAddress?.number || '',
         neighborhood: selectedAddress?.neighborhood || '',
         reference: [selectedAddress?.complement, selectedAddress?.city, selectedAddress?.state].filter(Boolean).join(' · '),
-        latitude: null,
-        longitude: null,
+        latitude: selectedAddress?.lat ?? null,
+        longitude: selectedAddress?.lng ?? null,
         accessToken: currentAccessToken,
       },
       p_order: {
@@ -646,6 +691,11 @@ export default function Checkout() {
                   })}
                 </div>
               )}
+              <Button type="button" variant="outline" className="mt-3 w-full gap-2 border-primary/30 text-primary hover:bg-primary/10 hover:text-primary" onClick={useCurrentLocation} disabled={locating}>
+                {locating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Navigation className="h-4 w-4" />}
+                {locating ? 'Buscando sua localização...' : 'Usar minha localização pelo GPS'}
+              </Button>
+              {locationError && <p className="mt-2 text-xs text-destructive">{locationError}</p>}
             </section>
 
             {/* 3. Pagamento + Cupom */}

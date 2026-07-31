@@ -139,6 +139,8 @@ export interface Address {
   state: string;
   zipCode: string;
   isDefault?: boolean;
+  lat?: number;
+  lng?: number;
 }
 
 export interface DeliveryAddress {
