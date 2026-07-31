@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import { ShoppingCart, X, Plus, Minus, Trash2, Truck, Store, MapPin, CheckCircle2 } from 'lucide-react';
+import { ShoppingCart, X, Plus, Minus, Trash2, Truck, Store, MapPin, CheckCircle2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -33,6 +33,59 @@ export function CartDrawer({ className, onEditItem, onAddSuggestion, allProducts
   };
   const [showPickupConfirm, setShowPickupConfirm] = useState(false);
   const [showAddressForm, setShowAddressForm] = useState(false);
+  const [locating, setLocating] = useState(false);
+  const [locationError, setLocationError] = useState('');
+
+  const useCurrentLocation = () => {
+    setLocationError('');
+    if (!navigator.geolocation) {
+      setLocationError('Este aparelho não oferece localização automática. Digite seu endereço manualmente.');
+      return;
+    }
+
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(async ({ coords }) => {
+      const baseAddress: DeliveryAddress = {
+        street: '', number: '', quadra: '', lote: '', neighborhood: '',
+        complement: '', aptBloco: '', referencePoint: '', city: '', state: '',
+        lat: coords.latitude, lng: coords.longitude,
+      };
+      try {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&lat=${coords.latitude}&lon=${coords.longitude}`,
+          { headers: { 'Accept-Language': 'pt-BR' } },
+        );
+        if (!response.ok) throw new Error('reverse-geocode');
+        const result = await response.json() as {
+          display_name?: string;
+          address?: {
+            road?: string; pedestrian?: string; house_number?: string;
+            suburb?: string; neighbourhood?: string; quarter?: string;
+            city?: string; town?: string; village?: string; municipality?: string; state?: string;
+          };
+        };
+        const found = result.address || {};
+        setDeliveryAddress({
+          ...baseAddress,
+          street: found.road || found.pedestrian || '',
+          number: found.house_number || '',
+          neighborhood: found.suburb || found.neighbourhood || found.quarter || '',
+          city: found.city || found.town || found.village || found.municipality || '',
+          state: found.state || '',
+          referencePoint: result.display_name || '',
+        });
+      } catch {
+        setDeliveryAddress(baseAddress);
+      } finally {
+        setLocating(false);
+      }
+    }, (error) => {
+      setLocating(false);
+      setLocationError(error.code === error.PERMISSION_DENIED
+        ? 'Permissão de localização negada. Autorize o GPS no navegador ou digite o endereço manualmente.'
+        : 'Não foi possível identificar sua localização. Tente novamente ou digite o endereço manualmente.');
+    }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
+  };
 
   const handleCheckout = () => {
     if (!cart) return;
@@ -123,9 +176,7 @@ export function CartDrawer({ className, onEditItem, onAddSuggestion, allProducts
                     key={opt.mode}
                     onClick={() => {
                       setDeliveryMode(opt.mode);
-                      if (opt.mode === 'delivery' && !deliveryAddress) {
-                        setShowAddressForm(true);
-                      }
+                      if (opt.mode === 'delivery') setShowAddressForm(false);
                     }}
                     className={cn(
                       'flex-1 flex items-center gap-2.5 rounded-xl border-2 px-3 py-2.5 text-left transition-all',
@@ -186,12 +237,19 @@ export function CartDrawer({ className, onEditItem, onAddSuggestion, allProducts
                 ) : (
                   <div className="border-b border-border px-5 py-3">
                     <button
-                      className="flex items-center gap-2 text-xs font-medium text-primary hover:underline"
-                      onClick={() => setShowAddressForm(true)}
+                      className="flex items-center gap-2 text-xs font-medium text-primary hover:underline disabled:opacity-60"
+                      onClick={useCurrentLocation}
+                      disabled={locating}
                     >
-                      <MapPin className="h-3.5 w-3.5" />
-                      Adicionar endereço de entrega
+                      {locating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MapPin className="h-3.5 w-3.5" />}
+                      {locating ? 'Buscando sua localização...' : 'Clique aqui para adicionar sua localização'}
                     </button>
+                    {locationError && <p className="mt-2 text-[11px] leading-relaxed text-destructive">{locationError}</p>}
+                    {locationError && (
+                      <button className="mt-1 text-[11px] font-medium text-primary hover:underline" onClick={() => setShowAddressForm(true)}>
+                        Digitar endereço manualmente
+                      </button>
+                    )}
                   </div>
                 )}
               </>
