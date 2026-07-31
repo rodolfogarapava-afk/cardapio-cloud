@@ -90,14 +90,28 @@ while ($true) {
       $LastHeartbeat = Get-Date
     }
 
-    $jobs = @(Invoke-AgentRpc "claim_print_jobs" @{ p_token=$Token; p_limit=5 })
+    # Trabalha uma comanda por vez para nunca deixar várias como "imprimindo".
+    $jobs = @(Invoke-AgentRpc "claim_print_jobs" @{ p_token=$Token; p_limit=1 })
     foreach ($job in $jobs) {
       if (-not $job.job_id) { continue }
       try {
         $bytes = [Convert]::FromBase64String([string]$job.payload.data)
         $result = [CloudRawPrinter]::Send($printer, $bytes)
         if ($result -ne "OK") { throw $result }
-        Invoke-AgentRpc "complete_print_job" @{ p_token=$Token; p_job_id=$job.job_id; p_success=$true; p_error=$null } | Out-Null
+        $confirmed = $false
+        for ($attempt = 1; $attempt -le 5 -and -not $confirmed; $attempt++) {
+          try {
+            $confirmed = [bool](Invoke-AgentRpc "complete_print_job" @{
+              p_token=$Token
+              p_job_id=$job.job_id
+              p_success=$true
+              p_error=$null
+            })
+          } catch {
+            if ($attempt -lt 5) { Start-Sleep -Milliseconds 500 }
+          }
+        }
+        if (-not $confirmed) { throw "A impressao saiu, mas o servidor nao confirmou o status" }
       } catch {
         Invoke-AgentRpc "complete_print_job" @{ p_token=$Token; p_job_id=$job.job_id; p_success=$false; p_error=$_.Exception.Message } | Out-Null
       }

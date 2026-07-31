@@ -56,4 +56,38 @@ begin
 end $$;
 
 grant execute on function public.claim_print_jobs(text,integer) to anon,authenticated;
+
+-- O spooler do Windows pode aceitar e imprimir o RAW, mas uma oscilação curta
+-- pode impedir apenas a chamada seguinte de complete_print_job. Quando o mesmo
+-- agente volta a enviar heartbeat, sabemos que o ciclo local terminou. Nesse
+-- caso reconciliamos trabalhos ainda presos em "processing".
+create or replace function public.printer_agent_heartbeat(p_token text,p_printer_name text)
+returns boolean
+language plpgsql security definer set search_path=public,extensions
+as $$
+declare
+  v_agent uuid;
+  v_tenant uuid;
+begin
+  update public.printer_agents
+  set last_seen_at=now(),printer_name=p_printer_name
+  where token_hash=encode(digest(p_token,'sha256'),'hex')
+    and revoked_at is null
+  returning id,tenant_id into v_agent,v_tenant;
+
+  if v_agent is null then
+    return false;
+  end if;
+
+  update public.print_jobs
+  set status='printed',printed_at=now(),error_message=null
+  where claimed_by=v_agent
+    and status='processing'
+    and claimed_at < now()-interval '5 seconds';
+
+  update public.tenants set printer_status='online' where id=v_tenant;
+  return true;
+end $$;
+
+grant execute on function public.printer_agent_heartbeat(text,text) to anon,authenticated;
 notify pgrst, 'reload schema';
