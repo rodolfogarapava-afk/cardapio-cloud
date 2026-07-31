@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { CheckCircle2, Clock, MapPin, ArrowRight, Home, FileText, IdCard } from 'lucide-react';
+import { CheckCircle2, Clock, MapPin, ArrowRight, Home, FileText, IdCard, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { motion } from 'framer-motion';
@@ -84,6 +84,7 @@ export default function PedidoConfirmado() {
   }
 
   const { orderNumber, restaurantName, total, estimatedTime, paymentMethod, observation, cpf, items } = state;
+  const isCancelled = kitchenStatus === 'cancelled';
 
   return (
     <div className="min-h-screen bg-muted/20 flex flex-col">
@@ -94,14 +95,22 @@ export default function PedidoConfirmado() {
           transition={{ type: 'spring', stiffness: 200, damping: 15 }}
           className="mb-6"
         >
-          <div className="flex h-24 w-24 items-center justify-center rounded-full bg-primary/15 shadow-sm">
-            <CheckCircle2 className="h-12 w-12 text-primary" />
+          <div className={`flex h-24 w-24 items-center justify-center rounded-full shadow-sm ${isCancelled ? 'bg-destructive/15' : 'bg-primary/15'}`}>
+            {isCancelled
+              ? <XCircle className="h-12 w-12 text-destructive" />
+              : <CheckCircle2 className="h-12 w-12 text-primary" />}
           </div>
         </motion.div>
 
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-          <h1 className="text-2xl font-bold text-foreground mb-2">Pedido Confirmado!</h1>
-          <p className="text-muted-foreground">Seu pedido foi recebido pela loja</p>
+          <h1 className={`text-2xl font-bold mb-2 ${isCancelled ? 'text-destructive' : 'text-foreground'}`}>
+            {isCancelled ? 'Seu pedido foi cancelado' : 'Pedido Confirmado!'}
+          </h1>
+          <p className="text-muted-foreground">
+            {isCancelled
+              ? 'O estabelecimento cancelou este pedido. Entre em contato com a loja caso precise de ajuda.'
+              : 'Seu pedido foi recebido pela loja'}
+          </p>
         </motion.div>
 
         <motion.div
@@ -183,16 +192,23 @@ export default function PedidoConfirmado() {
               </>
             )}
 
-            <div className="flex items-center justify-center gap-2 py-3 rounded-lg bg-info/5 border border-info/15">
-              <Clock className="h-5 w-5 text-info" />
-              <span className="text-sm font-medium">
-                Tempo estimado: <span className="text-info font-semibold">{estimatedTime}</span>
-              </span>
-            </div>
+            {isCancelled ? (
+              <div className="flex items-center justify-center gap-2 rounded-lg border border-destructive/20 bg-destructive/5 py-3 text-destructive">
+                <XCircle className="h-5 w-5" />
+                <span className="text-sm font-semibold">Pedido cancelado pelo estabelecimento</span>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center gap-2 py-3 rounded-lg bg-info/5 border border-info/15">
+                <Clock className="h-5 w-5 text-info" />
+                <span className="text-sm font-medium">
+                  Tempo estimado: <span className="text-info font-semibold">{estimatedTime}</span>
+                </span>
+              </div>
+            )}
           </div>
         </motion.div>
 
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }} className="w-full max-w-md mt-6">
+        {!isCancelled && <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }} className="w-full max-w-md mt-6">
           <div className="flex items-center justify-between text-xs">
             <div className="flex flex-col items-center gap-1">
               <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center shadow-sm">
@@ -217,7 +233,7 @@ export default function PedidoConfirmado() {
               </span>
             </div>
           </div>
-        </motion.div>
+        </motion.div>}
 
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -225,10 +241,12 @@ export default function PedidoConfirmado() {
           transition={{ delay: 0.6 }}
           className="flex flex-col sm:flex-row gap-3 mt-8 w-full max-w-md"
         >
-          <Button variant="outline" className="flex-1 gap-2" onClick={() => navigate(`/pedido/${orderNumber}`, { state })}>
-            Acompanhar Pedido
-            <ArrowRight className="h-4 w-4" />
-          </Button>
+          {!isCancelled && (
+            <Button variant="outline" className="flex-1 gap-2" onClick={() => navigate(`/pedido/${orderNumber}`, { state })}>
+              Acompanhar Pedido
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          )}
           <Button className="flex-1 gap-2" onClick={() => navigate(`/cardapio/${state.vendorSlug || 'proveu-espeto'}`)}>
             <Home className="h-4 w-4" />
             Voltar ao Início
