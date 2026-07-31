@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, ChevronRight, Clock3, ShoppingBag } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Clock3, Loader2, ShoppingBag, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
 type SavedOrder = {
@@ -28,33 +33,57 @@ export default function MeusPedidos() {
   const { vendorSlug = 'proveu-espeto' } = useParams<{ vendorSlug: string }>();
   const [orders, setOrders] = useState<SavedOrder[]>([]);
   const [statuses, setStatuses] = useState<Record<string, keyof typeof statusText>>({});
+  const [cancelOrder, setCancelOrder] = useState<SavedOrder | null>(null);
+  const [cancelling, setCancelling] = useState(false);
+
+  const confirmCancellation = async () => {
+    if (!cancelOrder?.orderId || !cancelOrder.tenantId || !cancelOrder.customerPhone) return;
+    setCancelling(true);
+    const { data, error } = await (supabase as any).rpc('cancel_public_order', {
+      p_tenant_id: cancelOrder.tenantId,
+      p_order_id: cancelOrder.orderId,
+      p_phone: cancelOrder.customerPhone,
+    });
+    setCancelling(false);
+    if (error || !data?.cancelled) {
+      toast({
+        title: 'Não foi possível cancelar',
+        description: data?.message || error?.message || 'O pedido pode já estar em preparo.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setStatuses(current => ({ ...current, [cancelOrder.orderNumber]: 'cancelled' }));
+    setCancelOrder(null);
+    toast({ title: 'Pedido cancelado', description: 'A loja foi avisada do cancelamento.' });
+  };
 
   useEffect(() => {
     let active = true;
     const refresh = async () => {
       try {
-        const access = JSON.parse(localStorage.getItem('cardapio_delivery_access') || 'null') as {phone?:string}|null;
+        const access = JSON.parse(localStorage.getItem('cardapio_delivery_access') || 'null') as { phone?: string } | null;
         if (!access?.phone) return;
-        const {data:menu}=await (supabase as any).rpc('get_public_menu',{p_slug:vendorSlug});
-        if(!menu?.tenantId)return;
-        const {data}=await (supabase as any).rpc('get_public_customer_orders',{
-          p_tenant_id:menu.tenantId,p_phone:access.phone,
+        const { data: menu } = await (supabase as any).rpc('get_public_menu', { p_slug: vendorSlug });
+        if (!menu?.tenantId) return;
+        const { data } = await (supabase as any).rpc('get_public_customer_orders', {
+          p_tenant_id: menu.tenantId, p_phone: access.phone,
         });
-        if(!active||!Array.isArray(data))return;
-        const loaded:SavedOrder[]=data.map((row:any)=>{
-          const payload=row.payload||{};
+        if (!active || !Array.isArray(data)) return;
+        const loaded: SavedOrder[] = data.map((row: any) => {
+          const payload = row.payload || {};
           return {
-            orderNumber:`ORD-${String(row.id).slice(-6)}`,
-            orderId:Number(row.id),tenantId:menu.tenantId,customerPhone:access.phone,
-            restaurantName:menu.tenantName||'Loja',total:Number(payload.total||0),
-            createdAt:new Date(row.createdAt).getTime(),
-            items:(payload.items||[]).map((item:any)=>({productName:item.name,quantity:Number(item.qty||0)})),
+            orderNumber: `ORD-${String(row.id).slice(-6)}`,
+            orderId: Number(row.id), tenantId: menu.tenantId, customerPhone: access.phone,
+            restaurantName: menu.tenantName || 'Loja', total: Number(payload.total || 0),
+            createdAt: new Date(row.createdAt).getTime(),
+            items: (payload.items || []).map((item: any) => ({ productName: item.name, quantity: Number(item.qty || 0) })),
           };
         });
         setOrders(loaded);
-        setStatuses(Object.fromEntries(data.map((row:any)=>[
+        setStatuses(Object.fromEntries(data.map((row: any) => [
           `ORD-${String(row.id).slice(-6)}`,
-          statusText[row.status as keyof typeof statusText]?row.status:'new',
+          statusText[row.status as keyof typeof statusText] ? row.status : 'new',
         ])));
       } catch {
         // Mantém a tela estável enquanto a conexão é restabelecida.
@@ -95,36 +124,75 @@ export default function MeusPedidos() {
         ) : orders.map(order => {
           const status = statuses[order.orderNumber] || 'new';
           return (
-            <button
-              key={order.orderNumber}
-              type="button"
-              onClick={() => navigate(`/pedido/${order.orderNumber}`)}
-              className="w-full rounded-2xl border bg-card p-4 text-left shadow-sm transition-colors hover:border-primary/60"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-primary">{statusText[status]}</p>
-                  <h2 className="mt-1 text-lg font-bold">{order.orderNumber}</h2>
-                  <p className="text-xs text-muted-foreground">{order.restaurantName}</p>
+            <article key={order.orderNumber} className="w-full overflow-hidden rounded-2xl border bg-card shadow-sm">
+              <button
+                type="button"
+                onClick={() => navigate(`/pedido/${order.orderNumber}`)}
+                className="w-full p-4 text-left transition-colors hover:bg-muted/30"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-primary">{statusText[status]}</p>
+                    <h2 className="mt-1 text-lg font-bold">{order.orderNumber}</h2>
+                    <p className="text-xs text-muted-foreground">{order.restaurantName}</p>
+                  </div>
+                  <ChevronRight className="mt-2 h-5 w-5 text-muted-foreground" />
                 </div>
-                <ChevronRight className="mt-2 h-5 w-5 text-muted-foreground" />
-              </div>
-              <div className="my-3 border-t" />
-              <div className="flex items-end justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate text-sm text-muted-foreground">
-                    {(order.items || []).map(item => `${item.quantity}x ${item.productName}`).join(' · ') || 'Pedido realizado'}
-                  </p>
-                  <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-                    <Clock3 className="h-3.5 w-3.5" /> Toque para acompanhar
-                  </p>
+                <div className="my-3 border-t" />
+                <div className="flex items-end justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm text-muted-foreground">
+                      {(order.items || []).map(item => `${item.quantity}x ${item.productName}`).join(' · ') || 'Pedido realizado'}
+                    </p>
+                    <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                      <Clock3 className="h-3.5 w-3.5" /> Toque para acompanhar
+                    </p>
+                  </div>
+                  <strong className="shrink-0">R$ {order.total.toFixed(2).replace('.', ',')}</strong>
                 </div>
-                <strong className="shrink-0">R$ {order.total.toFixed(2).replace('.', ',')}</strong>
-              </div>
-            </button>
+              </button>
+              {status === 'new' && (
+                <div className="border-t px-4 py-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    onClick={() => setCancelOrder(order)}
+                  >
+                    <XCircle className="mr-2 h-4 w-4" /> Cancelar pedido
+                  </Button>
+                </div>
+              )}
+            </article>
           );
         })}
       </main>
+
+      <AlertDialog open={!!cancelOrder} onOpenChange={open => !open && !cancelling && setCancelOrder(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Você tem certeza que deseja cancelar?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O pedido {cancelOrder?.orderNumber} será removido das comandas da loja. O cancelamento só é permitido antes do início do preparo.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancelling}>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={cancelling}
+              onClick={event => {
+                event.preventDefault();
+                void confirmCancellation();
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {cancelling
+                ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Cancelando...</>
+                : 'Sim, cancelar pedido'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
