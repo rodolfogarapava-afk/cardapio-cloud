@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, Clock, MapPin, ArrowRight, Home, FileText, IdCard, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -32,24 +32,60 @@ interface LocationState {
 }
 
 const brl = (v: number) => `R$ ${v.toFixed(2).replace('.', ',')}`;
+const asPaymentMethod = (value: unknown): PaymentMethod =>
+  value === 'pix' || value === 'credit_card' || value === 'debit_card' || value === 'cash' ? value : 'cash';
 
 export default function PedidoConfirmado() {
   const location = useLocation();
   const navigate = useNavigate();
   const { orderNumber: routeOrderNumber } = useParams<{ orderNumber: string }>();
+  const [searchParams] = useSearchParams();
   const navigationState = location.state as LocationState | null;
-  let savedState: LocationState | null = null;
-  if (!navigationState && routeOrderNumber) {
-    try {
-      const access = JSON.parse(localStorage.getItem('cardapio_delivery_access') || 'null') as { phone?: string; token?: string } | null;
-      const order = JSON.parse(localStorage.getItem(`cardapio_tracked_order_${routeOrderNumber}`) || 'null') as LocationState | null;
-      if (access?.phone && order?.customerPhone === access.phone) savedState = order;
-    } catch {
-      savedState = null;
-    }
-  }
-  const state = navigationState || savedState;
+  const [cloudState, setCloudState] = useState<LocationState | null>(navigationState);
+  const [cloudLoading, setCloudLoading] = useState(!navigationState && !!routeOrderNumber);
+  const state = navigationState || cloudState;
   const [kitchenStatus, setKitchenStatus] = useState<'new' | 'preparing' | 'ready' | 'completed' | 'cancelled'>('new');
+
+  useEffect(() => {
+    if (navigationState || !routeOrderNumber) return;
+    let active = true;
+    const loadFromCloud = async () => {
+      try {
+        const access = JSON.parse(localStorage.getItem('cardapio_delivery_access') || 'null') as {
+          phone?: string; token?: string; tenantId?: string; vendorSlug?: string;
+        } | null;
+        if (!access?.phone || !access.token || !access.tenantId) return;
+        const { data } = await (supabase as any).rpc('get_public_customer_orders', {
+          p_tenant_id: access.tenantId, p_phone: access.phone, p_access_token: access.token,
+        });
+        const row = Array.isArray(data) ? data.find((item: any) => String(item.id) === String(routeOrderNumber)) : null;
+        if (!row || !active) return;
+        const payload = row.payload || {};
+        const slug = searchParams.get('loja') || access.vendorSlug || 'proveu-espeto';
+        const { data: menu } = await (supabase as any).rpc('get_public_menu', { p_slug: slug });
+        if (!active) return;
+        setKitchenStatus(row.status || 'new');
+        setCloudState({
+          vendorSlug: slug,
+          orderNumber: `ORD-${String(row.id).slice(-6)}`,
+          orderId: Number(row.id), tenantId: access.tenantId, customerPhone: access.phone,
+          restaurantName: menu?.tenantName || 'Loja', total: Number(payload.total || 0),
+          estimatedTime: '25-40 min',
+          paymentMethod: asPaymentMethod(payload.delivery?.payment),
+          observation: payload.delivery?.notes || undefined,
+          items: (payload.items || []).map((item: any) => ({
+            productName: item.name, quantity: Number(item.qty || 0),
+            totalPrice: Number(item.price || 0) * Number(item.qty || 0),
+            complements: item.detail ? [String(item.detail)] : [], removedIngredients: [],
+          })),
+        });
+      } finally {
+        if (active) setCloudLoading(false);
+      }
+    };
+    void loadFromCloud();
+    return () => { active = false; };
+  }, [navigationState, routeOrderNumber, searchParams]);
 
   useEffect(() => {
     if (!state?.tenantId || !state.orderId || !state.customerPhone) return;
@@ -75,6 +111,10 @@ export default function PedidoConfirmado() {
       window.clearInterval(interval);
     };
   }, [state?.customerPhone, state?.orderId, state?.tenantId]);
+
+  if (cloudLoading) {
+    return <div className="min-h-screen flex items-center justify-center"><p className="text-muted-foreground">Carregando pedido...</p></div>;
+  }
 
   if (!state) {
     return (

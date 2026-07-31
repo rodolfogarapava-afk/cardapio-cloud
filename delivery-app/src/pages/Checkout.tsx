@@ -404,13 +404,13 @@ export default function Checkout() {
     localStorage.setItem('cardapio_delivery_access', JSON.stringify({
       phone: phoneDigits(phone),
       tenantId,
+      vendorSlug: vendorSlug || 'proveu-espeto',
       token: orderResult?.customerToken || currentAccessToken,
       updatedAt: Date.now(),
     }));
-    localStorage.setItem(`cardapio_tracked_order_${publicOrderNumber}`, JSON.stringify(trackingState));
     if (selectedAddress) saveCustomerProfileOnDevice(selectedAddress);
     clearCart();
-    navigate('/pedido-confirmado', { state: trackingState });
+    navigate(`/pedido/${savedOrderId}?loja=${encodeURIComponent(vendorSlug || 'proveu-espeto')}`, { state: trackingState });
     toast({ title: 'Pedido enviado!', description: `Seu pedido ${publicOrderNumber} foi recebido.` });
     setIsSubmitting(false);
   };

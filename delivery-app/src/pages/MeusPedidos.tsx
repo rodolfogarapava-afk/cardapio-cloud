@@ -18,6 +18,7 @@ type SavedOrder = {
   total: number;
   createdAt?: number;
   items?: Array<{ productName: string; quantity: number }>;
+  trackingState?: Record<string, unknown>;
 };
 
 const statusText = {
@@ -80,6 +81,21 @@ export default function MeusPedidos() {
             restaurantName: menu.tenantName || 'Loja', total: Number(payload.total || 0),
             createdAt: new Date(row.createdAt).getTime(),
             items: (payload.items || []).map((item: any) => ({ productName: item.name, quantity: Number(item.qty || 0) })),
+            trackingState: {
+              vendorSlug,
+              orderNumber: `ORD-${String(row.id).slice(-6)}`,
+              orderId: Number(row.id), tenantId: menu.tenantId, customerPhone: access.phone,
+              restaurantName: menu.tenantName || 'Loja', total: Number(payload.total || 0),
+              estimatedTime: '25-40 min',
+              paymentMethod: payload.delivery?.payment || 'cash',
+              observation: payload.delivery?.notes || undefined,
+              items: (payload.items || []).map((item: any) => ({
+                productName: item.name, quantity: Number(item.qty || 0),
+                totalPrice: Number(item.price || 0) * Number(item.qty || 0),
+                complements: item.detail ? [String(item.detail)] : [],
+                removedIngredients: [],
+              })),
+            },
           };
         });
         setOrders(loaded);
@@ -129,7 +145,7 @@ export default function MeusPedidos() {
             <article key={order.orderNumber} className="w-full overflow-hidden rounded-2xl border bg-card shadow-sm">
               <button
                 type="button"
-                onClick={() => navigate(`/pedido/${order.orderNumber}`)}
+                onClick={() => navigate(`/pedido/${order.orderId}?loja=${encodeURIComponent(vendorSlug)}`, { state: order.trackingState })}
                 className="w-full p-4 text-left transition-colors hover:bg-muted/30"
               >
                 <div className="flex items-start justify-between gap-3">

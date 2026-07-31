@@ -248,6 +248,7 @@ export default function Cardapio() {
       localStorage.setItem('cardapio_delivery_access', JSON.stringify({
         phone: d,
         tenantId: cloudCatalog?.tenantId,
+        vendorSlug,
         token: previousAccess?.phone === d ? previousAccess.token || '' : '',
         updatedAt: Date.now(),
       }));
