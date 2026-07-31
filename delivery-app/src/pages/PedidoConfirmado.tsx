@@ -45,6 +45,7 @@ export default function PedidoConfirmado() {
   const [cloudLoading, setCloudLoading] = useState(!navigationState && !!routeOrderNumber);
   const state = navigationState || cloudState;
   const [kitchenStatus, setKitchenStatus] = useState<'new' | 'preparing' | 'ready' | 'completed' | 'cancelled'>('new');
+  const [trackingLoading, setTrackingLoading] = useState(false);
 
   useEffect(() => {
     if (navigationState || !routeOrderNumber) return;
@@ -111,6 +112,27 @@ export default function PedidoConfirmado() {
       window.clearInterval(interval);
     };
   }, [state?.customerPhone, state?.orderId, state?.tenantId]);
+
+  const handleTrackOrder = async () => {
+    if (!state?.tenantId || !state.orderId || !state.customerPhone) return;
+    setTrackingLoading(true);
+    try {
+      const access = JSON.parse(localStorage.getItem('cardapio_delivery_access') || 'null') as { phone?: string; token?: string } | null;
+      const { data } = await (supabase as any).rpc('get_public_order_status', {
+        p_tenant_id: state.tenantId,
+        p_order_id: state.orderId,
+        p_phone: state.customerPhone,
+        p_access_token: access?.phone === state.customerPhone ? access.token || '' : '',
+      });
+      const next = data?.kitchenStatus;
+      if (next === 'new' || next === 'preparing' || next === 'ready' || next === 'completed' || next === 'cancelled') {
+        setKitchenStatus(next);
+      }
+      document.getElementById('order-tracking')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } finally {
+      setTrackingLoading(false);
+    }
+  };
 
   if (cloudLoading) {
     return <div className="min-h-screen flex items-center justify-center"><p className="text-muted-foreground">Carregando pedido...</p></div>;
@@ -250,7 +272,7 @@ export default function PedidoConfirmado() {
           </div>
         </motion.div>
 
-        {!isCancelled && <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }} className="w-full max-w-md mt-6">
+        {!isCancelled && <motion.div id="order-tracking" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }} className="w-full max-w-md mt-6 scroll-mt-6">
           <div className="flex items-center justify-between text-xs">
             <div className="flex flex-col items-center gap-1">
               <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center shadow-sm">
@@ -275,6 +297,12 @@ export default function PedidoConfirmado() {
               </span>
             </div>
           </div>
+          <p className="mt-4 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm font-medium text-foreground" aria-live="polite">
+            {kitchenStatus === 'new' && 'Pedido recebido. Aguardando o estabelecimento iniciar o preparo.'}
+            {kitchenStatus === 'preparing' && 'Seu pedido está sendo preparado pela cozinha.'}
+            {kitchenStatus === 'ready' && 'Seu pedido está pronto.'}
+            {kitchenStatus === 'completed' && 'Pedido concluído com sucesso.'}
+          </p>
         </motion.div>}
 
         <motion.div
@@ -284,8 +312,8 @@ export default function PedidoConfirmado() {
           className="flex flex-col sm:flex-row gap-3 mt-8 w-full max-w-md"
         >
           {!isCancelled && (
-            <Button variant="outline" className="flex-1 gap-2" onClick={() => navigate(`/pedido/${orderNumber}`, { state })}>
-              Acompanhar Pedido
+            <Button variant="outline" className="flex-1 gap-2" onClick={handleTrackOrder} disabled={trackingLoading}>
+              {trackingLoading ? 'Atualizando pedido...' : 'Acompanhar Pedido'}
               <ArrowRight className="h-4 w-4" />
             </Button>
           )}
