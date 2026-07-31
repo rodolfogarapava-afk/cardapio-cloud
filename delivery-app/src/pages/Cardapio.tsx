@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
-import { Clock, Star, Search, ShoppingCart, GalleryHorizontal, Coins, X, ArrowUp, User as UserIcon, LogIn, LogOut, Smartphone, KeyRound, ArrowRight, UtensilsCrossed, Tag, ClipboardList, Info } from 'lucide-react';
+import { Clock, Star, Search, ShoppingCart, GalleryHorizontal, Coins, X, ArrowUp, User as UserIcon, LogIn, LogOut, MapPin, ArrowRight, UtensilsCrossed, Tag, ClipboardList, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
@@ -19,7 +19,7 @@ import { RestaurantInfoModal } from '@/components/client/RestaurantInfoModal';
 import { RestaurantReviewsModal } from '@/components/client/RestaurantReviewsModal';
 import { MenuTour } from '@/components/client/MenuTour';
 import { getRestaurantBySlug, getCategoriesBySlug, getProductsBySlug } from '@/data/restaurants';
-import { Product, CartItem, ProductCategory, Restaurant } from '@/types';
+import { Product, CartItem, ProductCategory, Restaurant, Address } from '@/types';
 import { isWithinSchedule } from '@/lib/availability';
 import { useCart } from '@/contexts/CartContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -134,13 +134,17 @@ export default function Cardapio() {
   const { vendorSlug } = useParams<{ vendorSlug: string }>();
   const navigate = useNavigate();
   const { cart, itemCount, setDeliveryFee, deliveryMode } = useCart();
-  const { user, isAuthenticated, login, logout } = useAuth();
+  const { user, isAuthenticated, logout } = useAuth();
   const [authOpen, setAuthOpen] = useState(false);
-  const [authStep, setAuthStep] = useState<'identify' | 'choose' | 'otp' | 'password'>('identify');
+  const [authStep, setAuthStep] = useState<'identify' | 'register'>('identify');
   const [authIdentifier, setAuthIdentifier] = useState('');
   const [identifiedName, setIdentifiedName] = useState('');
-  const [authPwd, setAuthPwd] = useState('');
-  const [otpCode, setOtpCode] = useState('');
+  const [registerName, setRegisterName] = useState('');
+  const [registerStreet, setRegisterStreet] = useState('');
+  const [registerNumber, setRegisterNumber] = useState('');
+  const [registerNeighborhood, setRegisterNeighborhood] = useState('');
+  const [registerCity, setRegisterCity] = useState('');
+  const [registerState, setRegisterState] = useState('');
   const [authErr, setAuthErr] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
   const [cloudCatalog, setCloudCatalog] = useState<CloudCatalog | null>(null);
@@ -192,7 +196,6 @@ export default function Cardapio() {
     if (digits.length === 11) return digits[2] === '9' ? 'phone' : 'cpf';
     return 'unknown';
   };
-  const identifierKind = useMemo(() => detectKind(onlyDigits(authIdentifier)), [authIdentifier]);
   const formatIdentifier = (v: string) => {
     const d = onlyDigits(v).slice(0, 11);
     const kind = detectKind(d);
@@ -214,15 +217,22 @@ export default function Cardapio() {
     if (d.length <= 6) return d.replace(/^(\d{2})(\d+)/, '($1) $2');
     return d.replace(/^(\d{2})(\d{4,5})(\d+)/, '($1) $2-$3');
   };
-  const maskedIdentifier = useMemo(() => {
-    const d = onlyDigits(authIdentifier);
-    if (d.length < 4) return authIdentifier;
-    return '•••• ' + d.slice(-4);
-  }, [authIdentifier]);
-
   const resetAuth = () => {
     setAuthStep('identify'); setAuthIdentifier(''); setIdentifiedName('');
-    setAuthPwd(''); setOtpCode(''); setAuthErr(''); setAuthLoading(false);
+    setRegisterName(''); setRegisterStreet(''); setRegisterNumber('');
+    setRegisterNeighborhood(''); setRegisterCity(''); setRegisterState('');
+    setAuthErr(''); setAuthLoading(false);
+  };
+
+  const connectCustomer = (phone: string, name: string, token = '') => {
+    localStorage.setItem('cardapio_delivery_access', JSON.stringify({
+      phone, tenantId: cloudCatalog?.tenantId, vendorSlug, token, updatedAt: Date.now(),
+    }));
+    setDeliveryPhone(phone);
+    setDeliveryName(name);
+    setIdentifiedName(name);
+    setAuthOpen(false);
+    resetAuth();
   };
 
   const handleIdentify = async (e: React.FormEvent) => {
@@ -233,30 +243,30 @@ export default function Cardapio() {
     if (kind !== 'phone') { setAuthErr('Informe um telefone válido com DDD.'); return; }
     setAuthLoading(true);
     try {
-      const localProfile = JSON.parse(localStorage.getItem(`cardapio_delivery_profile_${d}`) || 'null') as { name?: string } | null;
-      let customerName = localProfile?.name?.trim() || 'Cliente';
+      const localProfile = JSON.parse(localStorage.getItem(`cardapio_delivery_profile_${d}`) || 'null') as { name?: string; address?: Address } | null;
+      let customer: any = localProfile?.name ? { name: localProfile.name, ...(localProfile.address || {}) } : null;
+      const access = JSON.parse(localStorage.getItem('cardapio_delivery_access') || 'null') as { phone?: string; token?: string } | null;
       if (cloudCatalog?.tenantId) {
-        const access = JSON.parse(localStorage.getItem('cardapio_delivery_access') || 'null') as { phone?: string; token?: string } | null;
         const { data } = await (supabase as any).rpc('get_public_customer', {
           p_tenant_id: cloudCatalog.tenantId,
           p_phone: d,
           p_access_token: access?.phone === d ? access.token || '' : '',
         });
-        customerName = data?.name?.trim() || customerName;
+        if (data?.name?.trim()) customer = data;
       }
-      const previousAccess = JSON.parse(localStorage.getItem('cardapio_delivery_access') || 'null') as { phone?: string; token?: string } | null;
-      localStorage.setItem('cardapio_delivery_access', JSON.stringify({
-        phone: d,
-        tenantId: cloudCatalog?.tenantId,
-        vendorSlug,
-        token: previousAccess?.phone === d ? previousAccess.token || '' : '',
-        updatedAt: Date.now(),
-      }));
-      setDeliveryPhone(d);
-      setDeliveryName(customerName);
-      setIdentifiedName(customerName);
-      setAuthOpen(false);
-      resetAuth();
+      if (customer?.name?.trim()) {
+        if (!localProfile?.name) {
+          const address: Address = {
+            id: `address-${Date.now()}`, label: 'Endereço cadastrado', isDefault: true,
+            street: customer.street || '', number: customer.number || '', neighborhood: customer.neighborhood || '',
+            complement: customer.reference || '', city: '', state: '', zipCode: '',
+          };
+          localStorage.setItem(`cardapio_delivery_profile_${d}`, JSON.stringify({ name: customer.name.trim(), phone: d, address, updatedAt: Date.now() }));
+        }
+        connectCustomer(d, customer.name.trim(), access?.phone === d ? access.token || '' : '');
+      } else {
+        setAuthStep('register');
+      }
     } catch {
       setAuthErr('Não foi possível acessar agora. Tente novamente.');
     } finally {
@@ -264,33 +274,26 @@ export default function Cardapio() {
     }
   };
 
+  const handleRegister = (event: React.FormEvent) => {
+    event.preventDefault();
+    const phone = onlyDigits(authIdentifier);
+    if (!registerName.trim() || !registerStreet.trim() || !registerNumber.trim() || !registerNeighborhood.trim()) {
+      setAuthErr('Preencha nome, rua, número e bairro.');
+      return;
+    }
+    const address: Address = {
+      id: `address-${Date.now()}`, label: 'Endereço cadastrado', isDefault: true,
+      street: registerStreet.trim(), number: registerNumber.trim(), neighborhood: registerNeighborhood.trim(),
+      city: registerCity.trim(), state: registerState.trim(), zipCode: '', complement: '',
+    };
+    localStorage.setItem(`cardapio_delivery_profile_${phone}`, JSON.stringify({
+      name: registerName.trim(), phone, address, updatedAt: Date.now(),
+    }));
+    connectCustomer(phone, registerName.trim());
+  };
+
   const customerConnected = isAuthenticated || deliveryPhone.length >= 10;
   const customerFirstName = user?.name.split(' ')[0] || deliveryName.split(' ')[0] || 'Cliente';
-
-  const handleSendOtp = async () => {
-    setAuthErr(''); setAuthLoading(true);
-    await new Promise(r => setTimeout(r, 500));
-    setAuthLoading(false); setAuthStep('otp');
-  };
-
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthErr('');
-    if (otpCode.length !== 6) { setAuthErr('Digite o código de 6 dígitos.'); return; }
-    setAuthLoading(true);
-    await new Promise(r => setTimeout(r, 400));
-    const ok = await login('cliente@email.com', '123456', 'client');
-    setAuthLoading(false);
-    if (ok) { setAuthOpen(false); resetAuth(); } else setAuthErr('Não foi possível validar.');
-  };
-
-  const handlePasswordLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthErr(''); setAuthLoading(true);
-    const ok = await login('cliente@email.com', authPwd, 'client');
-    setAuthLoading(false);
-    if (ok) { setAuthOpen(false); resetAuth(); } else setAuthErr('Senha inválida. Use 123456 para a demo.');
-  };
 
   const ProfileButton = ({ compact = false }: { compact?: boolean }) => (
     isAuthenticated && user ? (
@@ -874,9 +877,7 @@ export default function Cardapio() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {authStep === 'identify' && (<><UserIcon className="h-5 w-5 text-primary" /> Entrar</>)}
-              {authStep === 'choose' && (<>👋 Olá, {identifiedName.split(' ')[0]}!</>)}
-              {authStep === 'otp' && (<><Smartphone className="h-5 w-5 text-primary" /> Código por SMS</>)}
-              {authStep === 'password' && (<><KeyRound className="h-5 w-5 text-primary" /> Sua senha</>)}
+              {authStep === 'register' && (<><MapPin className="h-5 w-5 text-primary" /> Complete seu cadastro</>)}
             </DialogTitle>
           </DialogHeader>
 
@@ -903,97 +904,22 @@ export default function Cardapio() {
             </form>
           )}
 
-          {authStep === 'choose' && (
-            <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">Como você prefere entrar?</p>
-              {identifierKind === 'phone' && (
-                <button
-                  onClick={handleSendOtp}
-                  disabled={authLoading}
-                  className="w-full flex items-center gap-3 rounded-lg border p-3 text-left hover:bg-muted/60 transition-colors"
-                >
-                  <div className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                    <Smartphone className="h-4 w-4" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">Código por SMS</p>
-                    <p className="text-[11px] text-muted-foreground">Enviar para {maskedIdentifier}</p>
-                  </div>
-                  <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                </button>
-              )}
-              <button
-                onClick={() => { setAuthErr(''); setAuthStep('password'); }}
-                className="w-full flex items-center gap-3 rounded-lg border p-3 text-left hover:bg-muted/60 transition-colors"
-              >
-                <div className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                  <KeyRound className="h-4 w-4" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium">Usar senha</p>
-                  <p className="text-[11px] text-muted-foreground">Acesso rápido com sua senha</p>
-                </div>
-                <ArrowRight className="h-4 w-4 text-muted-foreground" />
-              </button>
-              {identifierKind === 'cpf' && (
-                <p className="text-[11px] text-muted-foreground text-center">
-                  Para receber código por SMS, entre com seu telefone.
-                </p>
-              )}
-              <button onClick={resetAuth} className="text-[11px] text-muted-foreground hover:text-foreground w-full text-center pt-1">
-                Não sou {identifiedName.split(' ')[0]}? Trocar conta
-              </button>
-            </div>
-          )}
-
-          {authStep === 'otp' && (
-            <form onSubmit={handleVerifyOtp} className="space-y-3">
-              <p className="text-sm text-muted-foreground">
-                Enviamos um código para <span className="font-medium text-foreground">{maskedIdentifier}</span>
-              </p>
-              <div>
-                <Label htmlFor="auth-otp" className="text-xs">Código (6 dígitos)</Label>
-                <Input
-                  id="auth-otp"
-                  inputMode="numeric"
-                  maxLength={6}
-                  required
-                  value={otpCode}
-                  onChange={e => setOtpCode(onlyDigits(e.target.value).slice(0, 6))}
-                  placeholder="••••••"
-                  className="mt-1 tracking-[0.5em] text-center text-lg"
-                  autoFocus
-                />
+          {authStep === 'register' && (
+            <form onSubmit={handleRegister} className="space-y-3">
+              <p className="text-xs text-muted-foreground">Este telefone ainda não possui cadastro neste aparelho. Informe seus dados para continuar.</p>
+              <div><Label htmlFor="register-name" className="text-xs">Nome completo</Label><Input id="register-name" required value={registerName} onChange={e => setRegisterName(e.target.value)} placeholder="Seu nome" className="mt-1" autoFocus /></div>
+              <div className="grid grid-cols-[1fr_90px] gap-2">
+                <div><Label htmlFor="register-street" className="text-xs">Rua</Label><Input id="register-street" required value={registerStreet} onChange={e => setRegisterStreet(e.target.value)} placeholder="Nome da rua" className="mt-1" /></div>
+                <div><Label htmlFor="register-number" className="text-xs">Número</Label><Input id="register-number" required value={registerNumber} onChange={e => setRegisterNumber(e.target.value)} placeholder="Nº" className="mt-1" /></div>
+              </div>
+              <div><Label htmlFor="register-neighborhood" className="text-xs">Bairro</Label><Input id="register-neighborhood" required value={registerNeighborhood} onChange={e => setRegisterNeighborhood(e.target.value)} placeholder="Seu bairro" className="mt-1" /></div>
+              <div className="grid grid-cols-[1fr_80px] gap-2">
+                <div><Label htmlFor="register-city" className="text-xs">Cidade</Label><Input id="register-city" value={registerCity} onChange={e => setRegisterCity(e.target.value)} placeholder="Cidade" className="mt-1" /></div>
+                <div><Label htmlFor="register-state" className="text-xs">UF</Label><Input id="register-state" maxLength={2} value={registerState} onChange={e => setRegisterState(e.target.value.toUpperCase())} placeholder="UF" className="mt-1" /></div>
               </div>
               {authErr && <p className="text-xs text-destructive">{authErr}</p>}
-              <Button type="submit" className="w-full" disabled={authLoading}>
-                {authLoading ? 'Validando...' : 'Confirmar'}
-              </Button>
-              <div className="flex justify-between text-[11px] text-muted-foreground">
-                <button type="button" onClick={() => setAuthStep('choose')} className="hover:text-foreground">← Voltar</button>
-                <button type="button" onClick={handleSendOtp} className="hover:text-foreground">Reenviar código</button>
-              </div>
-            </form>
-          )}
-
-          {authStep === 'password' && (
-            <form onSubmit={handlePasswordLogin} className="space-y-3">
-              <p className="text-sm text-muted-foreground">
-                Conta: <span className="font-medium text-foreground">{maskedIdentifier}</span>
-              </p>
-              <div>
-                <Label htmlFor="auth-pwd" className="text-xs">Senha</Label>
-                <Input id="auth-pwd" type="password" required value={authPwd} onChange={e => setAuthPwd(e.target.value)} placeholder="••••••" className="mt-1" autoFocus />
-              </div>
-              {authErr && <p className="text-xs text-destructive">{authErr}</p>}
-              <Button type="submit" className="w-full" disabled={authLoading}>
-                {authLoading ? 'Entrando...' : 'Entrar'}
-              </Button>
-              <div className="flex justify-between text-[11px] text-muted-foreground">
-                <button type="button" onClick={() => setAuthStep('choose')} className="hover:text-foreground">← Voltar</button>
-                <button type="button" onClick={handleSendOtp} className="hover:text-foreground">Esqueci a senha — usar SMS</button>
-              </div>
-              <p className="text-[11px] text-muted-foreground text-center">Demo: senha <code>123456</code></p>
+              <Button type="submit" className="w-full">CADASTRAR E ENTRAR</Button>
+              <button type="button" onClick={resetAuth} className="w-full text-center text-[11px] text-muted-foreground hover:text-foreground">Usar outro telefone</button>
             </form>
           )}
         </DialogContent>
