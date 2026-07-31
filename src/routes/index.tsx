@@ -135,6 +135,7 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
   const [activeMain, setActiveMain] = useState(tenantInitialCategories[0] || "");
   const [cart, setCart] = useState<Record<number, number>>({});
   const [modal, setModal] = useState<"review" | "cart" | "about" | "commands" | "payment" | "doneness" | null>(null);
+  const [visibleCommandCount, setVisibleCommandCount] = useState(5);
   const [pendingMeatId, setPendingMeatId] = useState<number | null>(null);
   const [doneness, setDoneness] = useState("");
   const [meatNote, setMeatNote] = useState("");
@@ -239,6 +240,9 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
     const merged=mergeOpenCommands(savedCommands);
     if(JSON.stringify(merged)!==JSON.stringify(savedCommands))setSavedCommands(merged);
   },[savedCommands,storageReady]);
+  useEffect(()=>{
+    if(modal==="commands")setVisibleCommandCount(5);
+  },[modal]);
   useEffect(()=>{
     if(!storageReady)return;
     const currentIds=new Set(savedCommands.map((command)=>command.id));
@@ -615,7 +619,7 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
                 <span className="modal-icon"><ShoppingBag /></span>
                 <h3>Comandas abertas</h3>
                 {!savedCommands.length ? <p>Nenhuma comanda aberta no momento.</p> :
-                  <div className="saved-commands">{savedCommands.map((command) => <div key={command.id}>
+                  <div className="saved-commands">{[...savedCommands].sort((a,b)=>b.createdAt-a.createdAt).slice(0,visibleCommandCount).map((command) => <div key={command.id}>
                     <div><b>{command.name}</b><small>{command.count} {command.count === 1 ? "item" : "itens"}</small>
                       <span className={`command-print-status ${printStatuses[command.id]||"checking"}`}>{
                         printStatuses[command.id]==="printed"?"✓ IMPRESSA COM SUCESSO":
@@ -645,7 +649,9 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
                       }).then(()=>setPrintStatuses((current)=>({...current,[command.id]:"pending"})))
                         .catch(()=>setPrintStatuses((current)=>({...current,[command.id]:"failed"})));
                     }}>TENTAR NOVAMENTE</button>}
-                  </div>)}</div>
+                  </div>)}
+                  {savedCommands.length>visibleCommandCount&&<button className="commands-load-more" onClick={()=>setVisibleCommandCount((count)=>count+5)}>VER MAIS <ChevronDown size={14}/></button>}
+                  </div>
                 }
               </>
             )}
