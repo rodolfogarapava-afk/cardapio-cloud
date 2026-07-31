@@ -104,9 +104,9 @@ export default function Cardapio() {
 
   useEffect(() => {
     let active = true;
+    let timer: number | undefined;
 
     async function loadDeusProveuCatalog() {
-      setCatalogError('');
       const { data, error } = await (supabase as any).rpc('get_public_menu', {
         p_slug: vendorSlug,
       });
@@ -117,12 +117,20 @@ export default function Cardapio() {
         return;
       }
 
+      setCatalogError('');
       setCloudCatalog(data as CloudCatalog);
     }
 
-    loadDeusProveuCatalog();
+    void loadDeusProveuCatalog();
+    timer = window.setInterval(() => { void loadDeusProveuCatalog(); }, 5000);
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void loadDeusProveuCatalog();
+    };
+    document.addEventListener('visibilitychange', refreshWhenVisible);
     return () => {
       active = false;
+      if (timer) window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
     };
   }, [vendorSlug]);
 
@@ -300,7 +308,12 @@ export default function Cardapio() {
 
   const rawCategories = useMemo<ProductCategory[]>(() => {
     if (!cloudCatalog) return [];
-    return cloudCatalog.categories.map((name, order) => ({
+    const names = [...cloudCatalog.categories];
+    for (const product of cloudCatalog.products) {
+      const name = product.category?.trim();
+      if (name && !names.some(current => current.toLocaleLowerCase('pt-BR') === name.toLocaleLowerCase('pt-BR'))) names.push(name);
+    }
+    return names.map((name, order) => ({
       id: categoryKey(name),
       name,
       order,

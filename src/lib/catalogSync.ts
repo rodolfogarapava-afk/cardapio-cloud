@@ -25,6 +25,17 @@ type Params = {
   legacyStoragePrefix: string;
 };
 
+function catalogCategories(products: CloudProduct[], categories: string[]) {
+  const result: string[] = [];
+  for (const category of [...categories, ...products.map((product) => product.category)]) {
+    const clean = String(category || "").trim();
+    if (clean && !result.some((current) => current.toLocaleLowerCase("pt-BR") === clean.toLocaleLowerCase("pt-BR"))) {
+      result.push(clean);
+    }
+  }
+  return result;
+}
+
 export function useCatalogSync(params: Params) {
   const [tenantId, setTenantId] = useState<string | null>(null);
   const hydrated = useRef(false);
@@ -59,15 +70,18 @@ export function useCatalogSync(params: Params) {
       }
 
       if (data) {
+        const remoteProducts = (data.products || []) as CloudProduct[];
+        const remoteCategories = catalogCategories(remoteProducts, (data.categories || []) as string[]);
         applyingRemote.current = true;
-        latest.current.setProducts((data.products || []) as CloudProduct[]);
-        latest.current.setCategories((data.categories || []) as string[]);
+        latest.current.setProducts(remoteProducts);
+        latest.current.setCategories(remoteCategories);
         window.setTimeout(() => { applyingRemote.current = false; }, 0);
       } else {
         const current = latest.current;
+        const categories = catalogCategories(current.products, current.categories);
         const { error: seedError } = await supabase!
           .from("restaurant_catalogs")
-          .insert({ tenant_id: id, products: current.products, categories: current.categories });
+          .insert({ tenant_id: id, products: current.products, categories });
         if (seedError) {
           console.error("Não foi possível criar o catálogo na nuvem.", seedError);
           return;
@@ -87,12 +101,13 @@ export function useCatalogSync(params: Params) {
     if (!supabase || !tenantId || !hydrated.current || applyingRemote.current) return;
     const timer = window.setTimeout(async () => {
       const current = latest.current;
+      const categories = catalogCategories(current.products, current.categories);
       const { error } = await supabase!
         .from("restaurant_catalogs")
         .upsert({
           tenant_id: tenantId,
           products: current.products,
-          categories: current.categories,
+          categories,
           updated_at: new Date().toISOString(),
         });
       if (error) console.error("Não foi possível salvar o catálogo.", error);
@@ -111,7 +126,7 @@ export function useCatalogSync(params: Params) {
       if (error || !data) return;
       const current = latest.current;
       const remoteProducts = (data.products || []) as CloudProduct[];
-      const remoteCategories = (data.categories || []) as string[];
+      const remoteCategories = catalogCategories(remoteProducts, (data.categories || []) as string[]);
       applyingRemote.current = true;
       if (JSON.stringify(remoteProducts) !== JSON.stringify(current.products)) current.setProducts(remoteProducts);
       if (JSON.stringify(remoteCategories) !== JSON.stringify(current.categories)) current.setCategories(remoteCategories);
