@@ -50,6 +50,7 @@ end
 $$;
 
 revoke all on function public.adjust_catalog_stock(uuid,jsonb) from public;
+revoke all on function public.adjust_catalog_stock(uuid,jsonb) from anon;
 grant execute on function public.adjust_catalog_stock(uuid,jsonb) to authenticated;
 
 create or replace function public.submit_waiter_order(
@@ -150,5 +151,6 @@ end
 $$;
 
 revoke all on function public.submit_waiter_order(uuid,jsonb) from public;
+revoke all on function public.submit_waiter_order(uuid,jsonb) from anon;
 grant execute on function public.submit_waiter_order(uuid,jsonb) to authenticated;
 notify pgrst, 'reload schema';
