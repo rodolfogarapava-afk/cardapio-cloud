@@ -980,6 +980,7 @@ button { cursor:pointer;touch-action:manipulation; }
   gap:12px;
 }
 .client-menu-content.compact-menu .product-card {
+  position:relative;
   display:grid;
   grid-template-columns:minmax(0,1fr) 128px;
   min-height:154px;
@@ -1042,6 +1043,10 @@ button { cursor:pointer;touch-action:manipulation; }
 .client-menu-content.compact-menu .price span { display:none; }
 .client-menu-content.compact-menu .price strong { color:var(--yellow);font-size:17px; }
 .client-menu-content.compact-menu .add-button {
+  position:absolute;
+  z-index:3;
+  right:8px;
+  bottom:9px;
   width:38px;
   min-width:38px;
   height:38px;
