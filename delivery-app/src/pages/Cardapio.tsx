@@ -654,18 +654,11 @@ export default function Cardapio() {
                     <Tag className="h-3.5 w-3.5 text-primary" /> Ofertas
                   </Button>
                 )}
-                {customerConnected ? (
-                  <>
-                    <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => setLoyaltyOpen(true)}>
-                      <UserIcon className="h-3.5 w-3.5 text-primary" /> Minha conta
-                    </Button>
-                    {customerConnected && (
-                      <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={handleOrdersClick}>
-                        <ClipboardList className="h-3.5 w-3.5" /> Meus Pedidos
-                      </Button>
-                    )}
-                  </>
-                ) : null}
+                {customerConnected && (
+                  <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={handleOrdersClick}>
+                    <ClipboardList className="h-3.5 w-3.5" /> Meus Pedidos
+                  </Button>
+                )}
                 <ProfileButton />
                 <Button
                   variant="outline"
