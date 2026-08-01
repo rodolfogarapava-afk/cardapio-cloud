@@ -93,15 +93,27 @@ export function CartDrawer({ className, onEditItem, onAddSuggestion, allProducts
       setShowPickupConfirm(true);
     } else {
       setOpen(false);
-      navigate(`/checkout/${cart.restaurantSlug}`);
+      openCheckout(cart.restaurantSlug);
     }
+  };
+
+  const openCheckout = (restaurantSlug: string) => {
+    const target = `/checkout/${restaurantSlug}`;
+    navigate(target);
+
+    // O delivery roda dentro de um iframe. Alguns navegadores atualizam o hash
+    // sem renderizar a nova rota; a recarga preserva o carrinho na sessão e
+    // garante a abertura do checkout sem alterar a URL pública /delivery/loja.
+    window.setTimeout(() => {
+      window.location.reload();
+    }, 0);
   };
 
   const confirmPickupCheckout = () => {
     if (cart) {
       setShowPickupConfirm(false);
       setOpen(false);
-      navigate(`/checkout/${cart.restaurantSlug}`);
+      openCheckout(cart.restaurantSlug);
     }
   };
 

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
 import { Cart, CartItem, CartItemComplement, DeliveryMode, DeliveryAddress } from '@/types';
 
 interface CartContextType {
@@ -37,6 +37,32 @@ interface CartContextType {
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
+const CART_SESSION_KEY = 'cardapio_delivery_cart_session_v1';
+
+type PersistedCartState = {
+  cart: Cart | null;
+  deliveryMode: DeliveryMode;
+  deliveryAddress: DeliveryAddress | null;
+};
+
+function readPersistedCartState(): PersistedCartState {
+  const fallback: PersistedCartState = { cart: null, deliveryMode: 'delivery', deliveryAddress: null };
+  if (typeof window === 'undefined') return fallback;
+
+  try {
+    const saved = JSON.parse(window.sessionStorage.getItem(CART_SESSION_KEY) || 'null') as Partial<PersistedCartState> | null;
+    const cart = saved?.cart;
+    if (!cart || !Array.isArray(cart.items) || cart.items.length === 0 || !cart.restaurantSlug) return fallback;
+    return {
+      cart,
+      deliveryMode: saved.deliveryMode === 'pickup' ? 'pickup' : 'delivery',
+      deliveryAddress: saved.deliveryAddress || null,
+    };
+  } catch {
+    window.sessionStorage.removeItem(CART_SESSION_KEY);
+    return fallback;
+  }
+}
 
 function generateId(): string {
   return Math.random().toString(36).substring(2, 11);
@@ -48,9 +74,19 @@ function calculateItemTotal(unitPrice: number, quantity: number, complements: Ca
 }
 
 export function CartProvider({ children }: { children: ReactNode }) {
-  const [cart, setCart] = useState<Cart | null>(null);
-  const [deliveryMode, setDeliveryMode] = useState<DeliveryMode>('delivery');
-  const [deliveryAddress, setDeliveryAddress] = useState<DeliveryAddress | null>(null);
+  const [persistedState] = useState(readPersistedCartState);
+  const [cart, setCart] = useState<Cart | null>(persistedState.cart);
+  const [deliveryMode, setDeliveryMode] = useState<DeliveryMode>(persistedState.deliveryMode);
+  const [deliveryAddress, setDeliveryAddress] = useState<DeliveryAddress | null>(persistedState.deliveryAddress);
+
+  useEffect(() => {
+    if (!cart) {
+      window.sessionStorage.removeItem(CART_SESSION_KEY);
+      return;
+    }
+
+    window.sessionStorage.setItem(CART_SESSION_KEY, JSON.stringify({ cart, deliveryMode, deliveryAddress }));
+  }, [cart, deliveryMode, deliveryAddress]);
 
   const addItem = useCallback(
     (

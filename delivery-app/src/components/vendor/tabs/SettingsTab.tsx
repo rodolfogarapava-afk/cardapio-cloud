@@ -339,7 +339,7 @@ export function SettingsTab() {
                 </Label>
                 <div className="flex items-center gap-0">
                   <span className="h-8 px-2 flex items-center text-xs text-muted-foreground bg-muted border border-r-0 rounded-l-md shrink-0">
-                    cardapio/
+                    delivery/
                   </span>
                   <Input
                     id="store-slug"
