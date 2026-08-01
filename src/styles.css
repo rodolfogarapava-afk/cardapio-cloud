@@ -1045,12 +1045,12 @@ button { cursor:pointer;touch-action:manipulation; }
 .client-menu-content.compact-menu .add-button {
   position:absolute;
   z-index:3;
-  right:8px;
-  bottom:9px;
-  width:38px;
-  min-width:38px;
-  height:38px;
-  min-height:38px;
+  right:16px;
+  bottom:16px;
+  width:32px;
+  min-width:32px;
+  height:32px;
+  min-height:32px;
   padding:0;
   border-radius:50%;
   overflow:hidden;
@@ -1113,7 +1113,8 @@ button { cursor:pointer;touch-action:manipulation; }
   .client-menu-content.compact-menu .product-info { grid-column:1;grid-row:1;padding:14px 6px 13px 14px; }
   .client-menu-content.compact-menu .product-info h2 { font-size:14px; }
   .client-menu-content.compact-menu .buy { flex-direction:row;align-items:center; }
-  .client-menu-content.compact-menu .add-button { width:34px;min-width:34px;height:34px;min-height:34px;padding:0; }
+  .client-menu-content.compact-menu .add-button { right:17px;bottom:17px;width:30px;min-width:30px;height:30px;min-height:30px;padding:0; }
+  .client-menu-content.compact-menu .add-button svg { width:15px;height:15px; }
 }
 
 @media (max-width: 640px) {
