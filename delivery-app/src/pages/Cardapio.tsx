@@ -105,13 +105,14 @@ export default function Cardapio() {
       const profile = phone.length >= 10
         ? JSON.parse(localStorage.getItem(`cardapio_delivery_profile_${phone}`) || 'null') as { name?: string } | null
         : null;
-      return { phone: phone.length >= 10 ? phone : '', name: profile?.name?.trim() || '' };
+      return { phone: phone.length >= 10 ? phone : '', name: profile?.name?.trim() || '', token: access?.token || '' };
     } catch {
-      return { phone: '', name: '' };
+      return { phone: '', name: '', token: '' };
     }
   });
   const [deliveryPhone, setDeliveryPhone] = useState(storedIdentity.phone);
   const [deliveryName, setDeliveryName] = useState(storedIdentity.name);
+  const [deliveryToken, setDeliveryToken] = useState(storedIdentity.token);
 
   useEffect(() => {
     let active = true;
@@ -150,7 +151,18 @@ export default function Cardapio() {
       const access = readDeliveryAccess();
       const digits = (access?.phone || '').replace(/\D/g, '');
       if (digits.length < 10) return;
-      if (access?.token) localStorage.setItem(deviceTokenKey(cloudCatalog?.tenantId, digits), access.token);
+      const rememberedToken = access?.token || localStorage.getItem(deviceTokenKey(cloudCatalog?.tenantId, digits)) || '';
+      if (rememberedToken) {
+        localStorage.setItem(deviceTokenKey(cloudCatalog?.tenantId, digits), rememberedToken);
+        saveDeliveryAccess({
+          ...access,
+          phone: digits,
+          token: rememberedToken,
+          tenantId: cloudCatalog?.tenantId || access?.tenantId,
+          vendorSlug,
+        });
+        setDeliveryToken(rememberedToken);
+      }
       setDeliveryPhone(digits);
       const profile = JSON.parse(localStorage.getItem(`cardapio_delivery_profile_${digits}`) || 'null') as { name?: string; address?: Address } | null;
       setDeliveryName(profile?.name?.trim() || 'Cliente');
@@ -203,6 +215,7 @@ export default function Cardapio() {
     if (rememberedToken) localStorage.setItem(deviceTokenKey(cloudCatalog?.tenantId, phone), rememberedToken);
     setDeliveryPhone(phone);
     setDeliveryName(name);
+    setDeliveryToken(rememberedToken);
     if (address) setDeliveryAddress(address);
     setIdentifiedName(name);
     setAuthOpen(false);
@@ -269,6 +282,7 @@ export default function Cardapio() {
   };
 
   const customerConnected = isAuthenticated || deliveryPhone.length >= 10;
+  const customerCanViewOrders = isAuthenticated || Boolean(deliveryToken);
   const customerFirstName = user?.name.split(' ')[0] || deliveryName.split(' ')[0] || 'Cliente';
 
   const ProfileButton = ({ compact = false }: { compact?: boolean }) => (
@@ -476,9 +490,9 @@ export default function Cardapio() {
 
   const handleOrdersClick = useCallback(() => {
     if (!restaurant) return;
-    if (customerConnected) navigateDelivery(`/pedidos/${restaurant.slug}`);
+    if (customerCanViewOrders) navigateDelivery(`/pedidos/${restaurant.slug}`);
     else setAuthOpen(true);
-  }, [customerConnected, restaurant]);
+  }, [customerCanViewOrders, restaurant]);
 
   const handleProfileClick = useCallback(() => {
     if (customerConnected) setLoyaltyOpen(true);
@@ -494,6 +508,7 @@ export default function Cardapio() {
     clearDeliveryAccess();
     setDeliveryPhone('');
     setDeliveryName('');
+    setDeliveryToken('');
     setDeliveryAddress(null);
     setLoyaltyOpen(false);
   }, [logout, setDeliveryAddress]);
@@ -618,9 +633,11 @@ export default function Cardapio() {
                     <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => setLoyaltyOpen(true)}>
                       <UserIcon className="h-3.5 w-3.5 text-primary" /> Minha conta
                     </Button>
-                    <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={handleOrdersClick}>
-                      <ClipboardList className="h-3.5 w-3.5" /> Meus Pedidos
-                    </Button>
+                    {customerCanViewOrders && (
+                      <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={handleOrdersClick}>
+                        <ClipboardList className="h-3.5 w-3.5" /> Meus Pedidos
+                      </Button>
+                    )}
                   </>
                 ) : null}
                 <ProfileButton />
@@ -852,7 +869,7 @@ export default function Cardapio() {
         items={[
           { key: 'menu', label: 'Cardápio', icon: UtensilsCrossed, active: true, onClick: () => { setActiveCategory(''); setSearch(''); scrollToTop(); } },
           { key: 'offers', label: 'Ofertas', icon: Tag, hidden: !hasOffers, onClick: goToOffers },
-          { key: 'orders', label: 'Pedidos', icon: ClipboardList, hidden: !customerConnected, onClick: handleOrdersClick },
+          { key: 'orders', label: 'Pedidos', icon: ClipboardList, hidden: !customerCanViewOrders, onClick: handleOrdersClick },
           { key: 'profile', label: customerConnected ? customerFirstName : 'Entrar', icon: customerConnected ? UserIcon : LogIn, onClick: handleProfileClick },
         ] as BottomNavItem[]}
       />
