@@ -53,6 +53,12 @@ const categoryKey = (name: string) =>
 const deviceTokenKey = (tenantId: string | undefined, phone: string) =>
   `cardapio_delivery_device_token_${tenantId || 'unknown'}_${phone}`;
 
+const hasCompleteSavedAddress = (address?: Address | null) => Boolean(
+  address?.street?.trim()
+  && address?.number?.trim()
+  && address?.neighborhood?.trim(),
+);
+
 function LoyaltyModal({ open, onClose, name, phone, onLogout }: { open: boolean; onClose: () => void; name: string; phone: string; onLogout: () => void }) {
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -166,7 +172,7 @@ export default function Cardapio() {
       setDeliveryPhone(digits);
       const profile = JSON.parse(localStorage.getItem(`cardapio_delivery_profile_${digits}`) || 'null') as { name?: string; address?: Address } | null;
       setDeliveryName(profile?.name?.trim() || 'Cliente');
-      if (profile?.address) setDeliveryAddress(profile.address);
+      if (profile?.address && hasCompleteSavedAddress(profile.address)) setDeliveryAddress(profile.address);
     } catch {
       clearDeliveryAccess();
     }
@@ -491,8 +497,12 @@ export default function Cardapio() {
   const handleOrdersClick = useCallback(() => {
     if (!restaurant) return;
     if (customerCanViewOrders) navigateDelivery(`/pedidos/${restaurant.slug}`);
-    else setAuthOpen(true);
-  }, [customerCanViewOrders, restaurant]);
+    else {
+      setAuthIdentifier(formatIdentifier(deliveryPhone));
+      setAuthErr('Confirme seu telefone para ativar o acompanhamento de pedidos neste aparelho.');
+      setAuthOpen(true);
+    }
+  }, [customerCanViewOrders, deliveryPhone, restaurant]);
 
   const handleProfileClick = useCallback(() => {
     if (customerConnected) setLoyaltyOpen(true);
@@ -633,7 +643,7 @@ export default function Cardapio() {
                     <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => setLoyaltyOpen(true)}>
                       <UserIcon className="h-3.5 w-3.5 text-primary" /> Minha conta
                     </Button>
-                    {customerCanViewOrders && (
+                    {customerConnected && (
                       <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={handleOrdersClick}>
                         <ClipboardList className="h-3.5 w-3.5" /> Meus Pedidos
                       </Button>
@@ -869,7 +879,7 @@ export default function Cardapio() {
         items={[
           { key: 'menu', label: 'Cardápio', icon: UtensilsCrossed, active: true, onClick: () => { setActiveCategory(''); setSearch(''); scrollToTop(); } },
           { key: 'offers', label: 'Ofertas', icon: Tag, hidden: !hasOffers, onClick: goToOffers },
-          { key: 'orders', label: 'Pedidos', icon: ClipboardList, hidden: !customerCanViewOrders, onClick: handleOrdersClick },
+          { key: 'orders', label: 'Pedidos', icon: ClipboardList, hidden: !customerConnected, onClick: handleOrdersClick },
           { key: 'profile', label: customerConnected ? customerFirstName : 'Entrar', icon: customerConnected ? UserIcon : LogIn, onClick: handleProfileClick },
         ] as BottomNavItem[]}
       />

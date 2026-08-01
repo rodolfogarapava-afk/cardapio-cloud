@@ -14,7 +14,7 @@ import { useCart } from '@/contexts/CartContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { getRestaurantBySlug } from '@/data/restaurants';
-import { PaymentMethod, Address } from '@/types';
+import { PaymentMethod, Address, DeliveryAddress } from '@/types';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { navigateDelivery } from '@/lib/deliveryNavigation';
@@ -44,6 +44,30 @@ const formatPhone = (value: string) => {
   if (digits.length <= 10) return digits.replace(/^(\d{2})(\d{4})(\d+)/, '($1) $2-$3');
   return digits.replace(/^(\d{2})(\d{5})(\d{1,4})$/, '($1) $2-$3');
 };
+
+const checkoutAddressFromCart = (address: DeliveryAddress | null): Address | undefined => {
+  if (!address) return undefined;
+  return {
+    id: 'cart-delivery-address',
+    label: 'Endereço de entrega',
+    street: address.street || '',
+    number: address.number || '',
+    complement: [address.complement, address.aptBloco, address.referencePoint].filter(Boolean).join(' · '),
+    neighborhood: address.neighborhood || '',
+    city: address.city || '',
+    state: address.state || '',
+    zipCode: '',
+    lat: address.lat,
+    lng: address.lng,
+    isDefault: true,
+  };
+};
+
+const isCompleteDeliveryAddress = (address?: Address | null) => Boolean(
+  address?.street?.trim()
+  && address?.number?.trim()
+  && address?.neighborhood?.trim(),
+);
 
 const brl = (v: number) => `R$ ${v.toFixed(2).replace('.', ',')}`;
 
@@ -113,7 +137,7 @@ function SectionHeader({ icon: Icon, step, title, hint }: { icon: React.ElementT
 
 export default function Checkout() {
   const { vendorSlug } = useParams<{ vendorSlug: string }>();
-  const { cart, clearCart, deliveryMode } = useCart();
+  const { cart, clearCart, deliveryMode, deliveryAddress } = useCart();
   const { user, addresses, getDefaultAddress } = useAuth();
   const restaurant = (vendorSlug ? getRestaurantBySlug(vendorSlug) : undefined)
     || getRestaurantBySlug('sabor-arte');
@@ -121,8 +145,9 @@ export default function Checkout() {
   const [name, setName] = useState(user?.name || '');
   const [phone, setPhone] = useState(user?.phone || '');
   const [cpf, setCpf] = useState('');
-  const [checkoutAddressList, setCheckoutAddressList] = useState<Address[]>(user ? addresses : []);
-  const [selectedAddress, setSelectedAddress] = useState<Address | undefined>(user ? getDefaultAddress() : undefined);
+  const initialCartAddress = checkoutAddressFromCart(deliveryAddress);
+  const [checkoutAddressList, setCheckoutAddressList] = useState<Address[]>(user ? addresses : initialCartAddress ? [initialCartAddress] : []);
+  const [selectedAddress, setSelectedAddress] = useState<Address | undefined>(user ? getDefaultAddress() : initialCartAddress);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('pix');
   const [changeAmount, setChangeAmount] = useState<number | undefined>();
   const [observation, setObservation] = useState('');
@@ -134,7 +159,7 @@ export default function Checkout() {
   const [mobileSummaryOpen, setMobileSummaryOpen] = useState(false);
   const [tenantId, setTenantId] = useState('');
   const [customerLookupMessage, setCustomerLookupMessage] = useState('');
-  const [lookupAddress, setLookupAddress] = useState<Address | null>(null);
+  const [lookupAddress, setLookupAddress] = useState<Address | null>(initialCartAddress || null);
   const [locating, setLocating] = useState(false);
   const [locationError, setLocationError] = useState('');
   const lookupRequest = useRef(0);
@@ -157,10 +182,18 @@ export default function Checkout() {
   const saveCustomerProfileOnDevice = (address?: Address, phoneValue = phone, nameValue = name) => {
     const digits = phoneDigits(phoneValue);
     if (digits.length < 10) return;
+    let existingAddress: Address | undefined;
+    try {
+      const existing = JSON.parse(localStorage.getItem(`cardapio_delivery_profile_${digits}`) || 'null') as { address?: Address } | null;
+      existingAddress = existing?.address;
+    } catch {
+      localStorage.removeItem(`cardapio_delivery_profile_${digits}`);
+    }
+    const addressToSave = address || existingAddress;
     localStorage.setItem(`cardapio_delivery_profile_${digits}`, JSON.stringify({
       name: nameValue.trim(),
       phone: digits,
-      ...(address ? { address } : {}),
+      ...(addressToSave ? { address: addressToSave } : {}),
       updatedAt: Date.now(),
     }));
   };
@@ -177,25 +210,26 @@ export default function Checkout() {
     }
     activePhoneDigits.current = digits;
     setPhone(formatted);
+    const cartAddress = checkoutAddressFromCart(deliveryAddress);
     setCustomerLookupMessage('');
-    setLookupAddress(null);
+    setLookupAddress(cartAddress || null);
+    if (cartAddress) setSelectedAddress(cartAddress);
     if (digits.length >= 10) {
       try {
         const currentAccess = readDeliveryAccess();
         if (currentAccess?.phone === digits) currentToken = currentAccess.token || '';
       } catch { /* armazenamento inválido será substituído */ }
-      saveDeliveryAccess({
-        ...readDeliveryAccess(),
-        phone: digits,
-        token: currentToken,
-      });
+      const currentAccess = readDeliveryAccess();
+      saveDeliveryAccess(currentAccess?.phone === digits
+        ? { ...currentAccess, phone: digits, token: currentToken }
+        : { phone: digits, token: '' });
       try {
         const localProfile = JSON.parse(localStorage.getItem(`cardapio_delivery_profile_${digits}`) || 'null') as {
           name?: string;
           address?: Address;
         } | null;
         if (localProfile?.name) setName(localProfile.name);
-        if (localProfile?.address) {
+        if (!cartAddress && isCompleteDeliveryAddress(localProfile?.address)) {
           setLookupAddress(localProfile.address);
           setSelectedAddress(localProfile.address);
           setCustomerLookupMessage('Endereço salvo neste aparelho preenchido automaticamente.');
@@ -234,9 +268,11 @@ export default function Checkout() {
           zipCode: '',
           isDefault: true,
         };
-        setLookupAddress(savedAddress);
-        setSelectedAddress(savedAddress);
-        saveCustomerProfileOnDevice(savedAddress, formatted, data.name || '');
+        if (!cartAddress && isCompleteDeliveryAddress(savedAddress)) {
+          setLookupAddress(savedAddress);
+          setSelectedAddress(savedAddress);
+        }
+        saveCustomerProfileOnDevice(isCompleteDeliveryAddress(savedAddress) ? savedAddress : cartAddress, formatted, data.name || '');
         setCustomerLookupMessage('Cadastro encontrado. Seus dados foram preenchidos automaticamente.');
       });
     }, 120);

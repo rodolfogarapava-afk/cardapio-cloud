@@ -8,7 +8,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
 // Fix default marker icon
-delete (L.Icon.Default.prototype as any)._getIconUrl;
+delete (L.Icon.Default.prototype as L.Icon.Default & { _getIconUrl?: unknown })._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
   iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
@@ -182,7 +182,11 @@ export function DeliveryAddressForm({ address, onSave }: DeliveryAddressFormProp
     setForm(prev => ({ ...prev, [field]: value }));
   };
 
-  const isValid = (form.lat && form.lng) || form.street;
+  const isValid = Boolean(
+    form.street.trim()
+    && form.number.trim()
+    && form.neighborhood.trim(),
+  );
 
   const handleSave = () => {
     if (!isValid) return;

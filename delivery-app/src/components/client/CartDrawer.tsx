@@ -34,6 +34,11 @@ export function CartDrawer({ className, onEditItem, onAddSuggestion, allProducts
   const [showAddressForm, setShowAddressForm] = useState(false);
   const [locating, setLocating] = useState(false);
   const [locationError, setLocationError] = useState('');
+  const deliveryAddressComplete = Boolean(
+    deliveryAddress?.street?.trim()
+    && deliveryAddress?.number?.trim()
+    && deliveryAddress?.neighborhood?.trim(),
+  );
 
   const useCurrentLocation = () => {
     setLocationError('');
@@ -91,6 +96,11 @@ export function CartDrawer({ className, onEditItem, onAddSuggestion, allProducts
     if (deliveryMode === 'pickup') {
       setShowPickupConfirm(true);
     } else {
+      if (!deliveryAddressComplete) {
+        setLocationError('Informe rua, número e bairro antes de continuar.');
+        setShowAddressForm(true);
+        return;
+      }
       setOpen(false);
       openCheckout(cart.restaurantSlug);
     }
@@ -211,7 +221,7 @@ export function CartDrawer({ className, onEditItem, onAddSuggestion, allProducts
             {/* Delivery address section */}
             {deliveryMode === 'delivery' && (
               <>
-                {deliveryAddress && !showAddressForm ? (
+                {deliveryAddressComplete && deliveryAddress && !showAddressForm ? (
                   <div className="border-b border-border px-5 py-3">
                     <div className="flex items-start gap-2">
                       <CheckCircle2 className="h-4 w-4 text-success shrink-0 mt-0.5" />

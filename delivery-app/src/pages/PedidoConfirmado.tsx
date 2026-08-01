@@ -286,10 +286,10 @@ export default function PedidoConfirmado() {
               </div>
               <span className={kitchenStatus !== 'new' ? 'font-semibold text-primary' : 'text-muted-foreground'}>Preparando</span>
             </div>
-            <div className={`flex-1 h-0.5 mx-2 ${kitchenStatus === 'ready' ? 'bg-primary' : 'bg-muted'}`} />
+            <div className={`flex-1 h-0.5 mx-2 ${kitchenStatus === 'ready' || kitchenStatus === 'completed' ? 'bg-primary' : 'bg-muted'}`} />
             <div className="flex flex-col items-center gap-1">
-              <div className={`h-8 w-8 rounded-full flex items-center justify-center ${kitchenStatus === 'ready' ? 'bg-primary' : 'bg-muted'}`}>
-                <MapPin className={`h-4 w-4 ${kitchenStatus === 'ready' ? 'text-primary-foreground' : 'text-muted-foreground'}`} />
+              <div className={`h-8 w-8 rounded-full flex items-center justify-center ${kitchenStatus === 'ready' || kitchenStatus === 'completed' ? 'bg-primary' : 'bg-muted'}`}>
+                <MapPin className={`h-4 w-4 ${kitchenStatus === 'ready' || kitchenStatus === 'completed' ? 'text-primary-foreground' : 'text-muted-foreground'}`} />
               </div>
               <span className={kitchenStatus === 'cancelled' ? 'font-semibold text-destructive' : kitchenStatus === 'ready' || kitchenStatus === 'completed' ? 'font-semibold text-primary' : 'text-muted-foreground'}>
                 {kitchenStatus === 'cancelled' ? 'Cancelado' : kitchenStatus === 'completed' ? 'Concluído' : 'Pronto'}

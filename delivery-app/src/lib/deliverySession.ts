@@ -9,7 +9,10 @@ export type DeliveryAccess = {
 const ACCESS_KEY = 'cardapio_delivery_access';
 
 export function readDeliveryAccess(): DeliveryAccess | null {
-  for (const storage of [window.localStorage, window.sessionStorage]) {
+  const storages: Storage[] = [];
+  try { storages.push(window.localStorage); } catch { /* armazenamento bloqueado */ }
+  try { storages.push(window.sessionStorage); } catch { /* armazenamento bloqueado */ }
+  for (const storage of storages) {
     try {
       const parsed = JSON.parse(storage.getItem(ACCESS_KEY) || 'null') as DeliveryAccess | null;
       if (parsed?.phone) return parsed;

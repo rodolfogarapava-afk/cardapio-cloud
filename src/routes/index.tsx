@@ -1392,6 +1392,7 @@ function IntegratedCommands({tenantId,commands,setCommands,sales,setSales,onChar
   const [recallPending,setRecallPending]=useState<IntegratedSale|null>(null);
   const [recalling,setRecalling]=useState(false);
   const [historyMessage,setHistoryMessage]=useState("");
+  const [flowMessage,setFlowMessage]=useState("");
   const editCategories=useMemo(()=>Array.from(new Set(products.map((product)=>product.category))),[products]);
   const [editCategory,setEditCategory]=useState(editCategories[0]||"");
   useEffect(()=>{
@@ -1536,8 +1537,25 @@ function IntegratedCommands({tenantId,commands,setCommands,sales,setSales,onChar
     if(usesPreparationPoint(product)){setEditDoneness("");setEditMeatNote("");setPendingEditMeat({command,product});return}
     setPendingProduct({command,product});
   };
-  const setKitchenStatus=(id:number,kitchenStatus:"new"|"preparing"|"ready")=>
-    setCommands((all)=>all.map((command)=>command.id===id?{...command,kitchenStatus}:command));
+  const setKitchenStatus=async(id:number,kitchenStatus:"new"|"preparing"|"ready")=>{
+    const current=commands.find((command)=>command.id===id);
+    if(!current)return;
+    const next={...current,kitchenStatus};
+    setFlowMessage("");
+    if(tenantId&&supabase){
+      const {error}=await supabase
+        .from("restaurant_commands")
+        .update({payload:next,updated_at:new Date().toISOString()})
+        .eq("tenant_id",tenantId)
+        .eq("id",id);
+      if(error){
+        console.error("Não foi possível atualizar a etapa da comanda:",error);
+        setFlowMessage("Não foi possível atualizar o pedido na nuvem. Verifique a conexão e tente novamente.");
+        return;
+      }
+    }
+    setCommands((all)=>all.map((command)=>command.id===id?next:command));
+  };
   const reprintCommand=(command:IntegratedCommand)=>{
     if(!tenantId){
       printKitchenTicket(command.name,command.items,command.waiterName);
@@ -1630,6 +1648,7 @@ function IntegratedCommands({tenantId,commands,setCommands,sales,setSales,onChar
   ];
   return <div className={`integrated-view kitchen-operations${kitchenMode?" is-focus-mode":""}`}>
     <div className="integrated-heading"><div><p>OPERAÇÃO · TEMPO REAL</p><h1>Comandas abertas</h1><span>Acompanhe preparo, entrega, impressão e cobrança sem sair do cardápio.</span></div><div className="kitchen-heading-actions"><b>{openCommandsCount} abertas</b><button onClick={()=>setHistoryOpen(true)}><History/> HISTÓRICO</button><button className="focus-toggle" onClick={()=>setKitchenMode((active)=>!active)}>{kitchenMode?<Minimize2/>:<Maximize2/>}{kitchenMode?"SAIR DO MODO COZINHA":"MODO COZINHA"}</button></div></div>
+    {flowMessage&&<div className="kitchen-system-alert danger" role="alert"><WifiOff/><div><b>ATUALIZAÇÃO NÃO ENVIADA</b><span>{flowMessage}</span></div></div>}
     <div className="kitchen-stats" aria-label="Resumo da operação">
       <article><small>AGUARDANDO</small><strong>{commands.filter((command)=>(command.kitchenStatus||"new")==="new").length}</strong></article>
       <article><small>EM PREPARO</small><strong>{commands.filter((command)=>command.kitchenStatus==="preparing").length}</strong></article>
@@ -1664,9 +1683,9 @@ function IntegratedCommands({tenantId,commands,setCommands,sales,setSales,onChar
         {command.delivery?.fulfillment==="pickup"&&<div className="command-delivery is-pickup"><b><Store/>RETIRADA NO BALCÃO</b>{command.delivery.phone&&<span><Phone/>{command.delivery.phone}</span>}{command.delivery.notes&&<small>OBS.: {command.delivery.notes}</small>}</div>}
         <div className="command-products">{command.items.map((item,index)=><label key={`${item.name}-${index}`}><input type="checkbox" disabled={column.id==="cancelled"} checked={item.delivered} onChange={()=>setCommands((all)=>all.map((c)=>c.id===command.id?{...c,items:c.items.map((x,i)=>i===index?{...x,delivered:!x.delivered}:x)}:c))}/><span><b>{item.qty}×</b> {item.name}{item.detail&&<small>{item.detail}</small>}</span><em>{column.id==="cancelled"?"Cancelado":item.delivered?"Entregue":column.id==="ready"?"Pronto":column.id==="new"?"Novo":"Preparando"}</em></label>)}</div>
         <div className="kitchen-flow-actions">
-          {column.id==="new"&&<button className="flow-main receive-order" onClick={()=>setKitchenStatus(command.id,"preparing")}>RECEBER E INICIAR PREPARO</button>}
-          {column.id==="preparing"&&<><button onClick={()=>setKitchenStatus(command.id,"new")}>VOLTAR</button><button className="flow-main" onClick={()=>setKitchenStatus(command.id,"ready")}>MARCAR PRONTO</button></>}
-          {column.id==="ready"&&<><button onClick={()=>setKitchenStatus(command.id,"preparing")}>VOLTAR</button><button className="flow-main" onClick={()=>onCharge(command)}>COBRAR / FINALIZAR</button></>}
+          {column.id==="new"&&<button className="flow-main receive-order" onClick={()=>void setKitchenStatus(command.id,"preparing")}>RECEBER E INICIAR PREPARO</button>}
+          {column.id==="preparing"&&<><button onClick={()=>void setKitchenStatus(command.id,"new")}>VOLTAR</button><button className="flow-main" onClick={()=>void setKitchenStatus(command.id,"ready")}>MARCAR PRONTO</button></>}
+          {column.id==="ready"&&<><button onClick={()=>void setKitchenStatus(command.id,"preparing")}>VOLTAR</button><button className="flow-main" onClick={()=>onCharge(command)}>COBRAR / FINALIZAR</button></>}
         </div>
         {column.id!=="cancelled"?<footer><button onClick={()=>{setEditing(command);setEditCategory((current)=>current||editCategories[0]||"")}}>EDITAR</button><button onClick={()=>reprintCommand(command)}>REIMPRIMIR</button><button className="danger" onClick={()=>setConfirmation({action:"cancel",command})}>CANCELAR</button></footer>:<footer><button className="danger" onClick={()=>setConfirmation({action:"dismiss",command})}>REMOVER DA LISTA</button></footer>}
       </article>):<div className="kitchen-column-empty"><ShoppingBag/><span>Nenhuma comanda</span></div>}</div>
