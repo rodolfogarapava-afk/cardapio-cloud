@@ -16,7 +16,6 @@ import { MobileBottomNav, BottomNavItem } from '@/components/client/MobileBottom
 import { OffersModal } from '@/components/client/OffersModal';
 import { RestaurantInfoModal } from '@/components/client/RestaurantInfoModal';
 import { RestaurantReviewsModal } from '@/components/client/RestaurantReviewsModal';
-import { MenuTour } from '@/components/client/MenuTour';
 import { getRestaurantBySlug, getCategoriesBySlug, getProductsBySlug } from '@/data/restaurants';
 import { Product, CartItem, ProductCategory, Restaurant, Address } from '@/types';
 import { isWithinSchedule } from '@/lib/availability';
@@ -525,12 +524,6 @@ export default function Cardapio() {
 
   return (
     <div className="min-h-screen bg-background pb-24 max-sm:pb-24">
-      <MenuTour
-        vendorSlug={restaurant.slug}
-        setCarouselEnabled={setCarouselEnabled}
-        setSearch={setSearch}
-        setCartOpen={setCartOpen}
-      />
       <header className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
         <div className="container py-3 sm:py-4">
           {/* Mobile */}
