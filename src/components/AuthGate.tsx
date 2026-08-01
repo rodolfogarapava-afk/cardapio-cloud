@@ -94,7 +94,7 @@ function LoginScreen({ area }: { area: "admin" | "cliente" | "sistema" }) {
   return (
     <main className="auth-screen">
       <section className="auth-brand-panel">
-        <div className="auth-brand"><span><ChefHat /></span><div><b>CARDÁPIO CLOUD</b><small>DEUS PROVEU ESPETINHOS</small></div></div>
+        <div className="auth-brand"><span><ChefHat /></span><div><b>CARDÁPIO CLOUD</b></div></div>
         <div className="auth-brand-copy">
           <p>ACESSO ADMINISTRATIVO</p>
           <h1>Gestão simples.<br />Operação sob controle.</h1>
