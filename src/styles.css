@@ -1059,6 +1059,49 @@ button { cursor:pointer;touch-action:manipulation; }
 }
 .client-menu-content.compact-menu .add-button svg { flex:0 0 auto;color:#151515; }
 
+/* Desktop do cardápio do cliente. As regras móveis abaixo permanecem independentes. */
+@media (min-width: 641px) {
+  .client-menu-content { padding:26px clamp(22px,3vw,42px) 100px; }
+  .client-menu-content .client-menu-toolbar {
+    position:relative;
+    z-index:10;
+    width:max-content;
+    min-height:40px;
+    margin:0 0 -48px auto;
+  }
+  .client-menu-content .menu-category-strip {
+    min-height:48px;
+    padding-right:210px;
+  }
+  .client-menu-content .intro { max-width:none; }
+  .client-menu-content .product-list,
+  .client-menu-content.compact-menu .product-list {
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    align-items:stretch;
+  }
+  .client-menu-content.compact-menu .product-card { min-height:168px; }
+  .client-menu-content.compact-menu .product-card .photo {
+    width:142px;
+    min-height:168px;
+  }
+  .client-menu-content.compact-menu .product-info { padding:18px 10px 17px 18px; }
+  .client-menu-content.compact-menu .product-info h2 { font-size:16px; }
+  .client-menu-content.compact-menu .product-info p { font-size:12px;line-height:1.5; }
+}
+
+@media (min-width: 641px) and (max-width: 1080px) {
+  .client-menu-content .product-list,
+  .client-menu-content.compact-menu .product-list { grid-template-columns:1fr; }
+  .client-menu-content.compact-menu .product-card { grid-template-columns:minmax(0,1fr) 180px; }
+  .client-menu-content.compact-menu .product-card .photo { width:180px; }
+}
+
+@media (min-width: 1580px) {
+  .client-menu-content.compact-menu .product-list { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .client-menu-content.compact-menu .product-card { grid-template-columns:minmax(0,1fr) 132px; }
+  .client-menu-content.compact-menu .product-card .photo { width:132px; }
+}
+
 @media (max-width: 920px) {
   .client-menu-content .product-list { grid-template-columns:1fr; }
   .client-menu-content .product-card { flex-direction:row; }
