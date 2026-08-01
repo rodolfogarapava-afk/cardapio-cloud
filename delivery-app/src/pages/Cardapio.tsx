@@ -237,7 +237,8 @@ export default function Cardapio() {
     setAuthLoading(true);
     try {
       const localProfile = JSON.parse(localStorage.getItem(`cardapio_delivery_profile_${d}`) || 'null') as { name?: string; address?: Address } | null;
-      let customer: any = localProfile?.name ? { name: localProfile.name, ...(localProfile.address || {}) } : null;
+      let customer: any = null;
+      let activeToken = '';
       const access = readDeliveryAccess();
       const rememberedToken = (access?.phone === d ? access.token || '' : '') || localStorage.getItem(deviceTokenKey(cloudCatalog?.tenantId, d)) || '';
       if (cloudCatalog?.tenantId) {
@@ -246,19 +247,34 @@ export default function Cardapio() {
           p_phone: d,
           p_access_token: rememberedToken,
         });
-        if (data?.name?.trim()) customer = data;
+        if (data?.name?.trim()) {
+          customer = data;
+          activeToken = rememberedToken;
+        } else {
+          const { data: activated, error: activationError } = await (supabase as any).rpc('activate_public_customer_access', {
+            p_tenant_id: cloudCatalog.tenantId,
+            p_phone: d,
+          });
+          if (activationError) throw activationError;
+          if (activated?.name?.trim() && activated?.accessToken) {
+            customer = activated;
+            activeToken = activated.accessToken;
+          }
+        }
+      } else if (localProfile?.name) {
+        customer = { name: localProfile.name, ...(localProfile.address || {}) };
       }
       if (customer?.name?.trim()) {
-        let savedAddress = localProfile?.address;
-        if (!localProfile?.name) {
-          savedAddress = {
-            id: `address-${Date.now()}`, label: 'Endereço cadastrado', isDefault: true,
-            street: customer.street || '', number: customer.number || '', neighborhood: customer.neighborhood || '',
-            complement: customer.reference || '', city: '', state: '', zipCode: '',
-          };
-          localStorage.setItem(`cardapio_delivery_profile_${d}`, JSON.stringify({ name: customer.name.trim(), phone: d, address: savedAddress, updatedAt: Date.now() }));
-        }
-        connectCustomer(d, customer.name.trim(), rememberedToken, savedAddress);
+        const savedAddress: Address = {
+          id: `address-${Date.now()}`, label: 'Endereço cadastrado', isDefault: true,
+          street: customer.street || localProfile?.address?.street || '',
+          number: customer.number || localProfile?.address?.number || '',
+          neighborhood: customer.neighborhood || localProfile?.address?.neighborhood || '',
+          complement: customer.reference || localProfile?.address?.complement || '',
+          city: localProfile?.address?.city || '', state: localProfile?.address?.state || '', zipCode: localProfile?.address?.zipCode || '',
+        };
+        localStorage.setItem(`cardapio_delivery_profile_${d}`, JSON.stringify({ name: customer.name.trim(), phone: d, address: savedAddress, updatedAt: Date.now() }));
+        connectCustomer(d, customer.name.trim(), activeToken || rememberedToken, savedAddress);
       } else {
         setAuthStep('register');
       }
