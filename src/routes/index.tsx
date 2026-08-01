@@ -454,16 +454,19 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
           systemView === "cash" ? <IntegratedCash sales={salesHistory} expenses={expenses} sync={operationsSync} onAddExpense={(description,amount) => setExpenses((all)=>[...all,{id:Date.now(),description,amount,createdAt:Date.now()}])} onDeleteExpense={(id)=>setExpenses((all)=>all.filter(expense=>expense.id!==id))} /> :
           systemView === "reports" ? <IntegratedReports sales={salesHistory} expenses={expenses} commands={savedCommands} sync={operationsSync} /> : <>
           {!categories.length && <div className="integrated-empty new-store-empty"><Store/><h3>{publicMenu ? "Cardápio em preparação" : "Seu cardápio está vazio"}</h3><p>{publicMenu ? "Esta loja ainda não publicou produtos." : "Esta é uma loja nova. Cadastre a primeira categoria e os produtos para começar."}</p>{!publicMenu && <button className="primary" onClick={()=>setSystemView("products")}>CADASTRAR PRODUTOS</button>}</div>}
-          {!publicMenu && !!categories.length && <div className="menu-layout-control">
-            <span><b>Imagens grandes</b><small>Alterne o formato dos produtos</small></span>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={!compactMenu}
-              className="menu-layout-switch"
-              onClick={()=>setCompactMenu((current)=>{const next=!current;window.localStorage.setItem(`${tenantStoragePrefix}-menu-layout`,next?"compact":"large");return next})}
-              aria-label="Alternar entre cards compactos e imagens grandes"
-            ><span /></button>
+          {!publicMenu && !!categories.length && <div className="client-menu-toolbar">
+            <label className="client-menu-search"><Search size={17}/><input value={query} onChange={(event)=>setQuery(event.target.value)} placeholder="Buscar no cardápio..." aria-label="Buscar no cardápio" /></label>
+            <div className="menu-layout-control">
+              <span><b>Imagens grandes</b><small>Alterne o formato dos produtos</small></span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={!compactMenu}
+                className="menu-layout-switch"
+                onClick={()=>setCompactMenu((current)=>{const next=!current;window.localStorage.setItem(`${tenantStoragePrefix}-menu-layout`,next?"compact":"large");return next})}
+                aria-label="Alternar entre cards compactos e imagens grandes"
+              ><span /></button>
+            </div>
           </div>}
           <div className="category-strip menu-category-strip" aria-label="Categorias do cardápio">
             {categories.map((category) => (
