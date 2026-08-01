@@ -614,7 +614,7 @@ export default function Checkout() {
           {/* COLUNA PRINCIPAL */}
           <div className="space-y-4">
             {/* 1. Dados */}
-            {isDelivery && <section className="rounded-2xl border bg-card p-5 lg:p-6">
+            <section className="rounded-2xl border bg-card p-5 lg:p-6">
               <SectionHeader icon={User} step={1} title="Seus dados" hint="Para identificar seu pedido" />
               <div className="space-y-3">
                 <div className="space-y-2">
@@ -633,10 +633,10 @@ export default function Checkout() {
                   </div>
                 </div>
               </div>
-            </section>}
+            </section>
 
             {/* 2. Endereço */}
-            <section className="rounded-2xl border bg-card p-5 lg:p-6">
+            {isDelivery && <section className="rounded-2xl border bg-card p-5 lg:p-6">
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">
                   <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-semibold shadow-sm">2</div>
@@ -697,7 +697,7 @@ export default function Checkout() {
                 {locating ? 'Buscando sua localização...' : 'Usar minha localização pelo GPS'}
               </Button>
               {locationError && <p className="mt-2 text-xs text-destructive">{locationError}</p>}
-            </section>
+            </section>}
 
             {/* 3. Pagamento + Cupom */}
             <section className="rounded-2xl border bg-card p-5 lg:p-6">
