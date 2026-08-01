@@ -1,14 +1,14 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { ShoppingCart, X, Plus, Minus, Trash2, Truck, Store, MapPin, CheckCircle2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useCart } from '@/contexts/CartContext';
-import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { Product, CartItem, DeliveryMode, DeliveryAddress } from '@/types';
 import { DeliveryAddressForm } from '@/components/client/DeliveryAddressForm';
+import { navigateDelivery } from '@/lib/deliveryNavigation';
 
 interface CartDrawerProps {
   className?: string;
@@ -21,7 +21,6 @@ interface CartDrawerProps {
 
 export function CartDrawer({ className, onEditItem, onAddSuggestion, allProducts = [], externalOpen, onExternalClose }: CartDrawerProps) {
   const { cart, itemCount, updateItemQuantity, removeItem, clearCart, deliveryMode, setDeliveryMode, deliveryAddress, setDeliveryAddress } = useCart();
-  const navigate = useNavigate();
   const [internalOpen, setInternalOpen] = useState(false);
   const open = externalOpen !== undefined ? externalOpen : internalOpen;
   const setOpen = (v: boolean) => {
@@ -98,15 +97,7 @@ export function CartDrawer({ className, onEditItem, onAddSuggestion, allProducts
   };
 
   const openCheckout = (restaurantSlug: string) => {
-    const target = `/checkout/${restaurantSlug}`;
-    navigate(target);
-
-    // O delivery roda dentro de um iframe. Alguns navegadores atualizam o hash
-    // sem renderizar a nova rota; a recarga preserva o carrinho na sessão e
-    // garante a abertura do checkout sem alterar a URL pública /delivery/loja.
-    window.setTimeout(() => {
-      window.location.reload();
-    }, 0);
+    navigateDelivery(`/checkout/${restaurantSlug}`);
   };
 
   const confirmPickupCheckout = () => {
@@ -146,6 +137,10 @@ export function CartDrawer({ className, onEditItem, onAddSuggestion, allProducts
       )}
 
       <SheetContent className="flex w-full flex-col p-0 sm:max-w-md gap-0 [&>button.absolute]:top-3.5 [&>button.absolute]:right-4">
+        <SheetHeader className="sr-only">
+          <SheetTitle>Resumo do pedido</SheetTitle>
+          <SheetDescription>Confira os itens e escolha entrega ou retirada antes de continuar.</SheetDescription>
+        </SheetHeader>
         {/* Header */}
         <div className="border-b border-border px-5 py-3.5 pr-12">
           <div className="flex items-center justify-between">

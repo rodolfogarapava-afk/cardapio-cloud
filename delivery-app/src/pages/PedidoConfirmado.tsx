@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
-import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, Clock, MapPin, ArrowRight, Home, FileText, IdCard, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { motion } from 'framer-motion';
 import { PAYMENT_METHOD_LABELS, PaymentMethod } from '@/types';
 import { supabase } from '@/integrations/supabase/client';
+import { navigateDelivery } from '@/lib/deliveryNavigation';
+import { readDeliveryAccess } from '@/lib/deliverySession';
 
 interface OrderItemSummary {
   productName: string;
@@ -37,7 +39,6 @@ const asPaymentMethod = (value: unknown): PaymentMethod =>
 
 export default function PedidoConfirmado() {
   const location = useLocation();
-  const navigate = useNavigate();
   const { orderNumber: routeOrderNumber } = useParams<{ orderNumber: string }>();
   const [searchParams] = useSearchParams();
   const navigationState = location.state as LocationState | null;
@@ -52,9 +53,7 @@ export default function PedidoConfirmado() {
     let active = true;
     const loadFromCloud = async () => {
       try {
-        const access = JSON.parse(localStorage.getItem('cardapio_delivery_access') || 'null') as {
-          phone?: string; token?: string; tenantId?: string; vendorSlug?: string;
-        } | null;
+        const access = readDeliveryAccess();
         if (!access?.phone || !access.token || !access.tenantId) return;
         const { data } = await (supabase as any).rpc('get_public_customer_orders', {
           p_tenant_id: access.tenantId, p_phone: access.phone, p_access_token: access.token,
@@ -93,7 +92,7 @@ export default function PedidoConfirmado() {
     let active = true;
 
     const refreshStatus = async () => {
-      const access = JSON.parse(localStorage.getItem('cardapio_delivery_access') || 'null') as { phone?: string; token?: string } | null;
+      const access = readDeliveryAccess();
       const { data, error } = await (supabase as any).rpc('get_public_order_status', {
         p_tenant_id: state.tenantId,
         p_order_id: state.orderId,
@@ -117,7 +116,7 @@ export default function PedidoConfirmado() {
     if (!state?.tenantId || !state.orderId || !state.customerPhone) return;
     setTrackingLoading(true);
     try {
-      const access = JSON.parse(localStorage.getItem('cardapio_delivery_access') || 'null') as { phone?: string; token?: string } | null;
+      const access = readDeliveryAccess();
       const { data } = await (supabase as any).rpc('get_public_order_status', {
         p_tenant_id: state.tenantId,
         p_order_id: state.orderId,
@@ -142,7 +141,7 @@ export default function PedidoConfirmado() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-4">
         <p className="text-lg text-muted-foreground text-center">Nenhum pedido encontrado</p>
-        <Button onClick={() => navigate('/cardapio/proveu-espeto')}>Voltar ao cardápio</Button>
+        <Button onClick={() => navigateDelivery('/cardapio/proveu-espeto')}>Voltar ao cardápio</Button>
       </div>
     );
   }
@@ -317,7 +316,7 @@ export default function PedidoConfirmado() {
               <ArrowRight className="h-4 w-4" />
             </Button>
           )}
-          <Button className="flex-1 gap-2" onClick={() => navigate(`/cardapio/${state.vendorSlug || 'proveu-espeto'}`)}>
+          <Button className="flex-1 gap-2" onClick={() => navigateDelivery(`/cardapio/${state.vendorSlug || 'proveu-espeto'}`)}>
             <Home className="h-4 w-4" />
             Voltar ao Início
           </Button>

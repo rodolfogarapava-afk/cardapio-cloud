@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, ChevronRight, Clock3, Loader2, ShoppingBag, XCircle } from 'lucide-react';
+import { useParams } from 'react-router-dom';
+import { AlertCircle, ArrowLeft, ChevronRight, Clock3, Loader2, ShoppingBag, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -8,6 +8,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { navigateDelivery } from '@/lib/deliveryNavigation';
+import { readDeliveryAccess } from '@/lib/deliverySession';
 
 type SavedOrder = {
   orderNumber: string;
@@ -30,17 +32,18 @@ const statusText = {
 } as const;
 
 export default function MeusPedidos() {
-  const navigate = useNavigate();
   const { vendorSlug = 'proveu-espeto' } = useParams<{ vendorSlug: string }>();
   const [orders, setOrders] = useState<SavedOrder[]>([]);
   const [statuses, setStatuses] = useState<Record<string, keyof typeof statusText>>({});
   const [cancelOrder, setCancelOrder] = useState<SavedOrder | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
   const confirmCancellation = async () => {
     if (!cancelOrder?.orderId || !cancelOrder.tenantId || !cancelOrder.customerPhone) return;
     setCancelling(true);
-    const access = JSON.parse(localStorage.getItem('cardapio_delivery_access') || 'null') as { phone?: string; token?: string } | null;
+    const access = readDeliveryAccess();
     const { data, error } = await (supabase as any).rpc('cancel_public_order', {
       p_tenant_id: cancelOrder.tenantId,
       p_order_id: cancelOrder.orderId,
@@ -65,13 +68,17 @@ export default function MeusPedidos() {
     let active = true;
     const refresh = async () => {
       try {
-        const access = JSON.parse(localStorage.getItem('cardapio_delivery_access') || 'null') as { phone?: string; token?: string } | null;
-        if (!access?.phone || !access.token) return;
+        const access = readDeliveryAccess();
+        if (!access?.phone || !access.token) {
+          if (active) setLoadError('Entre com seu telefone para consultar os pedidos desta loja.');
+          return;
+        }
         const { data: menu } = await (supabase as any).rpc('get_public_menu', { p_slug: vendorSlug });
-        if (!menu?.tenantId) return;
-        const { data } = await (supabase as any).rpc('get_public_customer_orders', {
+        if (!menu?.tenantId) throw new Error('Loja indisponível no momento.');
+        const { data, error } = await (supabase as any).rpc('get_public_customer_orders', {
           p_tenant_id: menu.tenantId, p_phone: access.phone, p_access_token: access.token,
         });
+        if (error) throw error;
         if (!active || !Array.isArray(data)) return;
         const loaded: SavedOrder[] = data.map((row: any) => {
           const payload = row.payload || {};
@@ -103,8 +110,11 @@ export default function MeusPedidos() {
           `ORD-${String(row.id).slice(-6)}`,
           statusText[row.status as keyof typeof statusText] ? row.status : 'new',
         ])));
-      } catch {
-        // Mantém a tela estável enquanto a conexão é restabelecida.
+        setLoadError('');
+      } catch (error) {
+        if (active) setLoadError(error instanceof Error ? error.message : 'Não foi possível carregar seus pedidos.');
+      } finally {
+        if (active) setLoading(false);
       }
     };
     void refresh();
@@ -119,7 +129,7 @@ export default function MeusPedidos() {
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
         <div className="mx-auto flex h-16 w-full max-w-2xl items-center gap-3 px-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate(`/cardapio/${vendorSlug}`)} aria-label="Voltar">
+          <Button variant="ghost" size="icon" onClick={() => navigateDelivery(`/cardapio/${vendorSlug}`)} aria-label="Voltar">
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
@@ -130,14 +140,28 @@ export default function MeusPedidos() {
       </header>
 
       <main className="mx-auto w-full max-w-2xl space-y-3 px-4 py-5">
-        {!orders.length ? (
+        {loading ? (
+          <section className="flex min-h-[55vh] flex-col items-center justify-center gap-3 text-center">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-sm text-muted-foreground">Carregando seus pedidos...</p>
+          </section>
+        ) : loadError ? (
+          <section className="flex min-h-[55vh] flex-col items-center justify-center text-center">
+            <span className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+              <AlertCircle className="h-8 w-8" />
+            </span>
+            <h2 className="text-lg font-bold">Não foi possível abrir seus pedidos</h2>
+            <p className="mt-1 max-w-xs text-sm text-muted-foreground">{loadError}</p>
+            <Button className="mt-5" onClick={() => navigateDelivery(`/cardapio/${vendorSlug}`)}>Voltar ao cardápio</Button>
+          </section>
+        ) : !orders.length ? (
           <section className="flex min-h-[55vh] flex-col items-center justify-center text-center">
             <span className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
               <ShoppingBag className="h-8 w-8" />
             </span>
             <h2 className="text-lg font-bold">Nenhum pedido encontrado</h2>
             <p className="mt-1 max-w-xs text-sm text-muted-foreground">Os pedidos realizados com seu telefone aparecerão aqui.</p>
-            <Button className="mt-5" onClick={() => navigate(`/cardapio/${vendorSlug}`)}>Ver cardápio</Button>
+            <Button className="mt-5" onClick={() => navigateDelivery(`/cardapio/${vendorSlug}`)}>Ver cardápio</Button>
           </section>
         ) : orders.map(order => {
           const status = statuses[order.orderNumber] || 'new';
@@ -145,7 +169,7 @@ export default function MeusPedidos() {
             <article key={order.orderNumber} className="w-full overflow-hidden rounded-2xl border bg-card shadow-sm">
               <button
                 type="button"
-                onClick={() => navigate(`/pedido/${order.orderId}?loja=${encodeURIComponent(vendorSlug)}`, { state: order.trackingState })}
+                onClick={() => navigateDelivery(`/pedido/${order.orderId}?loja=${encodeURIComponent(vendorSlug)}`, order.trackingState)}
                 className="w-full p-4 text-left transition-colors hover:bg-muted/30"
               >
                 <div className="flex items-start justify-between gap-3">

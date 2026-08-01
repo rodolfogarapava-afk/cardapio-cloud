@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import {
   ArrowLeft, MapPin, Plus, Edit2, Trash2, X, Banknote,
   ShieldCheck, Clock, Lock, Tag, ChevronDown, User, CreditCard, FileText, CheckCircle2, Navigation, Loader2,
@@ -17,6 +17,8 @@ import { getRestaurantBySlug } from '@/data/restaurants';
 import { PaymentMethod, Address } from '@/types';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { navigateDelivery } from '@/lib/deliveryNavigation';
+import { readDeliveryAccess, saveDeliveryAccess } from '@/lib/deliverySession';
 
 interface AddressFormData {
   label: string;
@@ -111,7 +113,6 @@ function SectionHeader({ icon: Icon, step, title, hint }: { icon: React.ElementT
 
 export default function Checkout() {
   const { vendorSlug } = useParams<{ vendorSlug: string }>();
-  const navigate = useNavigate();
   const { cart, clearCart, deliveryMode } = useCart();
   const { user, addresses, getDefaultAddress } = useAuth();
   const restaurant = (vendorSlug ? getRestaurantBySlug(vendorSlug) : undefined)
@@ -153,13 +154,13 @@ export default function Checkout() {
     };
   }, [vendorSlug]);
 
-  const saveCustomerProfileOnDevice = (address: Address, phoneValue = phone, nameValue = name) => {
+  const saveCustomerProfileOnDevice = (address?: Address, phoneValue = phone, nameValue = name) => {
     const digits = phoneDigits(phoneValue);
     if (digits.length < 10) return;
     localStorage.setItem(`cardapio_delivery_profile_${digits}`, JSON.stringify({
       name: nameValue.trim(),
       phone: digits,
-      address,
+      ...(address ? { address } : {}),
       updatedAt: Date.now(),
     }));
   };
@@ -180,14 +181,14 @@ export default function Checkout() {
     setLookupAddress(null);
     if (digits.length >= 10) {
       try {
-        const currentAccess = JSON.parse(localStorage.getItem('cardapio_delivery_access') || 'null') as { phone?: string; token?: string } | null;
+        const currentAccess = readDeliveryAccess();
         if (currentAccess?.phone === digits) currentToken = currentAccess.token || '';
       } catch { /* armazenamento inválido será substituído */ }
-      localStorage.setItem('cardapio_delivery_access', JSON.stringify({
+      saveDeliveryAccess({
+        ...readDeliveryAccess(),
         phone: digits,
         token: currentToken,
-        updatedAt: Date.now(),
-      }));
+      });
       try {
         const localProfile = JSON.parse(localStorage.getItem(`cardapio_delivery_profile_${digits}`) || 'null') as {
           name?: string;
@@ -245,17 +246,14 @@ export default function Checkout() {
     if (!tenantId || restoredAccess.current) return;
     restoredAccess.current = true;
     try {
-      const access = JSON.parse(localStorage.getItem('cardapio_delivery_access') || 'null') as {
-        phone?: string;
-        token?: string;
-      } | null;
+      const access = readDeliveryAccess();
       const digits = phoneDigits(access?.phone || '');
       if (digits.length >= 10) {
         handlePhoneChange(digits);
         setCustomerLookupMessage('Você continua conectado. Atualizando seus dados...');
       }
     } catch {
-      localStorage.removeItem('cardapio_delivery_access');
+      // A sessão inválida será substituída quando o telefone for informado.
     }
   }, [tenantId]);
 
@@ -271,7 +269,26 @@ export default function Checkout() {
     : 0;
   const total = Math.max(0, subtotal + deliveryFee - (appliedCoupon?.code === 'FRETEGRATIS' ? 0 : discount));
 
-  const isValid = name.trim() && phone.trim() && (!isDelivery || selectedAddress) && cart && cart.items.length > 0;
+  const phoneIsValid = phoneDigits(phone).length >= 10;
+  const addressIsValid = !isDelivery || Boolean(
+    selectedAddress?.street?.trim()
+    && selectedAddress?.number?.trim()
+    && selectedAddress?.neighborhood?.trim(),
+  );
+  const isValid = Boolean(
+    name.trim().length >= 2
+    && phoneIsValid
+    && addressIsValid
+    && cart
+    && cart.items.length > 0,
+  );
+  const checkoutValidationMessage = !phoneIsValid
+    ? 'Informe um telefone válido com DDD.'
+    : name.trim().length < 2
+      ? 'Informe o nome do cliente.'
+      : !addressIsValid
+        ? 'Selecione ou cadastre um endereço completo para entrega.'
+        : '';
   const changeNeeded = paymentMethod === 'cash' && changeAmount ? changeAmount - total : null;
 
   const handleApplyCoupon = () => {
@@ -358,8 +375,9 @@ export default function Checkout() {
   };
 
   const handleSubmit = async () => {
-    if (!isValid || !cart || !restaurant) return;
+    if (isSubmitting || !isValid || !cart || !restaurant) return;
     setIsSubmitting(true);
+    try {
     const orderNumber = `ORD-${Date.now().toString().slice(-6)}`;
     const orderItems = cart.items.map(i => ({
       productName: i.productName,
@@ -393,7 +411,7 @@ export default function Checkout() {
     }));
     let currentAccessToken = '';
     try {
-      const access = JSON.parse(localStorage.getItem('cardapio_delivery_access') || 'null') as { phone?: string; token?: string } | null;
+      const access = readDeliveryAccess();
       if (access?.phone === phoneDigits(phone)) currentAccessToken = access.token || '';
     } catch { /* um novo token será emitido após o pedido */ }
     const { data: orderResult, error: orderError } = await (supabase as any).rpc('submit_public_order', {
@@ -428,6 +446,7 @@ export default function Checkout() {
       return;
     }
     const savedOrderId = Number(orderResult?.id);
+    if (!Number.isFinite(savedOrderId)) throw new Error('O servidor não retornou a identificação do pedido.');
     const authoritativeTotal = Number(orderResult?.total ?? total);
     const publicOrderNumber = Number.isFinite(savedOrderId)
       ? `ORD-${String(savedOrderId).slice(-6)}`
@@ -456,26 +475,33 @@ export default function Checkout() {
       latestDeviceToken = localStorage.getItem(`cardapio_delivery_device_token_${tenantId}_${phoneDigits(phone)}`) || '';
     } catch { /* armazenamento indisponivel; o token da resposta ainda sera usado */ }
     const issuedToken = orderResult?.customerToken || currentAccessToken || latestDeviceToken;
-    localStorage.setItem('cardapio_delivery_access', JSON.stringify({
+    saveDeliveryAccess({
       phone: phoneDigits(phone),
       tenantId,
       vendorSlug: vendorSlug || 'proveu-espeto',
       token: issuedToken,
-      updatedAt: Date.now(),
-    }));
+    });
     if (issuedToken) localStorage.setItem(`cardapio_delivery_device_token_${tenantId}_${phoneDigits(phone)}`, issuedToken);
-    if (selectedAddress) saveCustomerProfileOnDevice(selectedAddress);
+    saveCustomerProfileOnDevice(selectedAddress);
     clearCart();
-    navigate(`/pedido/${savedOrderId}?loja=${encodeURIComponent(vendorSlug || 'proveu-espeto')}`, { state: trackingState });
+    navigateDelivery(`/pedido/${savedOrderId}?loja=${encodeURIComponent(vendorSlug || 'proveu-espeto')}`, trackingState);
     toast({ title: 'Pedido enviado!', description: `Seu pedido ${publicOrderNumber} foi recebido.` });
-    setIsSubmitting(false);
+    } catch (error) {
+      toast({
+        title: 'Não foi possível enviar o pedido',
+        description: error instanceof Error ? error.message : 'Verifique sua conexão e tente novamente.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (!cart || cart.items.length === 0) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-4">
         <p className="text-lg text-muted-foreground text-center">Seu carrinho está vazio</p>
-        <Button onClick={() => navigate(`/cardapio/${vendorSlug || 'sabor-arte'}`)}>Voltar ao cardápio</Button>
+        <Button onClick={() => navigateDelivery(`/cardapio/${vendorSlug || 'sabor-arte'}`)}>Voltar ao cardápio</Button>
       </div>
     );
   }
@@ -484,7 +510,7 @@ export default function Checkout() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-4">
         <p className="text-lg text-muted-foreground text-center">Restaurante não encontrado</p>
-        <Button onClick={() => navigate(`/cardapio/${vendorSlug || 'sabor-arte'}`)}>Voltar ao cardápio</Button>
+        <Button onClick={() => navigateDelivery(`/cardapio/${vendorSlug || 'sabor-arte'}`)}>Voltar ao cardápio</Button>
       </div>
     );
   }
@@ -583,7 +609,7 @@ export default function Checkout() {
       {/* Header */}
       <header className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
         <div className="container flex items-center gap-3 py-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+          <Button variant="ghost" size="icon" onClick={() => navigateDelivery(`/cardapio/${vendorSlug || 'sabor-arte'}`)}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div className="flex-1 min-w-0">
@@ -795,6 +821,7 @@ export default function Checkout() {
               >
                 {isSubmitting ? 'Enviando…' : `Confirmar pedido · ${brl(total)}`}
               </Button>
+              {checkoutValidationMessage && <p className="text-center text-xs text-destructive">{checkoutValidationMessage}</p>}
               <p className="text-[11px] text-center text-muted-foreground px-4">
                 Ao confirmar, você concorda com os termos da loja e da plataforma.
               </p>
@@ -814,6 +841,7 @@ export default function Checkout() {
           >
             {isSubmitting ? 'Enviando…' : `Confirmar · ${brl(total)}`}
           </Button>
+          {checkoutValidationMessage && <p className="mt-2 text-center text-[11px] text-destructive">{checkoutValidationMessage}</p>}
           <p className="text-[10px] text-center text-muted-foreground mt-2">
             Ao confirmar, você concorda com os termos da loja e da plataforma.
           </p>

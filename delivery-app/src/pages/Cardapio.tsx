@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
+import { useParams, useLocation } from 'react-router-dom';
 import { Clock, Star, Search, ShoppingCart, GalleryHorizontal, X, ArrowUp, User as UserIcon, LogIn, LogOut, MapPin, ArrowRight, UtensilsCrossed, Tag, ClipboardList, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -21,9 +21,10 @@ import { Product, CartItem, ProductCategory, Restaurant, Address } from '@/types
 import { isWithinSchedule } from '@/lib/availability';
 import { useCart } from '@/contexts/CartContext';
 import { supabase } from '@/integrations/supabase/client';
+import { navigateDelivery } from '@/lib/deliveryNavigation';
+import { clearDeliveryAccess, readDeliveryAccess, saveDeliveryAccess } from '@/lib/deliverySession';
 
 import { useAuth } from '@/contexts/AuthContext';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { motion, AnimatePresence } from 'framer-motion';
 
 type CloudProduct = {
@@ -81,7 +82,6 @@ function LoyaltyModal({ open, onClose, name, phone, onLogout }: { open: boolean;
 
 export default function Cardapio() {
   const { vendorSlug } = useParams<{ vendorSlug: string }>();
-  const navigate = useNavigate();
   const { cart, itemCount, setDeliveryFee, deliveryMode, setDeliveryAddress } = useCart();
   const { user, isAuthenticated, logout } = useAuth();
   const [authOpen, setAuthOpen] = useState(false);
@@ -98,8 +98,20 @@ export default function Cardapio() {
   const [authLoading, setAuthLoading] = useState(false);
   const [cloudCatalog, setCloudCatalog] = useState<CloudCatalog | null>(null);
   const [catalogError, setCatalogError] = useState('');
-  const [deliveryPhone, setDeliveryPhone] = useState('');
-  const [deliveryName, setDeliveryName] = useState('');
+  const [storedIdentity] = useState(() => {
+    try {
+      const access = readDeliveryAccess();
+      const phone = (access?.phone || '').replace(/\D/g, '');
+      const profile = phone.length >= 10
+        ? JSON.parse(localStorage.getItem(`cardapio_delivery_profile_${phone}`) || 'null') as { name?: string } | null
+        : null;
+      return { phone: phone.length >= 10 ? phone : '', name: profile?.name?.trim() || '' };
+    } catch {
+      return { phone: '', name: '' };
+    }
+  });
+  const [deliveryPhone, setDeliveryPhone] = useState(storedIdentity.phone);
+  const [deliveryName, setDeliveryName] = useState(storedIdentity.name);
 
   useEffect(() => {
     let active = true;
@@ -135,7 +147,7 @@ export default function Cardapio() {
 
   useEffect(() => {
     try {
-      const access = JSON.parse(localStorage.getItem('cardapio_delivery_access') || 'null') as { phone?: string; token?: string } | null;
+      const access = readDeliveryAccess();
       const digits = (access?.phone || '').replace(/\D/g, '');
       if (digits.length < 10) return;
       if (access?.token) localStorage.setItem(deviceTokenKey(cloudCatalog?.tenantId, digits), access.token);
@@ -144,7 +156,7 @@ export default function Cardapio() {
       setDeliveryName(profile?.name?.trim() || 'Cliente');
       if (profile?.address) setDeliveryAddress(profile.address);
     } catch {
-      localStorage.removeItem('cardapio_delivery_access');
+      clearDeliveryAccess();
     }
   }, [cloudCatalog?.tenantId, setDeliveryAddress]);
 
@@ -185,9 +197,9 @@ export default function Cardapio() {
 
   const connectCustomer = (phone: string, name: string, token = '', address?: Address) => {
     const rememberedToken = token || localStorage.getItem(deviceTokenKey(cloudCatalog?.tenantId, phone)) || '';
-    localStorage.setItem('cardapio_delivery_access', JSON.stringify({
+    saveDeliveryAccess({
       phone, tenantId: cloudCatalog?.tenantId, vendorSlug, token: rememberedToken, updatedAt: Date.now(),
-    }));
+    });
     if (rememberedToken) localStorage.setItem(deviceTokenKey(cloudCatalog?.tenantId, phone), rememberedToken);
     setDeliveryPhone(phone);
     setDeliveryName(name);
@@ -207,7 +219,7 @@ export default function Cardapio() {
     try {
       const localProfile = JSON.parse(localStorage.getItem(`cardapio_delivery_profile_${d}`) || 'null') as { name?: string; address?: Address } | null;
       let customer: any = localProfile?.name ? { name: localProfile.name, ...(localProfile.address || {}) } : null;
-      const access = JSON.parse(localStorage.getItem('cardapio_delivery_access') || 'null') as { phone?: string; token?: string } | null;
+      const access = readDeliveryAccess();
       const rememberedToken = (access?.phone === d ? access.token || '' : '') || localStorage.getItem(deviceTokenKey(cloudCatalog?.tenantId, d)) || '';
       if (cloudCatalog?.tenantId) {
         const { data } = await (supabase as any).rpc('get_public_customer', {
@@ -260,26 +272,18 @@ export default function Cardapio() {
   const customerFirstName = user?.name.split(' ')[0] || deliveryName.split(' ')[0] || 'Cliente';
 
   const ProfileButton = ({ compact = false }: { compact?: boolean }) => (
-    isAuthenticated && user ? (
-      <Popover>
-        <PopoverTrigger asChild>
-          <Button variant="outline" size={compact ? 'icon' : 'sm'} className={compact ? 'h-9 w-9 shrink-0' : 'gap-1.5 text-xs'}>
-            <div className="h-5 w-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-semibold">
-              {user.name.charAt(0).toUpperCase()}
-            </div>
-            {!compact && <span className="truncate max-w-[80px]">{user.name.split(' ')[0]}</span>}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent align="end" className="w-56 p-2">
-          <div className="px-2 py-1.5 border-b mb-1">
-            <p className="text-sm font-medium truncate">{user.name}</p>
-            <p className="text-xs text-muted-foreground truncate">{user.email}</p>
-          </div>
-          <button onClick={() => { logout(); }} className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded-md hover:bg-muted text-destructive">
-            <LogOut className="h-3.5 w-3.5" /> Sair
-          </button>
-        </PopoverContent>
-      </Popover>
+    customerConnected ? (
+      <Button
+        variant="outline"
+        size={compact ? 'icon' : 'sm'}
+        onClick={() => setLoyaltyOpen(true)}
+        className={compact ? 'h-9 w-9 shrink-0' : 'gap-1.5 text-xs'}
+      >
+        <div className="h-5 w-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-semibold">
+          {customerFirstName.charAt(0).toUpperCase()}
+        </div>
+        {!compact && <span className="truncate max-w-[80px]">{customerFirstName}</span>}
+      </Button>
     ) : (
       <Button variant="outline" size={compact ? 'icon' : 'sm'} onClick={() => setAuthOpen(true)} className={compact ? 'h-9 w-9 shrink-0' : 'gap-1.5 text-xs'}>
         <LogIn className="h-3.5 w-3.5" />
@@ -472,9 +476,9 @@ export default function Cardapio() {
 
   const handleOrdersClick = useCallback(() => {
     if (!restaurant) return;
-    if (customerConnected) navigate(`/pedidos/${restaurant.slug}`);
+    if (customerConnected) navigateDelivery(`/pedidos/${restaurant.slug}`);
     else setAuthOpen(true);
-  }, [customerConnected, navigate, restaurant]);
+  }, [customerConnected, restaurant]);
 
   const handleProfileClick = useCallback(() => {
     if (customerConnected) setLoyaltyOpen(true);
@@ -483,11 +487,11 @@ export default function Cardapio() {
 
   const handleCustomerLogout = useCallback(() => {
     try {
-      const access = JSON.parse(localStorage.getItem('cardapio_delivery_access') || 'null') as { phone?: string; token?: string; tenantId?: string } | null;
+      const access = readDeliveryAccess();
       if (access?.phone && access.token) localStorage.setItem(deviceTokenKey(access.tenantId, access.phone), access.token);
     } catch { /* a sessão inválida será descartada */ }
     logout();
-    localStorage.removeItem('cardapio_delivery_access');
+    clearDeliveryAccess();
     setDeliveryPhone('');
     setDeliveryName('');
     setDeliveryAddress(null);
@@ -517,7 +521,7 @@ export default function Cardapio() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4">
         <p className="text-lg text-muted-foreground">Restaurante não encontrado</p>
-        <Button onClick={() => navigate('/cardapio/sabor-arte')}>Voltar ao cardápio</Button>
+        <Button onClick={() => navigateDelivery('/cardapio/sabor-arte')}>Voltar ao cardápio</Button>
       </div>
     );
   }
@@ -609,14 +613,14 @@ export default function Cardapio() {
                     <Tag className="h-3.5 w-3.5 text-primary" /> Ofertas
                   </Button>
                 )}
-                {isAuthenticated ? (
+                {customerConnected ? (
                   <>
                     <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => setLoyaltyOpen(true)}>
                       <UserIcon className="h-3.5 w-3.5 text-primary" /> Minha conta
                     </Button>
-                    <Link to={`/historico/${restaurant.slug}`}>
-                      <Button variant="outline" size="sm" className="gap-1.5 text-xs"><ClipboardList className="h-3.5 w-3.5" /> Meus Pedidos</Button>
-                    </Link>
+                    <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={handleOrdersClick}>
+                      <ClipboardList className="h-3.5 w-3.5" /> Meus Pedidos
+                    </Button>
                   </>
                 ) : null}
                 <ProfileButton />
