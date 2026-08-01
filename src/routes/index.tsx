@@ -143,6 +143,7 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
   const [menuOpen, setMenuOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
+  const [compactMenu, setCompactMenu] = useState(true);
   const [stars, setStars] = useState(0);
   const [sent, setSent] = useState(false);
   const [customerName, setCustomerName] = useState("");
@@ -167,6 +168,7 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
   useEffect(() => {
     if (publicCatalog) return;
     setWaiterName(window.localStorage.getItem(`${tenantStoragePrefix}-waiter-name`) || "");
+    setCompactMenu(window.localStorage.getItem(`${tenantStoragePrefix}-menu-layout`) !== "large");
   }, [publicCatalog, tenantStoragePrefix]);
 
   useEffect(() => {
@@ -444,7 +446,7 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
           </div>
         </aside>}
 
-        <section className={`content${!publicMenu && systemView === null && (!tenantNavigation || tenantNavigation.page === "operation") ? " client-menu-content" : ""}`}>
+        <section className={`content${!publicMenu && systemView === null && (!tenantNavigation || tenantNavigation.page === "operation") ? ` client-menu-content${compactMenu ? " compact-menu" : ""}` : ""}`}>
           {tenantNavigation && tenantNavigation.page !== "operation" ? tenantNavigation.content :
           systemView === "products" ? <IntegratedProducts tenantId={tenantNavigation?.tenantId} products={products} categories={categories} onChange={persistProducts} onAddCategory={(name)=>persistCategories([...categories,name])} onRenameCategory={renameCategory} onDeleteCategory={(name)=>{const next=categories.filter((c)=>c!==name);persistCategories(next);if(activeMain===name)setActiveMain(next[0]||"")}} /> :
           systemView === "stock" ? <IntegratedStock products={products} onChange={persistProducts} /> :
@@ -452,6 +454,17 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
           systemView === "cash" ? <IntegratedCash sales={salesHistory} expenses={expenses} sync={operationsSync} onAddExpense={(description,amount) => setExpenses((all)=>[...all,{id:Date.now(),description,amount,createdAt:Date.now()}])} onDeleteExpense={(id)=>setExpenses((all)=>all.filter(expense=>expense.id!==id))} /> :
           systemView === "reports" ? <IntegratedReports sales={salesHistory} expenses={expenses} commands={savedCommands} sync={operationsSync} /> : <>
           {!categories.length && <div className="integrated-empty new-store-empty"><Store/><h3>{publicMenu ? "Cardápio em preparação" : "Seu cardápio está vazio"}</h3><p>{publicMenu ? "Esta loja ainda não publicou produtos." : "Esta é uma loja nova. Cadastre a primeira categoria e os produtos para começar."}</p>{!publicMenu && <button className="primary" onClick={()=>setSystemView("products")}>CADASTRAR PRODUTOS</button>}</div>}
+          {!publicMenu && !!categories.length && <div className="menu-layout-control">
+            <span><b>Imagens grandes</b><small>Alterne o formato dos produtos</small></span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={!compactMenu}
+              className="menu-layout-switch"
+              onClick={()=>setCompactMenu((current)=>{const next=!current;window.localStorage.setItem(`${tenantStoragePrefix}-menu-layout`,next?"compact":"large");return next})}
+              aria-label="Alternar entre cards compactos e imagens grandes"
+            ><span /></button>
+          </div>}
           <div className="category-strip menu-category-strip" aria-label="Categorias do cardápio">
             {categories.map((category) => (
               <button
