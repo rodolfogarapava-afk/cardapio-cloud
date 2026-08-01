@@ -203,6 +203,7 @@ export default function Checkout() {
     const digits = phoneDigits(value);
     const requestId = ++lookupRequest.current;
     let currentToken = '';
+    let deviceProfile: { name?: string; address?: Address } | null = null;
     if (activePhoneDigits.current && activePhoneDigits.current !== digits) {
       setName('');
       setSelectedAddress(undefined);
@@ -224,14 +225,14 @@ export default function Checkout() {
         ? { ...currentAccess, phone: digits, token: currentToken }
         : { phone: digits, token: '' });
       try {
-        const localProfile = JSON.parse(localStorage.getItem(`cardapio_delivery_profile_${digits}`) || 'null') as {
+        deviceProfile = JSON.parse(localStorage.getItem(`cardapio_delivery_profile_${digits}`) || 'null') as {
           name?: string;
           address?: Address;
         } | null;
-        if (localProfile?.name) setName(localProfile.name);
-        if (!cartAddress && isCompleteDeliveryAddress(localProfile?.address)) {
-          setLookupAddress(localProfile.address);
-          setSelectedAddress(localProfile.address);
+        if (deviceProfile?.name) setName(deviceProfile.name);
+        if (!cartAddress && isCompleteDeliveryAddress(deviceProfile?.address)) {
+          setLookupAddress(deviceProfile.address);
+          setSelectedAddress(deviceProfile.address);
           setCustomerLookupMessage('Endereço salvo neste aparelho preenchido automaticamente.');
         }
       } catch {
@@ -250,8 +251,16 @@ export default function Checkout() {
       }).then(({ data, error }: { data: any; error: { message?: string } | null }) => {
         if (requestId !== lookupRequest.current) return;
         if (error || !data) {
-          setCustomerLookupMessage('Telefone não cadastrado. Preencha seus dados para continuar.');
-          setSelectedAddress(undefined);
+          if (deviceProfile?.name) {
+            setCustomerLookupMessage('Cadastro deste aparelho preenchido. Ele será sincronizado ao confirmar o primeiro pedido.');
+            if (!cartAddress && isCompleteDeliveryAddress(deviceProfile.address)) {
+              setLookupAddress(deviceProfile.address);
+              setSelectedAddress(deviceProfile.address);
+            }
+          } else {
+            setCustomerLookupMessage('Telefone não cadastrado. Preencha seus dados para continuar.');
+            setSelectedAddress(undefined);
+          }
           return;
         }
 
