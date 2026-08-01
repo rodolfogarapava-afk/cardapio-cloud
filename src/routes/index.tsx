@@ -444,7 +444,7 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
           </div>
         </aside>}
 
-        <section className="content">
+        <section className={`content${!publicMenu && systemView === null && (!tenantNavigation || tenantNavigation.page === "operation") ? " client-menu-content" : ""}`}>
           {tenantNavigation && tenantNavigation.page !== "operation" ? tenantNavigation.content :
           systemView === "products" ? <IntegratedProducts tenantId={tenantNavigation?.tenantId} products={products} categories={categories} onChange={persistProducts} onAddCategory={(name)=>persistCategories([...categories,name])} onRenameCategory={renameCategory} onDeleteCategory={(name)=>{const next=categories.filter((c)=>c!==name);persistCategories(next);if(activeMain===name)setActiveMain(next[0]||"")}} /> :
           systemView === "stock" ? <IntegratedStock products={products} onChange={persistProducts} /> :
