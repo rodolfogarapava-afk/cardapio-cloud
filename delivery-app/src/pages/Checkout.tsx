@@ -168,6 +168,7 @@ export default function Checkout() {
     const formatted = formatPhone(value);
     const digits = phoneDigits(value);
     const requestId = ++lookupRequest.current;
+    let currentToken = '';
     if (activePhoneDigits.current && activePhoneDigits.current !== digits) {
       setName('');
       setSelectedAddress(undefined);
@@ -178,7 +179,6 @@ export default function Checkout() {
     setCustomerLookupMessage('');
     setLookupAddress(null);
     if (digits.length >= 10) {
-      let currentToken = '';
       try {
         const currentAccess = JSON.parse(localStorage.getItem('cardapio_delivery_access') || 'null') as { phone?: string; token?: string } | null;
         if (currentAccess?.phone === digits) currentToken = currentAccess.token || '';
@@ -262,7 +262,8 @@ export default function Checkout() {
   const checkoutAddresses = lookupAddress ? [lookupAddress] : checkoutAddressList;
 
   const subtotal = cart?.subtotal || 0;
-  const deliveryFee = appliedCoupon?.code === 'FRETEGRATIS' ? 0 : (cart?.deliveryFee || 0);
+  const isDelivery = deliveryMode !== 'pickup';
+  const deliveryFee = !isDelivery || appliedCoupon?.code === 'FRETEGRATIS' ? 0 : (cart?.deliveryFee || 0);
   const discount = appliedCoupon
     ? appliedCoupon.code === 'FRETEGRATIS'
       ? (cart?.deliveryFee || 0)
@@ -270,7 +271,7 @@ export default function Checkout() {
     : 0;
   const total = Math.max(0, subtotal + deliveryFee - (appliedCoupon?.code === 'FRETEGRATIS' ? 0 : discount));
 
-  const isValid = name.trim() && phone.trim() && selectedAddress && cart && cart.items.length > 0;
+  const isValid = name.trim() && phone.trim() && (!isDelivery || selectedAddress) && cart && cart.items.length > 0;
   const changeNeeded = paymentMethod === 'cash' && changeAmount ? changeAmount - total : null;
 
   const handleApplyCoupon = () => {
@@ -532,10 +533,10 @@ export default function Checkout() {
           <span className="text-muted-foreground">Subtotal</span>
           <span>{brl(subtotal)}</span>
         </div>
-        <div className="flex justify-between">
+        {isDelivery && <div className="flex justify-between">
           <span className="text-muted-foreground">Taxa de entrega</span>
           <span>{deliveryFee === 0 ? <span className="text-success font-medium">Grátis</span> : brl(deliveryFee)}</span>
-        </div>
+        </div>}
         {appliedCoupon && appliedCoupon.code !== 'FRETEGRATIS' && (
           <div className="flex justify-between text-success">
             <span className="flex items-center gap-1"><Tag className="h-3 w-3" /> {appliedCoupon.code}</span>
@@ -613,7 +614,7 @@ export default function Checkout() {
           {/* COLUNA PRINCIPAL */}
           <div className="space-y-4">
             {/* 1. Dados */}
-            <section className="rounded-2xl border bg-card p-5 lg:p-6">
+            {isDelivery && <section className="rounded-2xl border bg-card p-5 lg:p-6">
               <SectionHeader icon={User} step={1} title="Seus dados" hint="Para identificar seu pedido" />
               <div className="space-y-3">
                 <div className="space-y-2">
@@ -632,7 +633,7 @@ export default function Checkout() {
                   </div>
                 </div>
               </div>
-            </section>
+            </section>}
 
             {/* 2. Endereço */}
             <section className="rounded-2xl border bg-card p-5 lg:p-6">
