@@ -29,6 +29,13 @@ import {
   MapPin,
   Phone,
   Truck,
+  AlertTriangle,
+  Clock3,
+  History,
+  Maximize2,
+  Minimize2,
+  RotateCcw,
+  WifiOff,
 } from "lucide-react";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { sendOrderTicketToPrinter, sendOrderUpdateToPrinter, sendReceiptToPrinter, type OrderChange } from "@/lib/printReceipt";
@@ -163,6 +170,7 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
   const [salesHistory, setSalesHistory] = useState<{id:number;name:string;total:number;method:string;createdAt:number;items:{name:string;qty:number;price:number;detail?:string}[]}[]>([]);
   const [expenses, setExpenses] = useState<{id:number;description:string;amount:number;createdAt:number}[]>([]);
   const [printStatuses, setPrintStatuses] = useState<Record<number,"sending"|"pending"|"processing"|"printed"|"failed">>({});
+  const [printerConnection,setPrinterConnection]=useState<{checking:boolean;online:boolean;printer:string;lastSeen:number|null}>({checking:true,online:false,printer:"",lastSeen:null});
   const [storageReady, setStorageReady] = useState(false);
   const knownCommandIds = useRef<Set<number>>(new Set());
   const commandNotificationsReady = useRef(false);
@@ -232,6 +240,33 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
     const timer=window.setInterval(refresh,2000);
     return()=>{active=false;window.clearInterval(timer)};
   },[tenantNavigation?.tenantId,savedCommands]);
+  useEffect(()=>{
+    if(!supabase||!tenantNavigation?.tenantId){
+      setPrinterConnection({checking:false,online:false,printer:"",lastSeen:null});
+      return;
+    }
+    let active=true;
+    const refresh=async()=>{
+      const {data,error}=await supabase.from("printer_agents")
+        .select("printer_name,last_seen_at")
+        .eq("tenant_id",tenantNavigation.tenantId)
+        .is("revoked_at",null)
+        .order("last_seen_at",{ascending:false})
+        .limit(1);
+      if(error||!active)return;
+      const current=data?.[0];
+      const lastSeen=current?.last_seen_at?new Date(current.last_seen_at).getTime():null;
+      setPrinterConnection({
+        checking:false,
+        online:Boolean(lastSeen&&Date.now()-lastSeen<45000),
+        printer:current?.printer_name||"",
+        lastSeen,
+      });
+    };
+    refresh();
+    const timer=window.setInterval(refresh,10000);
+    return()=>{active=false;window.clearInterval(timer)};
+  },[tenantNavigation?.tenantId]);
   useEffect(() => {
     if (!categories.length) {
       setActiveMain("");
@@ -464,7 +499,7 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
           {tenantNavigation && tenantNavigation.page !== "operation" ? tenantNavigation.content :
           systemView === "products" ? <IntegratedProducts tenantId={tenantNavigation?.tenantId} products={products} categories={categories} onChange={persistProducts} onAddCategory={(name)=>persistCategories([...categories,name])} onRenameCategory={renameCategory} onDeleteCategory={(name)=>{const next=categories.filter((c)=>c!==name);persistCategories(next);if(activeMain===name)setActiveMain(next[0]||"")}} /> :
           systemView === "stock" ? <IntegratedStock products={products} onChange={persistProducts} /> :
-          systemView === "commands" ? <IntegratedCommands tenantId={tenantNavigation?.tenantId} commands={savedCommands} setCommands={setSavedCommands} products={products} adjustStock={adjustStock} printStatuses={printStatuses} onCharge={(command) => { setCustomerName(command.name); setPaymentTotal(command.total); setPaymentItems(command.items); setPaymentMethod(deliveryPaymentLabel(command.delivery?.payment)); setPaymentCommandId(command.id); setPaymentCommandBackup(command); setPaymentError(""); setModal("payment"); }} /> :
+          systemView === "commands" ? <IntegratedCommands tenantId={tenantNavigation?.tenantId} commands={savedCommands} setCommands={setSavedCommands} sales={salesHistory} setSales={setSalesHistory} products={products} adjustStock={adjustStock} printStatuses={printStatuses} printerConnection={printerConnection} onCharge={(command) => { setCustomerName(command.name); setPaymentTotal(command.total); setPaymentItems(command.items); setPaymentMethod(deliveryPaymentLabel(command.delivery?.payment)); setPaymentCommandId(command.id); setPaymentCommandBackup(command); setPaymentError(""); setModal("payment"); }} /> :
           systemView === "cash" ? <IntegratedCash sales={salesHistory} expenses={expenses} sync={operationsSync} onAddExpense={(description,amount) => setExpenses((all)=>[...all,{id:Date.now(),description,amount,createdAt:Date.now()}])} onDeleteExpense={(id)=>setExpenses((all)=>all.filter(expense=>expense.id!==id))} /> :
           systemView === "reports" ? <IntegratedReports sales={salesHistory} expenses={expenses} commands={savedCommands} sync={operationsSync} /> : <>
           {!categories.length && <div className="integrated-empty new-store-empty"><Store/><h3>{publicMenu ? "Cardápio em preparação" : "Seu cardápio está vazio"}</h3><p>{publicMenu ? "Esta loja ainda não publicou produtos." : "Esta é uma loja nova. Cadastre a primeira categoria e os produtos para começar."}</p>{!publicMenu && <button className="primary" onClick={()=>setSystemView("products")}>CADASTRAR PRODUTOS</button>}</div>}
@@ -1347,11 +1382,31 @@ function IntegratedStock({products,onChange}:{products:Product[];onChange:(produ
   </div>;
 }
 
-function IntegratedCommands({tenantId,commands,setCommands,onCharge,products,adjustStock,printStatuses}:{tenantId?:string|null;commands:IntegratedCommand[];setCommands:React.Dispatch<React.SetStateAction<IntegratedCommand[]>>;onCharge:(command:IntegratedCommand)=>void;products:Product[];adjustStock:(deltas:{productId?:number|string;name:string;qty:number}[])=>Promise<boolean>;printStatuses:Record<number,"sending"|"pending"|"processing"|"printed"|"failed">}) {
+function IntegratedCommands({tenantId,commands,setCommands,sales,setSales,onCharge,products,adjustStock,printStatuses,printerConnection}:{tenantId?:string|null;commands:IntegratedCommand[];setCommands:React.Dispatch<React.SetStateAction<IntegratedCommand[]>>;sales:IntegratedSale[];setSales:React.Dispatch<React.SetStateAction<IntegratedSale[]>>;onCharge:(command:IntegratedCommand)=>void;products:Product[];adjustStock:(deltas:{productId?:number|string;name:string;qty:number}[])=>Promise<boolean>;printStatuses:Record<number,"sending"|"pending"|"processing"|"printed"|"failed">;printerConnection:{checking:boolean;online:boolean;printer:string;lastSeen:number|null}}) {
   const [confirmation,setConfirmation]=useState<{action:"print"|"cancel"|"dismiss";command:IntegratedCommand}|null>(null);
   const [editing,setEditing]=useState<IntegratedCommand|null>(null);
+  const [commandFilter,setCommandFilter]=useState<"all"|"waiter"|"delivery"|"pickup"|"late"|"print-failed">("all");
+  const [now,setNow]=useState(Date.now());
+  const [kitchenMode,setKitchenMode]=useState(false);
+  const [historyOpen,setHistoryOpen]=useState(false);
+  const [recallPending,setRecallPending]=useState<IntegratedSale|null>(null);
+  const [recalling,setRecalling]=useState(false);
+  const [historyMessage,setHistoryMessage]=useState("");
   const editCategories=useMemo(()=>Array.from(new Set(products.map((product)=>product.category))),[products]);
   const [editCategory,setEditCategory]=useState(editCategories[0]||"");
+  useEffect(()=>{
+    const timer=window.setInterval(()=>setNow(Date.now()),15000);
+    return()=>window.clearInterval(timer);
+  },[]);
+  useEffect(()=>{
+    document.body.classList.toggle("kitchen-focus-active",kitchenMode);
+    const close=(event:KeyboardEvent)=>{if(event.key==="Escape")setKitchenMode(false)};
+    window.addEventListener("keydown",close);
+    return()=>{
+      document.body.classList.remove("kitchen-focus-active");
+      window.removeEventListener("keydown",close);
+    };
+  },[kitchenMode]);
   const confirmAction=async()=>{
     if(!confirmation)return;
     if(confirmation.action==="print"){
@@ -1498,20 +1553,101 @@ function IntegratedCommands({tenantId,commands,setCommands,onCharge,products,adj
       kind:`reprint_${Date.now()}`,
     }).catch((error)=>console.error("Não foi possível colocar a reimpressão na fila:",error));
   };
+  const recallSale=async()=>{
+    if(!recallPending||recalling)return;
+    setRecalling(true);
+    setHistoryMessage("");
+    const restored:IntegratedCommand={
+      id:recallPending.id,
+      name:recallPending.name,
+      tableLabel:recallPending.name,
+      waiterName:"Comanda reaberta",
+      source:"waiter",
+      count:recallPending.items.reduce((sum,item)=>sum+item.qty,0),
+      total:recallPending.total,
+      createdAt:Date.now(),
+      kitchenStatus:"ready",
+      items:recallPending.items.map((item)=>({...item,delivered:true})),
+    };
+    try{
+      if(tenantId&&supabase){
+        const {error:commandError}=await supabase.from("restaurant_commands").upsert({
+          tenant_id:tenantId,
+          id:restored.id,
+          payload:restored,
+          updated_at:new Date().toISOString(),
+        });
+        if(commandError)throw commandError;
+        const {error:saleError}=await supabase.from("restaurant_sales").delete().eq("tenant_id",tenantId).eq("id",recallPending.id);
+        if(saleError){
+          await supabase.from("restaurant_commands").delete().eq("tenant_id",tenantId).eq("id",restored.id);
+          throw saleError;
+        }
+      }
+      setSales((all)=>all.filter((sale)=>sale.id!==recallPending.id));
+      setCommands((all)=>[...all.filter((command)=>command.id!==restored.id),restored]);
+      setRecallPending(null);
+      setHistoryOpen(false);
+      setCommandFilter("all");
+    }catch(error){
+      setHistoryMessage(`Não foi possível reabrir a comanda: ${error instanceof Error?error.message:"erro desconhecido"}`);
+    }finally{
+      setRecalling(false);
+    }
+  };
+  const ageInMinutes=(command:IntegratedCommand)=>Math.max(0,Math.floor((now-Number(command.createdAt||now))/60000));
+  const ageClass=(command:IntegratedCommand)=>{
+    const minutes=ageInMinutes(command);
+    return minutes>=20?"danger":minutes>=10?"warning":"ok";
+  };
+  const matchesFilter=(command:IntegratedCommand)=>{
+    if(commandFilter==="all")return true;
+    if(commandFilter==="waiter")return !command.delivery;
+    if(commandFilter==="delivery")return command.delivery?.fulfillment==="delivery";
+    if(commandFilter==="pickup")return command.delivery?.fulfillment==="pickup";
+    if(commandFilter==="late")return command.kitchenStatus!=="cancelled"&&ageInMinutes(command)>=20;
+    return printStatuses[command.id]==="failed";
+  };
+  const visibleCommands=[...commands].filter(matchesFilter).sort((a,b)=>Number(a.createdAt||0)-Number(b.createdAt||0));
   const kitchenColumns=[
-    {id:"new" as const,title:"NOVAS",description:"Aguardando início",commands:commands.filter((command)=>(command.kitchenStatus||"new")==="new")},
-    {id:"preparing" as const,title:"PREPARANDO",description:"Em produção",commands:commands.filter((command)=>command.kitchenStatus==="preparing")},
-    {id:"ready" as const,title:"PRONTAS",description:"Finalizadas",commands:commands.filter((command)=>command.kitchenStatus==="ready")},
-    {id:"cancelled" as const,title:"CANCELADAS",description:"Canceladas no delivery",commands:commands.filter((command)=>command.kitchenStatus==="cancelled")},
+    {id:"new" as const,title:"NOVAS",description:"Aguardando recebimento",commands:visibleCommands.filter((command)=>(command.kitchenStatus||"new")==="new")},
+    {id:"preparing" as const,title:"PREPARANDO",description:"Em produção",commands:visibleCommands.filter((command)=>command.kitchenStatus==="preparing")},
+    {id:"ready" as const,title:"PRONTAS",description:"Aguardando entrega ou cobrança",commands:visibleCommands.filter((command)=>command.kitchenStatus==="ready")},
+    {id:"cancelled" as const,title:"CANCELADAS",description:"Canceladas no delivery",commands:visibleCommands.filter((command)=>command.kitchenStatus==="cancelled")},
   ];
   const openCommandsCount=commands.filter((command)=>command.kitchenStatus!=="cancelled").length;
-  return <div className="integrated-view">
-    <div className="integrated-heading"><div><p>OPERAÇÃO · TEMPO REAL</p><h1>Comandas abertas</h1><span>Acompanhe preparo, entrega, impressão e cobrança sem sair do cardápio.</span></div><b>{openCommandsCount} abertas</b></div>
+  const lateCount=commands.filter((command)=>command.kitchenStatus!=="cancelled"&&ageInMinutes(command)>=20).length;
+  const failedCount=commands.filter((command)=>printStatuses[command.id]==="failed").length;
+  const waitingPrintCount=commands.filter((command)=>["pending","processing","sending"].includes(printStatuses[command.id]||"")).length;
+  const recentSales=[...sales].sort((a,b)=>b.createdAt-a.createdAt).slice(0,12);
+  const filterOptions:[typeof commandFilter,string,number][]=[
+    ["all","TODOS",commands.length],
+    ["waiter","MESAS",commands.filter((command)=>!command.delivery).length],
+    ["delivery","DELIVERY",commands.filter((command)=>command.delivery?.fulfillment==="delivery").length],
+    ["pickup","RETIRADA",commands.filter((command)=>command.delivery?.fulfillment==="pickup").length],
+    ["late","ATRASADOS",lateCount],
+    ["print-failed","FALHA IMPRESSÃO",failedCount],
+  ];
+  return <div className={`integrated-view kitchen-operations${kitchenMode?" is-focus-mode":""}`}>
+    <div className="integrated-heading"><div><p>OPERAÇÃO · TEMPO REAL</p><h1>Comandas abertas</h1><span>Acompanhe preparo, entrega, impressão e cobrança sem sair do cardápio.</span></div><div className="kitchen-heading-actions"><b>{openCommandsCount} abertas</b><button onClick={()=>setHistoryOpen(true)}><History/> HISTÓRICO</button><button className="focus-toggle" onClick={()=>setKitchenMode((active)=>!active)}>{kitchenMode?<Minimize2/>:<Maximize2/>}{kitchenMode?"SAIR DO MODO COZINHA":"MODO COZINHA"}</button></div></div>
+    <div className="kitchen-stats" aria-label="Resumo da operação">
+      <article><small>AGUARDANDO</small><strong>{commands.filter((command)=>(command.kitchenStatus||"new")==="new").length}</strong></article>
+      <article><small>EM PREPARO</small><strong>{commands.filter((command)=>command.kitchenStatus==="preparing").length}</strong></article>
+      <article><small>PRONTAS</small><strong>{commands.filter((command)=>command.kitchenStatus==="ready").length}</strong></article>
+      <article className={lateCount?"has-alert":""}><small>ATRASADAS</small><strong>{lateCount}</strong></article>
+    </div>
+    {!printerConnection.checking&&!printerConnection.online&&<div className="kitchen-system-alert danger" role="alert"><WifiOff/><div><b>IMPRESSORA DESCONECTADA</b><span>O agente do notebook não está respondendo.{waitingPrintCount?` ${waitingPrintCount} impressão(ões) aguardando na fila.`:" Abra o agente para receber as próximas comandas."}</span></div></div>}
+    {!!failedCount&&<div className="kitchen-system-alert danger" role="alert"><AlertTriangle/><div><b>{failedCount} FALHA(S) DE IMPRESSÃO</b><span>Use o filtro “Falha impressão” para localizar e reenviar as comandas.</span></div></div>}
+    <div className="kitchen-toolbar">
+      <div className="kitchen-filters" aria-label="Filtrar comandas">{filterOptions.map(([filter,label,total])=><button key={filter} className={commandFilter===filter?"active":""} onClick={()=>setCommandFilter(filter)}>{label}<span>{total}</span></button>)}</div>
+      {!printerConnection.checking&&printerConnection.online&&<span className="kitchen-printer-ok"><Printer/> {printerConnection.printer||"IMPRESSORA"} CONECTADA</span>}
+    </div>
     {!commands.length ? <div className="integrated-empty"><ShoppingBag/><h3>Nenhuma comanda aberta</h3><p>Adicione itens pelo cardápio e escolha “Salvar comanda”.</p></div> :
     <div className="kitchen-board">{kitchenColumns.map((column)=><section className={`kitchen-column ${column.id}`} key={column.id}>
       <header className="kitchen-column-head"><div><b>{column.title}</b><span>{column.commands.length}</span></div><small>{column.description}</small></header>
-      <div className="kitchen-column-list">{column.commands.length?column.commands.map((command)=><article className="kitchen-command-card" key={command.id}>
-        <header><div><small>COMANDA #{String(command.id).slice(-6)} · HÁ {Math.max(1,Math.round((Date.now()-command.createdAt)/60000))} MIN</small><h2>{command.name}</h2>{command.waiterName&&<small>GARÇOM: {command.waiterName}</small>}</div><strong>R$ {command.total.toFixed(2).replace(".",",")}</strong></header>
+      <div className="kitchen-column-list">{column.commands.length?column.commands.map((command)=><article className={`kitchen-command-card age-${ageClass(command)}${column.id==="new"?" requires-ack":""}`} key={command.id}>
+        <div className="command-card-meta"><span className={`command-source ${command.delivery?.fulfillment||"waiter"}`}>{command.delivery?.fulfillment==="delivery"?<><Truck/> DELIVERY</>:command.delivery?.fulfillment==="pickup"?<><Store/> RETIRADA</>:<><Utensils/> MESA / BALCÃO</>}</span><span className={`command-age ${ageClass(command)}`}><Clock3/>{ageInMinutes(command)<1?"AGORA":`HÁ ${ageInMinutes(command)} MIN`}</span></div>
+        <header><div><small>COMANDA #{String(command.id).slice(-6)}</small><h2>{command.name}</h2>{command.waiterName&&<small>GARÇOM: {command.waiterName}</small>}</div><strong>R$ {command.total.toFixed(2).replace(".",",")}</strong></header>
         <span className={`command-print-status ${printStatuses[command.id]||"checking"}`}>{
           printStatuses[command.id]==="printed"?"✓ IMPRESSA":
           printStatuses[command.id]==="failed"?"! FALHA NA IMPRESSÃO":
@@ -1525,15 +1661,33 @@ function IntegratedCommands({tenantId,commands,setCommands,onCharge,products,adj
           {deliveryAddress(command.delivery)&&<span><MapPin/>{deliveryAddress(command.delivery)}</span>}
           {command.delivery.notes&&<small>OBS.: {command.delivery.notes}</small>}
         </div>}
+        {command.delivery?.fulfillment==="pickup"&&<div className="command-delivery is-pickup"><b><Store/>RETIRADA NO BALCÃO</b>{command.delivery.phone&&<span><Phone/>{command.delivery.phone}</span>}{command.delivery.notes&&<small>OBS.: {command.delivery.notes}</small>}</div>}
         <div className="command-products">{command.items.map((item,index)=><label key={`${item.name}-${index}`}><input type="checkbox" disabled={column.id==="cancelled"} checked={item.delivered} onChange={()=>setCommands((all)=>all.map((c)=>c.id===command.id?{...c,items:c.items.map((x,i)=>i===index?{...x,delivered:!x.delivered}:x)}:c))}/><span><b>{item.qty}×</b> {item.name}{item.detail&&<small>{item.detail}</small>}</span><em>{column.id==="cancelled"?"Cancelado":item.delivered?"Entregue":column.id==="ready"?"Pronto":column.id==="new"?"Novo":"Preparando"}</em></label>)}</div>
         <div className="kitchen-flow-actions">
-          {column.id==="new"&&<button className="flow-main" onClick={()=>setKitchenStatus(command.id,"preparing")}>INICIAR PREPARO</button>}
+          {column.id==="new"&&<button className="flow-main receive-order" onClick={()=>setKitchenStatus(command.id,"preparing")}>RECEBER E INICIAR PREPARO</button>}
           {column.id==="preparing"&&<><button onClick={()=>setKitchenStatus(command.id,"new")}>VOLTAR</button><button className="flow-main" onClick={()=>setKitchenStatus(command.id,"ready")}>MARCAR PRONTO</button></>}
           {column.id==="ready"&&<><button onClick={()=>setKitchenStatus(command.id,"preparing")}>VOLTAR</button><button className="flow-main" onClick={()=>onCharge(command)}>COBRAR / FINALIZAR</button></>}
         </div>
         {column.id!=="cancelled"?<footer><button onClick={()=>{setEditing(command);setEditCategory((current)=>current||editCategories[0]||"")}}>EDITAR</button><button onClick={()=>reprintCommand(command)}>REIMPRIMIR</button><button className="danger" onClick={()=>setConfirmation({action:"cancel",command})}>CANCELAR</button></footer>:<footer><button className="danger" onClick={()=>setConfirmation({action:"dismiss",command})}>REMOVER DA LISTA</button></footer>}
       </article>):<div className="kitchen-column-empty"><ShoppingBag/><span>Nenhuma comanda</span></div>}</div>
     </section>)}</div>}
+    {historyOpen&&<div className="modal-backdrop" onMouseDown={()=>setHistoryOpen(false)}><section className="modal command-history-modal" onMouseDown={(event)=>event.stopPropagation()}>
+      <button className="modal-close" onClick={()=>setHistoryOpen(false)} aria-label="Fechar"><X/></button>
+      <div className="command-history-head"><span><History/></span><div><p>ÚLTIMAS FINALIZAÇÕES</p><h3>Histórico recente</h3><small>Reabra uma venda somente quando precisar corrigir ou cobrar novamente.</small></div></div>
+      {historyMessage&&<div className="drawer-form-alert" role="alert">{historyMessage}</div>}
+      <div className="command-history-list">{recentSales.length?recentSales.map((sale)=><article key={sale.id}>
+        <div><small>{new Date(sale.createdAt).toLocaleDateString("pt-BR")} · {new Date(sale.createdAt).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}</small><b>{sale.name}</b><span>{sale.items.reduce((sum,item)=>sum+item.qty,0)} item(ns) · {sale.method}</span></div>
+        <strong>R$ {sale.total.toFixed(2).replace(".",",")}</strong>
+        <button onClick={()=>{setHistoryMessage("");setRecallPending(sale)}}><RotateCcw/> REABRIR</button>
+      </article>):<div className="kitchen-column-empty"><History/><span>Nenhuma venda finalizada.</span></div>}</div>
+    </section></div>}
+    {recallPending&&<div className="modal-backdrop" onMouseDown={()=>!recalling&&setRecallPending(null)}><section className="modal confirmation-modal" onMouseDown={(event)=>event.stopPropagation()}>
+      <button className="modal-close" onClick={()=>setRecallPending(null)} aria-label="Fechar" disabled={recalling}><X/></button>
+      <span className="modal-icon"><RotateCcw/></span>
+      <h3>Reabrir comanda finalizada?</h3>
+      <p>A venda de <b>{recallPending.name}</b> voltará para a coluna “Prontas” e será removida temporariamente do caixa até uma nova finalização.</p>
+      <div className="confirmation-actions"><button onClick={()=>setRecallPending(null)} disabled={recalling}>VOLTAR</button><button className="primary" onClick={recallSale} disabled={recalling}>{recalling?"REABRINDO...":"SIM, REABRIR"}</button></div>
+    </section></div>}
     {confirmation&&<div className="modal-backdrop" onMouseDown={()=>setConfirmation(null)}><section className="modal confirmation-modal" onMouseDown={(event)=>event.stopPropagation()}>
       <button className="modal-close" onClick={()=>setConfirmation(null)} aria-label="Fechar"><X/></button>
       <span className="modal-icon">{confirmation.action==="print"?<ShoppingBag/>:<X/>}</span>
