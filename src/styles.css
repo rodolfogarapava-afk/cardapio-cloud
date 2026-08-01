@@ -928,6 +928,7 @@ button { cursor:pointer;touch-action:manipulation; }
 .client-menu-content .product-info small {
   display:none;
 }
+.client-menu-content .stock-badge { display:none; }
 .client-menu-content .buy {
   min-width:145px;
 }
