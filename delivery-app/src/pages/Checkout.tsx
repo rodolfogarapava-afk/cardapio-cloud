@@ -447,7 +447,15 @@ export default function Checkout() {
         cpf: cpf.trim() || undefined,
         items: orderItems,
       };
-    const issuedToken = orderResult?.customerToken || currentAccessToken;
+    // Em uma repeticao idempotente (duplo clique ou retry da rede), uma das
+    // respostas pode ser `existing` e nao carregar novamente o token secreto.
+    // Preserve o token que a primeira resposta acabou de salvar, em vez de
+    // desconectar o cliente sobrescrevendo-o com uma string vazia.
+    let latestDeviceToken = '';
+    try {
+      latestDeviceToken = localStorage.getItem(`cardapio_delivery_device_token_${tenantId}_${phoneDigits(phone)}`) || '';
+    } catch { /* armazenamento indisponivel; o token da resposta ainda sera usado */ }
+    const issuedToken = orderResult?.customerToken || currentAccessToken || latestDeviceToken;
     localStorage.setItem('cardapio_delivery_access', JSON.stringify({
       phone: phoneDigits(phone),
       tenantId,

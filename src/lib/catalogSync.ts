@@ -142,6 +142,10 @@ export function useCatalogSync(params: Params) {
         filter: `tenant_id=eq.${tenantId}`,
       }, refresh)
       .subscribe();
-    return () => { supabase!.removeChannel(channel); };
+    window.addEventListener("catalog-sync-refresh", refresh);
+    return () => {
+      supabase!.removeChannel(channel);
+      window.removeEventListener("catalog-sync-refresh", refresh);
+    };
   }, [tenantId]);
 }

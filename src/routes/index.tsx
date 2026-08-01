@@ -155,6 +155,8 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
   const [paymentCommandId, setPaymentCommandId] = useState<number | null>(null);
   const [paymentProcessing, setPaymentProcessing] = useState(false);
   const [paymentError, setPaymentError] = useState("");
+  const [commandSubmitting, setCommandSubmitting] = useState(false);
+  const [commandError, setCommandError] = useState("");
   const [paymentCommandBackup, setPaymentCommandBackup] = useState<IntegratedCommand|null>(null);
   const [systemView, setSystemView] = useState<"products" | "stock" | "commands" | "cash" | "reports" | null>(null);
   const [savedCommands, setSavedCommands] = useState<IntegratedCommand[]>([]);
@@ -176,9 +178,9 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
     if(publicCatalog){setStorageReady(true);return}
     const saved = window.localStorage.getItem(`${tenantStoragePrefix}-products`);
     if (saved) {
-      try { setProducts(JSON.parse(saved)); } catch {}
+      try { setProducts(JSON.parse(saved)); } catch { /* ignora cache local antigo ou corrompido */ }
       const savedCategories = window.localStorage.getItem(`${tenantStoragePrefix}-categories`);
-      if (savedCategories) { try { const parsed=JSON.parse(savedCategories);setCategories(parsed);setActiveMain(parsed[0]||""); } catch {} }
+      if (savedCategories) { try { const parsed=JSON.parse(savedCategories);setCategories(parsed);setActiveMain(parsed[0]||""); } catch { /* ignora cache local antigo ou corrompido */ } }
     }
     try {
       const commands=window.localStorage.getItem(`${tenantStoragePrefix}-commands`);
@@ -187,7 +189,7 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
       if(commands)setSavedCommands(mergeOpenCommands(JSON.parse(commands)));
       if(sales)setSalesHistory(JSON.parse(sales));
       if(savedExpenses)setExpenses(JSON.parse(savedExpenses));
-    } catch {}
+    } catch { /* a nuvem sera a fonte de verdade quando o cache nao puder ser lido */ }
     setStorageReady(true);
   }, [publicCatalog,tenantStoragePrefix]);
   useCatalogSync({
@@ -265,16 +267,27 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
   const persistProducts = (next: Product[]) => {
     setProducts(next);
   };
-  const adjustStock = (deltas: { name: string; qty: number }[]) => {
-    setProducts((prev) => {
-      const next = prev.map((p) => {
-        if (!p.trackStock) return p;
-        const delta = deltas.filter((d) => d.name === p.name).reduce((sum, d) => sum + d.qty, 0);
-        if (!delta) return p;
-        return { ...p, stock: Math.max(0, Number(p.stock || 0) + delta) };
+  const adjustStock = async (deltas: { productId?: number | string; name: string; qty: number }[]) => {
+    if (supabase && tenantNavigation?.tenantId) {
+      const { error } = await supabase.rpc("adjust_catalog_stock", {
+        p_tenant_id: tenantNavigation.tenantId,
+        p_deltas: deltas,
       });
-      return next;
-    });
+      if (error) {
+        console.error("Não foi possível atualizar o estoque:", error);
+        return false;
+      }
+      window.dispatchEvent(new Event("catalog-sync-refresh"));
+      return true;
+    }
+    setProducts((prev) => prev.map((product) => {
+      if (!product.trackStock) return product;
+      const delta = deltas
+        .filter((item) => item.productId !== undefined ? String(item.productId) === String(product.id) : item.name === product.name)
+        .reduce((sum, item) => sum + item.qty, 0);
+      return delta ? { ...product, stock: Math.max(0, Number(product.stock || 0) + delta) } : product;
+    }));
+    return true;
   };
   const persistCategories = (next: string[]) => {
     setCategories(next);
@@ -306,6 +319,7 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
     if(!product)return [];
     const detail = cartDetails[Number(id)];
     return [{
+      productId: product.id,
       name: product.name,
       qty,
       price: product.price,
@@ -601,31 +615,50 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
                     </label>
                     <div className="cart-total"><span>Total</span><strong>R$ {total.toFixed(2).replace(".", ",")}</strong></div>
                     <div className="cart-actions save-command-actions">
-                      <button className="primary" disabled={!customerName.trim()||!waiterName.trim()} onClick={() => {
+                      {commandError&&<p className="form-error">{commandError}</p>}
+                      <button className="primary" disabled={!customerName.trim()||!waiterName.trim()||commandSubmitting} onClick={async() => {
+                        setCommandSubmitting(true);
+                        setCommandError("");
                         const name=customerName.trim();
                         const waiter=waiterName.trim();
                         const newItems=currentCartItems.map((item)=>({...item,delivered:false}));
                         const createdAt=Date.now();
                         const randomPart=crypto.getRandomValues(new Uint16Array(1))[0]%1000;
                         const commandId=createdAt*1000+randomPart;
-                        setPrintStatuses((current)=>({...current,[commandId]:"sending"}));
-                        setSavedCommands((current)=>mergeOpenCommands([...current,{id:commandId,name,tableLabel:name,waiterName:waiter,source:"waiter",count,total,createdAt,items:newItems}]));
-                        adjustStock(newItems.map((item)=>({name:item.name,qty:-item.qty})));
+                        let savedCommand:IntegratedCommand={id:commandId,name,tableLabel:name,waiterName:waiter,source:"waiter",count,total,createdAt,items:newItems};
+                        if(tenantNavigation?.tenantId&&supabase){
+                          const {data,error}=await supabase.rpc("submit_waiter_order",{
+                            p_tenant_id:tenantNavigation.tenantId,
+                            p_command:savedCommand,
+                          });
+                          if(error||!data){
+                            setCommandError(error?.message||"Não foi possível salvar a comanda.");
+                            setCommandSubmitting(false);
+                            return;
+                          }
+                          savedCommand=data as IntegratedCommand;
+                          window.dispatchEvent(new Event("catalog-sync-refresh"));
+                        }else{
+                          const reserved=await adjustStock(newItems.map((item)=>({productId:item.productId,name:item.name,qty:-item.qty})));
+                          if(!reserved){setCommandSubmitting(false);return}
+                        }
+                        setPrintStatuses((current)=>({...current,[savedCommand.id]:"sending"}));
+                        setSavedCommands((current)=>mergeOpenCommands([...current,savedCommand]));
                         if(tenantNavigation?.tenantId)queueKitchenOrder({
                           tenantId:tenantNavigation.tenantId,
-                          commandId,
+                          commandId:savedCommand.id,
                           customer:name,
                           waiter,
-                          items:newItems.map((item)=>({name:item.name,qty:item.qty,unitPrice:item.price,total:item.price*item.qty,notes:item.detail})),
-                          total,
-                        }).then(()=>setPrintStatuses((current)=>({...current,[commandId]:"pending"})))
+                          items:savedCommand.items.map((item)=>({name:item.name,qty:item.qty,unitPrice:item.price,total:item.price*item.qty,notes:item.detail})),
+                          total:savedCommand.total,
+                        }).then(()=>setPrintStatuses((current)=>({...current,[savedCommand.id]:"pending"})))
                           .catch((error)=>{
-                            setPrintStatuses((current)=>({...current,[commandId]:"failed"}));
+                            setPrintStatuses((current)=>({...current,[savedCommand.id]:"failed"}));
                             console.error("Comanda salva, mas não foi possível entrar na fila de impressão:",error);
                           });
                         playNotificationSound("sale");
-                        setCart({}); setCartDetails({}); setCustomerName(""); setModal("commands");
-                      }}>SALVAR COMANDA</button>
+                        setCart({}); setCartDetails({}); setCustomerName(""); setCommandSubmitting(false); setModal("commands");
+                      }}>{commandSubmitting?"SALVANDO...":"SALVAR COMANDA"}</button>
                     </div>
                   </>
                 }
@@ -707,7 +740,7 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
                     paymentMethod:sale.method,
                   }).catch((error)=>console.error("Pagamento confirmado, mas o comprovante não entrou na fila de impressão:",error));
                   else printCustomerReceipt(sale);
-                  playNotificationSound("success"); setCart({}); setCartDetails({}); setCashReceived(""); setPaymentCommandId(null); setPaymentCommandBackup(null); setSent(true); setModal(null);setPaymentProcessing(false);
+                  playNotificationSound("success"); setCart({}); setCartDetails({}); setCustomerName(""); setCashReceived(""); setPaymentCommandId(null); setPaymentCommandBackup(null); setSent(true); setModal(null);setPaymentProcessing(false);
                 }}>{paymentProcessing?"FINALIZANDO...":"CONFIRMAR PAGAMENTO E IMPRIMIR"}</button>
               </>
             )}
@@ -900,7 +933,7 @@ function deliveryPaymentLabel(method?:string){
   if(value==="debit"||value==="debito"||value==="débito")return"Cartão Débito";
   return"PIX";
 }
-type IntegratedCommand = {id:number;name:string;tableLabel?:string;waiterName?:string;source?:"waiter"|"delivery";count:number;total:number;createdAt:number;kitchenStatus?:"new"|"preparing"|"ready"|"cancelled";cancelledBy?:"customer"|"store";cancelledAt?:string;delivery?:CommandDelivery;items:{name:string;qty:number;price:number;detail?:string;delivered:boolean}[]};
+type IntegratedCommand = {id:number;name:string;tableLabel?:string;waiterName?:string;source?:"waiter"|"delivery";count:number;total:number;createdAt:number;kitchenStatus?:"new"|"preparing"|"ready"|"cancelled";cancelledBy?:"customer"|"store";cancelledAt?:string;delivery?:CommandDelivery;items:{productId?:number|string;name:string;qty:number;price:number;detail?:string;delivered:boolean}[]};
 type IntegratedSale = {id:number;name:string;total:number;method:string;createdAt:number;items:{name:string;qty:number;price:number;detail?:string}[]};
 type IntegratedExpense = {id:number;description:string;amount:number;createdAt:number};
 
@@ -1314,7 +1347,7 @@ function IntegratedStock({products,onChange}:{products:Product[];onChange:(produ
   </div>;
 }
 
-function IntegratedCommands({tenantId,commands,setCommands,onCharge,products,adjustStock,printStatuses}:{tenantId?:string|null;commands:IntegratedCommand[];setCommands:React.Dispatch<React.SetStateAction<IntegratedCommand[]>>;onCharge:(command:IntegratedCommand)=>void;products:Product[];adjustStock:(deltas:{name:string;qty:number}[])=>void;printStatuses:Record<number,"sending"|"pending"|"processing"|"printed"|"failed">}) {
+function IntegratedCommands({tenantId,commands,setCommands,onCharge,products,adjustStock,printStatuses}:{tenantId?:string|null;commands:IntegratedCommand[];setCommands:React.Dispatch<React.SetStateAction<IntegratedCommand[]>>;onCharge:(command:IntegratedCommand)=>void;products:Product[];adjustStock:(deltas:{productId?:number|string;name:string;qty:number}[])=>Promise<boolean>;printStatuses:Record<number,"sending"|"pending"|"processing"|"printed"|"failed">}) {
   const [confirmation,setConfirmation]=useState<{action:"print"|"cancel"|"dismiss";command:IntegratedCommand}|null>(null);
   const [editing,setEditing]=useState<IntegratedCommand|null>(null);
   const editCategories=useMemo(()=>Array.from(new Set(products.map((product)=>product.category))),[products]);
@@ -1342,7 +1375,8 @@ function IntegratedCommands({tenantId,commands,setCommands,onCharge,products,adj
         }
       }
       if(!confirmation.command.delivery){
-        adjustStock(confirmation.command.items.map((item)=>({name:item.name,qty:item.qty})));
+        const restored=await adjustStock(confirmation.command.items.map((item)=>({productId:item.productId,name:item.name,qty:item.qty})));
+        if(!restored)return;
       }
       setCommands((all)=>all.filter((command)=>command.id!==confirmation.command.id));
     }
@@ -1420,27 +1454,27 @@ function IntegratedCommands({tenantId,commands,setCommands,onCharge,products,adj
       setPrintingChanges(false);
     }
   };
-  const changeItemQty=(command:IntegratedCommand,index:number,delta:number)=>{
+  const changeItemQty=async(command:IntegratedCommand,index:number,delta:number)=>{
     const item=command.items[index];
     if(delta>0){
-      const product=products.find((p)=>p.name===item.name);
+      const product=products.find((p)=>item.productId!==undefined?String(p.id)===String(item.productId):p.name===item.name);
       if(product?.trackStock&&Number(product.stock||0)<=0)return;
     }
     const nextQty=item.qty+delta;
     const nextItems=nextQty<=0?command.items.filter((_,i)=>i!==index):command.items.map((it,i)=>i===index?{...it,qty:nextQty}:it);
-    adjustStock([{name:item.name,qty:-delta}]);
+    if(!await adjustStock([{productId:item.productId,name:item.name,qty:-delta}]))return;
     applyEdit(command,nextItems,{type:delta>0?"adicionado":"removido",name:item.name,qty:1,notes:item.detail});
   };
-  const removeItem=(command:IntegratedCommand,index:number)=>{
+  const removeItem=async(command:IntegratedCommand,index:number)=>{
     const item=command.items[index];
-    adjustStock([{name:item.name,qty:item.qty}]);
+    if(!await adjustStock([{productId:item.productId,name:item.name,qty:item.qty}]))return;
     applyEdit(command,command.items.filter((_,i)=>i!==index),{type:"removido",name:item.name,qty:item.qty,notes:item.detail});
   };
-  const addProductToCommand=(command:IntegratedCommand,product:Product,detail=""):void=>{
+  const addProductToCommand=async(command:IntegratedCommand,product:Product,detail=""):Promise<void>=>{
     if(product.trackStock&&Number(product.stock||0)<=0)return;
     const existingIndex=command.items.findIndex((item)=>item.name===product.name&&(item.detail||"")===detail);
-    const nextItems=existingIndex>=0?command.items.map((item,i)=>i===existingIndex?{...item,qty:item.qty+1}:item):[...command.items,{name:product.name,qty:1,price:product.price,detail,delivered:false}];
-    adjustStock([{name:product.name,qty:-1}]);
+    const nextItems=existingIndex>=0?command.items.map((item,i)=>i===existingIndex?{...item,qty:item.qty+1}:item):[...command.items,{productId:product.id,name:product.name,qty:1,price:product.price,detail,delivered:false}];
+    if(!await adjustStock([{productId:product.id,name:product.name,qty:-1}]))return;
     applyEdit(command,nextItems,{type:"adicionado",name:product.name,qty:1,notes:detail||undefined});
   };
   const openAddProduct=(command:IntegratedCommand,product:Product)=>{
