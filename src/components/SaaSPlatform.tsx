@@ -528,7 +528,7 @@ function PrintingCenter({ tenant, jobs, setJobs }: { tenant: Tenant; jobs: Print
     </section>
     <section className="saas-print-setup">
       <div><b>1</b><span><strong>Gere o código desta loja</strong><small>O código expira em 20 minutos e só pode ser usado uma vez.</small>{activationCode&&<code className="saas-activation-code">{activationCode}</code>}</span><button className="saas-print-toggle" onClick={generateCode}><KeyRound/> {activationCode?"Gerar outro código":"Gerar código de ativação"}</button></div>
-      <div><b>2</b><span><strong>Instale no notebook da loja</strong><small>Baixe, extraia e execute “instalar-impressora.bat”. Se houver duas, escolha qual será a Impressora 1; depois direcione as categorias acima.</small></span><a className="saas-primary" href="/print-helper/cardapio-cloud-impressora.zip" download><Download/> Baixar agente Windows</a></div>
+      <div><b>2</b><span><strong>Instale no notebook da loja</strong><small>Baixe, extraia e execute “instalar-impressora.bat”. As impressoras serão detectadas automaticamente; toda separação de categorias é configurada acima.</small></span><a className="saas-primary" href="/print-helper/cardapio-cloud-impressora.zip" download><Download/> Baixar agente Windows</a></div>
     </section>
     {setupError&&<div className="saas-form-error">{setupError}</div>}
     <section className="saas-panel saas-table-panel"><PanelTitle title="Trabalhos recentes" subtitle="Fila isolada desta loja, com confirmação e proteção contra duplicidade"/><JobTable jobs={cloudJobs} tenants={[tenant]}/></section>

@@ -108,18 +108,14 @@ if ($ConfigureRouting) {
   $routingConfig = Get-Content $ConfigPath -Raw | ConvertFrom-Json
   $availablePrinters = @(Resolve-ThermalPrinters)
   if ($availablePrinters.Count -ge 2) {
-    Write-Host ""
-    Write-Host "Escolha qual sera a IMPRESSORA 1 (principal):" -ForegroundColor Yellow
-    Write-Host "  [1] $($availablePrinters[0])"
-    Write-Host "  [2] $($availablePrinters[1])"
-    do { $choice = Read-Host "Digite 1 ou 2" } while ($choice -notin @("1", "2"))
-    $skewerIndex = [int]$choice - 1
-    $sideIndex = if ($skewerIndex -eq 0) { 1 } else { 0 }
-    $routingConfig | Add-Member -NotePropertyName skewerPrinter -NotePropertyValue $availablePrinters[$skewerIndex] -Force
-    $routingConfig | Add-Member -NotePropertyName sidePrinter -NotePropertyValue $availablePrinters[$sideIndex] -Force
+    # A ordem e determinada automaticamente e exibida no painel do site.
+    # O usuario escolhe no site quais categorias seguem para cada impressora.
+    $routingConfig | Add-Member -NotePropertyName skewerPrinter -NotePropertyValue $availablePrinters[0] -Force
+    $routingConfig | Add-Member -NotePropertyName sidePrinter -NotePropertyValue $availablePrinters[1] -Force
     $routingConfig | ConvertTo-Json | Set-Content -Path $ConfigPath -Encoding UTF8
-    Write-Host "Impressora 1: $($availablePrinters[$skewerIndex])" -ForegroundColor Green
-    Write-Host "Impressora 2: $($availablePrinters[$sideIndex])" -ForegroundColor Green
+    Write-Host "Impressora 1 detectada: $($availablePrinters[0])" -ForegroundColor Green
+    Write-Host "Impressora 2 detectada: $($availablePrinters[1])" -ForegroundColor Green
+    Write-Host "As categorias sao configuradas somente no painel do site." -ForegroundColor Cyan
   } elseif ($availablePrinters.Count -eq 1) {
     $routingConfig | Add-Member -NotePropertyName skewerPrinter -NotePropertyValue $availablePrinters[0] -Force
     $routingConfig | Add-Member -NotePropertyName sidePrinter -NotePropertyValue $availablePrinters[0] -Force
