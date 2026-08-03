@@ -6,10 +6,10 @@
 # varias impressoras termicas clone.
 #
 # Uso: clique duplo em iniciar-impressora.vbs (ou rode este .ps1).
-# O app web faz POST em http://127.0.0.1:9100/print com { data: <base64> }.
+# O app web faz POST em http://127.0.0.1:19100/print com { data: <base64> }.
 
 param(
-  [int]$Port = 9100,
+  [int]$Port = 19100,
   [string[]]$PrinterName = @() # vazio = auto-detecta ate duas impressoras termicas
 )
 

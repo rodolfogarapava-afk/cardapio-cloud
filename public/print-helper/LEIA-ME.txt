@@ -17,6 +17,9 @@ Os arquivos sao atualizados na pasta permanente
 C:\ProgramData\CardapioCloud\Agent, portanto o agente nao depende da pasta
 Downloads depois da instalacao.
 
+O agente local usa a porta 19100. A porta antiga 9100 e removida pelo novo
+instalador para evitar conflito com servicos internos do Windows.
+
 O notebook precisa estar ligado e conectado a internet. O site nao precisa
 permanecer aberto para receber os pedidos feitos pelo telefone.
 

@@ -72,17 +72,19 @@ if errorlevel 1 (
 echo.
 
 echo [4/7] Autorizando comunicacao local segura...
+rem Limpa a reserva da versao antiga e usa uma porta dedicada menos disputada.
 netsh http delete urlacl url=http://127.0.0.1:9100/ >nul 2>&1
+netsh http delete urlacl url=http://127.0.0.1:19100/ >nul 2>&1
 rem Usa SDDL em vez do nome localizado "Everyone/Todos". Assim funciona em
 rem Windows em portugues, ingles e demais idiomas.
-netsh http add urlacl url=http://127.0.0.1:9100/ sddl="D:(A;;GX;;;WD)" >nul 2>&1
+netsh http add urlacl url=http://127.0.0.1:19100/ sddl="D:(A;;GX;;;WD)" >nul 2>&1
 if errorlevel 1 (
-  echo      [ERRO] O Windows nao autorizou a porta local 9100.
+  echo      [ERRO] O Windows nao autorizou a porta local 19100.
   echo      Feche outros agentes de impressao e execute novamente.
   pause
   exit /b 1
 )
-echo      OK - porta 9100 autorizada para o agente local.
+echo      OK - porta 19100 autorizada para o agente local.
 echo.
 
 echo [5/7] Configurando inicio automatico com o Windows...
@@ -100,7 +102,7 @@ echo      OK.
 echo.
 
 echo [7/7] Conferindo o agente e as impressoras USB...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$r=$null; for($i=1; $i -le 12 -and -not $r; $i++){ try { $r=Invoke-RestMethod -Uri 'http://127.0.0.1:9100/status' -TimeoutSec 2 } catch { if($i -lt 12){ Start-Sleep -Seconds 2 } } }; if(-not $r){ Write-Host '      [ERRO] O agente local nao respondeu na porta 9100.' -ForegroundColor Red; $log=Join-Path $env:ProgramData 'CardapioCloud\Agent\print-helper-error.log'; if(Test-Path $log){ Write-Host '      Motivo informado pelo Windows:' -ForegroundColor Yellow; Get-Content $log | ForEach-Object { Write-Host ('      ' + $_) -ForegroundColor Yellow } } else { $owner=Get-NetTCPConnection -LocalPort 9100 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1; if($owner){ $proc=Get-Process -Id $owner.OwningProcess -ErrorAction SilentlyContinue; Write-Host ('      A porta 9100 esta ocupada por: ' + $proc.ProcessName + ' (PID ' + $owner.OwningProcess + ')') -ForegroundColor Yellow } else { Write-Host '      Nenhum processo ficou escutando a porta. Verifique o antivirus do Windows.' -ForegroundColor Yellow } }; exit 1 }; $p=@($r.printers); if($p.Count -ge 2){ Write-Host ('      OK - 2 impressoras detectadas: ' + ($p -join ' + ')) -ForegroundColor Green } elseif($p.Count -eq 1){ Write-Host ('      OK - 1 impressora detectada; ela recebera o pedido completo: ' + $p[0]) -ForegroundColor Green } else { Write-Host '      Agente ativo, mas nenhuma impressora fisica foi detectada.' -ForegroundColor Yellow }; exit 0"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$r=$null; for($i=1; $i -le 12 -and -not $r; $i++){ try { $r=Invoke-RestMethod -Uri 'http://127.0.0.1:19100/status' -TimeoutSec 2 } catch { if($i -lt 12){ Start-Sleep -Seconds 2 } } }; if(-not $r){ Write-Host '      [ERRO] O agente local nao respondeu na porta 19100.' -ForegroundColor Red; $log=Join-Path $env:ProgramData 'CardapioCloud\Agent\print-helper-error.log'; if(Test-Path $log){ Write-Host '      Motivo informado pelo Windows:' -ForegroundColor Yellow; Get-Content $log | ForEach-Object { Write-Host ('      ' + $_) -ForegroundColor Yellow } } else { $owner=Get-NetTCPConnection -LocalPort 19100 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1; if($owner){ $proc=Get-Process -Id $owner.OwningProcess -ErrorAction SilentlyContinue; Write-Host ('      A porta 19100 esta ocupada por: ' + $proc.ProcessName + ' (PID ' + $owner.OwningProcess + ')') -ForegroundColor Yellow } else { Write-Host '      Nenhum processo ficou escutando a porta. Verifique o antivirus do Windows.' -ForegroundColor Yellow } }; exit 1 }; $p=@($r.printers); if($p.Count -ge 2){ Write-Host ('      OK - 2 impressoras detectadas: ' + ($p -join ' + ')) -ForegroundColor Green } elseif($p.Count -eq 1){ Write-Host ('      OK - 1 impressora detectada; ela recebera o pedido completo: ' + $p[0]) -ForegroundColor Green } else { Write-Host '      Agente ativo, mas nenhuma impressora fisica foi detectada.' -ForegroundColor Yellow }; exit 0"
 if errorlevel 1 (
   echo.
   echo ============================================================

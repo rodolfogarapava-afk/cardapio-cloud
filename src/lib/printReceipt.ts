@@ -6,7 +6,9 @@
 //
 // O site pode estar hospedado na Vercel, mas a ponte sempre roda no notebook
 // Windows conectado por USB à impressora da própria loja.
-const PRINT_HELPER_BASE_URL = "http://127.0.0.1:9100";
+// 19100 e a porta atual. 9100 permanece como fallback para notebooks que
+// ainda nao reinstalaram o agente antigo.
+const PRINT_HELPER_BASE_URLS = ["http://127.0.0.1:19100", "http://127.0.0.1:9100"];
 const PAPER_WIDTH_CHARS = 32;
 
 export interface ReceiptItem {
@@ -307,21 +309,43 @@ function buildUpdateRoutesBase64(data: { customer: string; waiter?: string; chan
 }
 
 async function sendToPrintHelper(bytes: Uint8Array, routes?: PrinterRoutePayload) {
-  const res = await fetch(`${PRINT_HELPER_BASE_URL}/print`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ data: bytesToBase64(bytes), ...(routes ? { routes } : {}) }),
-  });
-  if (!res.ok) {
-    const detail = await res.json().catch(() => ({}));
-    throw new Error(detail?.error || `HTTP ${res.status}`);
+  let connectionError: unknown;
+  for (const baseUrl of PRINT_HELPER_BASE_URLS) {
+    let helperResponded = false;
+    try {
+      const res = await fetch(`${baseUrl}/print`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: bytesToBase64(bytes), ...(routes ? { routes } : {}) }),
+      });
+      helperResponded = true;
+      if (!res.ok) {
+        const detail = await res.json().catch(() => ({}));
+        throw new Error(detail?.error || `HTTP ${res.status}`);
+      }
+      return;
+    } catch (error) {
+      // Se o agente respondeu, a solicitacao chegou ate ele. Nao tente a
+      // porta antiga, pois isso poderia imprimir o mesmo pedido duas vezes.
+      if (helperResponded) throw error;
+      connectionError = error;
+    }
   }
+  throw connectionError instanceof Error ? connectionError : new Error("Agente local indisponivel");
 }
 
 export async function getPrintHelperStatus() {
-  const response = await fetch(`${PRINT_HELPER_BASE_URL}/status`, { signal: AbortSignal.timeout(3500) });
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  return response.json() as Promise<{ ok: boolean; printer?: string | null; printers?: string[] }>;
+  let connectionError: unknown;
+  for (const baseUrl of PRINT_HELPER_BASE_URLS) {
+    try {
+      const response = await fetch(`${baseUrl}/status`, { signal: AbortSignal.timeout(3500) });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.json() as Promise<{ ok: boolean; printer?: string | null; printers?: string[] }>;
+    } catch (error) {
+      connectionError = error;
+    }
+  }
+  throw connectionError instanceof Error ? connectionError : new Error("Agente local indisponivel");
 }
 
 export async function sendPrinterTest() {
