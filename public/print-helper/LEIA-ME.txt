@@ -11,6 +11,9 @@ CARDAPIO CLOUD - IMPRESSAO AUTOMATICA
 
 Se ja havia uma versao do agente instalada, execute este novo instalador com
 um novo codigo. Ele encerra a versao anterior antes de iniciar a atualizacao.
+Os arquivos sao atualizados na pasta permanente
+C:\ProgramData\CardapioCloud\Agent, portanto o agente nao depende da pasta
+Downloads depois da instalacao.
 
 O notebook precisa estar ligado e conectado a internet. O site nao precisa
 permanecer aberto para receber os pedidos feitos pelo telefone.
