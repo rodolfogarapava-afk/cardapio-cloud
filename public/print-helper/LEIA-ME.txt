@@ -1,8 +1,8 @@
 CARDAPIO CLOUD - IMPRESSAO AUTOMATICA
 =====================================
 
-1. Conecte as duas impressoras termicas ao notebook por USB.
-2. Instale o driver de cada impressora no Windows.
+1. Conecte uma ou duas impressoras termicas ao notebook por USB.
+2. Instale no Windows o driver de cada impressora que sera utilizada.
 3. Extraia todos os arquivos deste ZIP.
 4. No Cardapio Cloud, abra Impressao e gere um codigo de ativacao.
 5. Clique duas vezes em instalar-impressora.bat.
@@ -25,5 +25,6 @@ TESTE COM DUAS IMPRESSORAS
 - O agente detecta ate duas impressoras termicas/USB instaladas no Windows.
 - Cada pedido completo e enviado, em sequencia, para as duas impressoras.
 - No teste inicial, deixe somente as duas impressoras desejadas conectadas.
-- Se apenas uma for detectada, o pedido sera impresso somente nela e o
-  instalador mostrara um aviso.
+- Se uma impressora for removida ou apenas uma estiver conectada, os proximos
+  pedidos serao impressos normalmente somente na impressora disponivel.
+- O unico arquivo .bat que deve ser executado e instalar-impressora.bat.
