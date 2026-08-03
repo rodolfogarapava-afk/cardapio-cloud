@@ -160,19 +160,22 @@ while ($listener.IsListening) {
       if ($printers.Count -eq 0) { throw "Nenhuma impressora encontrada" }
 
       $targets = @()
-      if ($printers.Count -ge 2 -and $payload.routes) {
-        $routing = Get-PrinterRouting $printers
-        if ($payload.routes.skewers.data) {
-          $targets += [pscustomobject]@{ printer=$routing.skewers; data=[string]$payload.routes.skewers.data; route="Espetinhos" }
+      $routing = Get-PrinterRouting $printers
+      if ([string]$payload.routingMode -eq "single") {
+        $singleTarget = if ($printers.Count -ge 2 -and [int]$payload.singlePrinter -eq 2) { $routing.sides } else { $routing.skewers }
+        $targets += [pscustomobject]@{ printer=$singleTarget; data=[string]$payload.data; route="Pedido completo" }
+      } elseif ($printers.Count -ge 2 -and $payload.routes) {
+        $printer1Route = if ($payload.routes.printer1) { $payload.routes.printer1 } else { $payload.routes.skewers }
+        $printer2Route = if ($payload.routes.printer2) { $payload.routes.printer2 } else { $payload.routes.sides }
+        if ($printer1Route.data) {
+          $targets += [pscustomobject]@{ printer=$routing.skewers; data=[string]$printer1Route.data; route="Impressora 1" }
         }
-        if ($payload.routes.sides.data) {
-          $targets += [pscustomobject]@{ printer=$routing.sides; data=[string]$payload.routes.sides.data; route="Acompanhamentos/outros" }
+        if ($printer2Route.data) {
+          $targets += [pscustomobject]@{ printer=$routing.sides; data=[string]$printer2Route.data; route="Impressora 2" }
         }
       }
       if ($targets.Count -eq 0) {
-        foreach ($printer in $printers) {
-          $targets += [pscustomobject]@{ printer=$printer; data=[string]$payload.data; route="Pedido completo" }
-        }
+        $targets += [pscustomobject]@{ printer=$routing.skewers; data=[string]$payload.data; route="Pedido completo" }
       }
       $results = @()
       foreach ($target in $targets) {

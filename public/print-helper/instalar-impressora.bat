@@ -62,7 +62,7 @@ if errorlevel 1 (
 )
 echo.
 
-echo [3/7] Configurando os pontos de preparo...
+echo [3/7] Configurando as impressoras...
 powershell -NoProfile -ExecutionPolicy Bypass -File "%INSTALLDIR%\cloud-print-agent.ps1" -ConfigureRouting
 if errorlevel 1 (
   echo [ERRO] Nao foi possivel configurar as impressoras.

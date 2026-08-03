@@ -438,6 +438,13 @@ function PrintingCenter({ tenant, jobs, setJobs }: { tenant: Tenant; jobs: Print
   const [activationCode,setActivationCode]=useState("");
   const [setupError,setSetupError]=useState("");
   const [cloudJobs,setCloudJobs]=useState<PrintJob[]>(jobs.filter(j=>j.tenantId===tenant.id));
+  const [routingMode,setRoutingMode]=useState<"single"|"split">("single");
+  const [singlePrinter,setSinglePrinter]=useState<1|2>(1);
+  const [printerOneCategories,setPrinterOneCategories]=useState<string[]>([]);
+  const [catalogCategories,setCatalogCategories]=useState<string[]>([]);
+  const [routingLoading,setRoutingLoading]=useState(true);
+  const [routingSaving,setRoutingSaving]=useState(false);
+  const [routingMessage,setRoutingMessage]=useState("");
   const refresh=async()=>{
     if(!supabase)return;
     const [{data:agents},{data:recentJobs}]=await Promise.all([
@@ -451,6 +458,28 @@ function PrintingCenter({ tenant, jobs, setJobs }: { tenant: Tenant; jobs: Print
     setCloudJobs((recentJobs||[]).map((job)=>({id:job.id,tenantId:tenant.id,label:`Impressão ${String(job.id).slice(0,8)}`,destination:"Cozinha",status:job.status==="printed"?"printed":job.status==="failed"?"failed":"pending",createdAt:new Date(job.created_at).getTime()})));
   };
   useEffect(()=>{refresh();const timer=window.setInterval(refresh,10000);return()=>window.clearInterval(timer)},[tenant.id]);
+  useEffect(()=>{
+    if(!supabase)return;
+    let active=true;
+    (async()=>{
+      const [{data:settings},{data:catalog}]=await Promise.all([
+        supabase!.from("tenant_printer_settings").select("mode,single_printer,printer_one_categories").eq("tenant_id",tenant.id).maybeSingle(),
+        supabase!.from("restaurant_catalogs").select("categories,products").eq("tenant_id",tenant.id).maybeSingle(),
+      ]);
+      if(!active)return;
+      const categoryNames:string[]=[];
+      const addCategory=(value:unknown)=>{const name=String(value||"").trim();if(name&&!categoryNames.some(current=>current.toLocaleLowerCase("pt-BR")===name.toLocaleLowerCase("pt-BR")))categoryNames.push(name)};
+      if(Array.isArray(catalog?.categories))catalog.categories.forEach(addCategory);
+      if(Array.isArray(catalog?.products))catalog.products.forEach((product:{category?:unknown})=>addCategory(product?.category));
+      setCatalogCategories(categoryNames);
+      setRoutingMode(settings?.mode==="split"?"split":"single");
+      setSinglePrinter(Number(settings?.single_printer)===2?2:1);
+      const saved=Array.isArray(settings?.printer_one_categories)?settings.printer_one_categories.map(String):[];
+      setPrinterOneCategories(saved.length?saved:categoryNames.filter(category=>category.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().includes("espet")));
+      setRoutingLoading(false);
+    })();
+    return()=>{active=false};
+  },[tenant.id]);
   const generateCode=async()=>{
     if(!supabase)return;
     setSetupError("");
@@ -467,11 +496,39 @@ function PrintingCenter({ tenant, jobs, setJobs }: { tenant: Tenant; jobs: Print
     try{await queuePrinterTest(tenant.id);await refresh();}
     catch{setSetupError("Não foi possível colocar o teste na fila de impressão.");}
   };
+  const togglePrinterOneCategory=(category:string)=>setPrinterOneCategories(current=>current.includes(category)?current.filter(item=>item!==category):[...current,category]);
+  const saveRouting=async()=>{
+    if(!supabase)return;
+    setRoutingSaving(true);setRoutingMessage("");setSetupError("");
+    const {error}=await supabase.from("tenant_printer_settings").upsert({
+      tenant_id:tenant.id,
+      mode:routingMode,
+      single_printer:singlePrinter,
+      printer_one_categories:printerOneCategories,
+      updated_at:new Date().toISOString(),
+    },{onConflict:"tenant_id"});
+    setRoutingSaving(false);
+    if(error){setSetupError(`Não foi possível salvar o modo de impressão: ${error.message}`);return}
+    setRoutingMessage("Configuração salva. Os próximos pedidos já usarão este modo.");
+  };
+  const printerNames=agent.printer.split(/\s+\+\s+/).map(name=>name.trim()).filter(Boolean);
+  const printerOneName=printerNames[0]||"Impressora 1";
+  const printerTwoName=printerNames[1]||"Impressora 2";
   return <main className="saas-tenant-page"><div className="saas-page-heading"><div><p>IMPRESSÃO NA NUVEM</p><h1>Central de impressão</h1><span>O agente desta loja recebe somente as impressões vinculadas a {tenant.name}.</span></div><button className="saas-primary" onClick={test} disabled={!agent.online}><Printer/> Imprimir teste</button></div>
     <div className={`saas-agent-card ${agent.online?"is-online":""}`}><span className={agent.online?"online":"offline"}><Wifi/></span><div><p>AGENTE WINDOWS · {tenant.name.toUpperCase()}</p><h2>{agent.checking?"Verificando agente...":agent.online?"Conectado e pronto":"Agente desconectado"}</h2><small>{agent.online?`${agent.printer||"Impressoras USB"} · último sinal às ${agent.lastSeen}`:"Gere um código e instale o agente no notebook conectado às impressoras."}</small></div><i className={agent.online?"online":"offline"}/></div>
+    <section className="saas-printer-routing">
+      <div className="saas-routing-heading"><div><p>MODO DE IMPRESSÃO</p><h2>Como os pedidos serão impressos?</h2><small>Você pode mudar o modo sem reinstalar o agente. A alteração vale para pedidos do salão e do delivery.</small></div><button className="saas-primary" onClick={saveRouting} disabled={routingLoading||routingSaving}><CheckCircle2/> {routingSaving?"Salvando...":"Salvar configuração"}</button></div>
+      <div className="saas-routing-modes" role="radiogroup" aria-label="Quantidade de impressoras">
+        <button type="button" role="radio" aria-checked={routingMode==="single"} className={routingMode==="single"?"active":""} onClick={()=>setRoutingMode("single")}><b>1</b><span><strong>Uma impressora</strong><small>Imprime a comanda completa uma única vez.</small></span></button>
+        <button type="button" role="radio" aria-checked={routingMode==="split"} className={routingMode==="split"?"active":""} onClick={()=>setRoutingMode("split")}><b>2</b><span><strong>Duas impressoras</strong><small>Separa os itens pelas categorias escolhidas.</small></span></button>
+      </div>
+      {!routingLoading&&routingMode==="single"&&<div className="saas-single-printer"><p>Escolha qual receberá o pedido completo</p><div><button className={singlePrinter===1?"active":""} onClick={()=>setSinglePrinter(1)}><Printer/><span><b>Impressora 1</b><small>{printerOneName}</small></span></button><button className={singlePrinter===2?"active":""} onClick={()=>setSinglePrinter(2)} disabled={printerNames.length<2}><Printer/><span><b>Impressora 2</b><small>{printerNames.length<2?"Não detectada":printerTwoName}</small></span></button></div></div>}
+      {!routingLoading&&routingMode==="split"&&<div className="saas-category-routing"><div className="saas-category-routing-head"><span>Categoria</span><b>Impressora 1<small>{printerOneName}</small></b><b>Impressora 2<small>{printerTwoName}</small></b></div>{catalogCategories.length?catalogCategories.map(category=><div className="saas-category-route" key={category}><strong>{category}</strong><button className={printerOneCategories.includes(category)?"active":""} onClick={()=>{if(!printerOneCategories.includes(category))togglePrinterOneCategory(category)}} aria-label={`${category} na impressora 1`}><CheckCircle2/></button><button className={!printerOneCategories.includes(category)?"active":""} onClick={()=>{if(printerOneCategories.includes(category))togglePrinterOneCategory(category)}} aria-label={`${category} na impressora 2`}><CheckCircle2/></button></div>):<p className="saas-routing-empty">Cadastre categorias no cardápio para poder direcioná-las.</p>}</div>}
+      {routingMessage&&<div className="saas-routing-success"><CheckCircle2/>{routingMessage}</div>}
+    </section>
     <section className="saas-print-setup">
       <div><b>1</b><span><strong>Gere o código desta loja</strong><small>O código expira em 20 minutos e só pode ser usado uma vez.</small>{activationCode&&<code className="saas-activation-code">{activationCode}</code>}</span><button className="saas-print-toggle" onClick={generateCode}><KeyRound/> {activationCode?"Gerar outro código":"Gerar código de ativação"}</button></div>
-      <div><b>2</b><span><strong>Instale no notebook da loja</strong><small>Baixe, extraia e execute “instalar-impressora.bat”. Com duas impressoras, escolha qual receberá os espetinhos; com uma, o pedido sai completo.</small></span><a className="saas-primary" href="/print-helper/cardapio-cloud-impressora.zip" download><Download/> Baixar agente Windows</a></div>
+      <div><b>2</b><span><strong>Instale no notebook da loja</strong><small>Baixe, extraia e execute “instalar-impressora.bat”. Se houver duas, escolha qual será a Impressora 1; depois direcione as categorias acima.</small></span><a className="saas-primary" href="/print-helper/cardapio-cloud-impressora.zip" download><Download/> Baixar agente Windows</a></div>
     </section>
     {setupError&&<div className="saas-form-error">{setupError}</div>}
     <section className="saas-panel saas-table-panel"><PanelTitle title="Trabalhos recentes" subtitle="Fila isolada desta loja, com confirmação e proteção contra duplicidade"/><JobTable jobs={cloudJobs} tenants={[tenant]}/></section>

@@ -281,6 +281,9 @@ function bytesToBase64(bytes: Uint8Array): string {
 }
 
 export type PrinterRoutePayload = {
+  printer1?: { data: string; itemCount: number };
+  printer2?: { data: string; itemCount: number };
+  /** Compatibilidade com agentes instalados antes do roteamento configuravel. */
   skewers?: { data: string; itemCount: number };
   sides?: { data: string; itemCount: number };
 };
@@ -288,24 +291,36 @@ export type PrinterRoutePayload = {
 const isSkewerCategory = (category?: string) =>
   stripAccents(category || '').trim().toLocaleLowerCase('pt-BR').includes('espet');
 
-function buildOrderRoutesBase64(data: { customer: string; waiter?: string; items: ReceiptItem[]; total?: number }): PrinterRoutePayload {
-  const skewers = data.items.filter((item) => isSkewerCategory(item.category));
-  // Para nenhum item desaparecer, bebidas e qualquer categoria futura seguem
-  // junto dos acompanhamentos nesta configuracao inicial de duas impressoras.
-  const sides = data.items.filter((item) => !isSkewerCategory(item.category));
+const normalizeCategory = (category?: string) =>
+  stripAccents(category || '').trim().toLocaleLowerCase('pt-BR');
+
+function goesToPrinterOne(category: string | undefined, printerOneCategories?: string[]) {
+  if (!printerOneCategories) return isSkewerCategory(category);
+  const selected = new Set(printerOneCategories.map(normalizeCategory));
+  return selected.has(normalizeCategory(category));
+}
+
+function compatibleRoutes(printer1?: { data: string; itemCount: number }, printer2?: { data: string; itemCount: number }): PrinterRoutePayload {
   return {
-    ...(skewers.length ? { skewers: { data: bytesToBase64(buildOrderTicketEscPos({ ...data, items: skewers })), itemCount: skewers.length } } : {}),
-    ...(sides.length ? { sides: { data: bytesToBase64(buildOrderTicketEscPos({ ...data, items: sides })), itemCount: sides.length } } : {}),
+    ...(printer1 ? { printer1, skewers: printer1 } : {}),
+    ...(printer2 ? { printer2, sides: printer2 } : {}),
   };
 }
 
-function buildUpdateRoutesBase64(data: { customer: string; waiter?: string; changes: OrderChange[]; newTotal?: number }): PrinterRoutePayload {
-  const skewers = data.changes.filter((change) => isSkewerCategory(change.category));
-  const sides = data.changes.filter((change) => !isSkewerCategory(change.category));
-  return {
-    ...(skewers.length ? { skewers: { data: bytesToBase64(buildOrderUpdateEscPos({ ...data, changes: skewers })), itemCount: skewers.length } } : {}),
-    ...(sides.length ? { sides: { data: bytesToBase64(buildOrderUpdateEscPos({ ...data, changes: sides })), itemCount: sides.length } } : {}),
-  };
+function buildOrderRoutesBase64(data: { customer: string; waiter?: string; items: ReceiptItem[]; total?: number }, printerOneCategories?: string[]): PrinterRoutePayload {
+  const printer1Items = data.items.filter((item) => goesToPrinterOne(item.category, printerOneCategories));
+  const printer2Items = data.items.filter((item) => !goesToPrinterOne(item.category, printerOneCategories));
+  const printer1 = printer1Items.length ? { data: bytesToBase64(buildOrderTicketEscPos({ ...data, items: printer1Items })), itemCount: printer1Items.length } : undefined;
+  const printer2 = printer2Items.length ? { data: bytesToBase64(buildOrderTicketEscPos({ ...data, items: printer2Items })), itemCount: printer2Items.length } : undefined;
+  return compatibleRoutes(printer1, printer2);
+}
+
+function buildUpdateRoutesBase64(data: { customer: string; waiter?: string; changes: OrderChange[]; newTotal?: number }, printerOneCategories?: string[]): PrinterRoutePayload {
+  const printer1Changes = data.changes.filter((change) => goesToPrinterOne(change.category, printerOneCategories));
+  const printer2Changes = data.changes.filter((change) => !goesToPrinterOne(change.category, printerOneCategories));
+  const printer1 = printer1Changes.length ? { data: bytesToBase64(buildOrderUpdateEscPos({ ...data, changes: printer1Changes })), itemCount: printer1Changes.length } : undefined;
+  const printer2 = printer2Changes.length ? { data: bytesToBase64(buildOrderUpdateEscPos({ ...data, changes: printer2Changes })), itemCount: printer2Changes.length } : undefined;
+  return compatibleRoutes(printer1, printer2);
 }
 
 async function sendToPrintHelper(bytes: Uint8Array, routes?: PrinterRoutePayload) {
@@ -378,8 +393,8 @@ export function buildOrderTicketBase64(data: { customer: string; waiter?: string
   return bytesToBase64(buildOrderTicketEscPos(data));
 }
 
-export function buildOrderTicketRoutesBase64(data: { customer: string; waiter?: string; items: ReceiptItem[]; total?: number }) {
-  return buildOrderRoutesBase64(data);
+export function buildOrderTicketRoutesBase64(data: { customer: string; waiter?: string; items: ReceiptItem[]; total?: number }, printerOneCategories?: string[]) {
+  return buildOrderRoutesBase64(data, printerOneCategories);
 }
 
 export function buildReceiptBase64(data: ReceiptData) {
@@ -390,8 +405,8 @@ export function buildOrderUpdateBase64(data: { customer: string; waiter?: string
   return bytesToBase64(buildOrderUpdateEscPos(data));
 }
 
-export function buildOrderUpdateRoutesBase64(data: { customer: string; waiter?: string; changes: OrderChange[]; newTotal?: number }) {
-  return buildUpdateRoutesBase64(data);
+export function buildOrderUpdateRoutesBase64(data: { customer: string; waiter?: string; changes: OrderChange[]; newTotal?: number }, printerOneCategories?: string[]) {
+  return buildUpdateRoutesBase64(data, printerOneCategories);
 }
 
 /**

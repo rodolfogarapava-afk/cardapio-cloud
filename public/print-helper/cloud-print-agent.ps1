@@ -109,7 +109,7 @@ if ($ConfigureRouting) {
   $availablePrinters = @(Resolve-ThermalPrinters)
   if ($availablePrinters.Count -ge 2) {
     Write-Host ""
-    Write-Host "Escolha a impressora dos ESPETINHOS:" -ForegroundColor Yellow
+    Write-Host "Escolha qual sera a IMPRESSORA 1 (principal):" -ForegroundColor Yellow
     Write-Host "  [1] $($availablePrinters[0])"
     Write-Host "  [2] $($availablePrinters[1])"
     do { $choice = Read-Host "Digite 1 ou 2" } while ($choice -notin @("1", "2"))
@@ -118,8 +118,8 @@ if ($ConfigureRouting) {
     $routingConfig | Add-Member -NotePropertyName skewerPrinter -NotePropertyValue $availablePrinters[$skewerIndex] -Force
     $routingConfig | Add-Member -NotePropertyName sidePrinter -NotePropertyValue $availablePrinters[$sideIndex] -Force
     $routingConfig | ConvertTo-Json | Set-Content -Path $ConfigPath -Encoding UTF8
-    Write-Host "Espetinhos: $($availablePrinters[$skewerIndex])" -ForegroundColor Green
-    Write-Host "Acompanhamentos e demais categorias: $($availablePrinters[$sideIndex])" -ForegroundColor Green
+    Write-Host "Impressora 1: $($availablePrinters[$skewerIndex])" -ForegroundColor Green
+    Write-Host "Impressora 2: $($availablePrinters[$sideIndex])" -ForegroundColor Green
   } elseif ($availablePrinters.Count -eq 1) {
     $routingConfig | Add-Member -NotePropertyName skewerPrinter -NotePropertyValue $availablePrinters[0] -Force
     $routingConfig | Add-Member -NotePropertyName sidePrinter -NotePropertyValue $availablePrinters[0] -Force
@@ -141,7 +141,8 @@ while ($true) {
   try {
     $printers = @(Resolve-ThermalPrinters)
     if ($printers.Count -eq 0) { throw "Nenhuma impressora USB encontrada" }
-    $printerLabel = $printers -join " + "
+    $routing = Get-PrinterRouting $printers $Config
+    $printerLabel = if ($printers.Count -ge 2) { "$($routing.skewers) + $($routing.sides)" } else { $printers -join " + " }
 
     if (((Get-Date) - $LastHeartbeat).TotalSeconds -ge 15) {
       Invoke-AgentRpc "printer_agent_heartbeat" @{ p_token=$Token; p_printer_name=$printerLabel } | Out-Null
@@ -154,19 +155,23 @@ while ($true) {
       if (-not $job.job_id) { continue }
       try {
         $targets = @()
-        if ($printers.Count -ge 2 -and $job.payload.routes) {
-          $routing = Get-PrinterRouting $printers $Config
-          if ($job.payload.routes.skewers.data) {
-            $targets += [pscustomobject]@{ printer=$routing.skewers; data=[string]$job.payload.routes.skewers.data; route="Espetinhos" }
+        if ([string]$job.payload.routingMode -eq "single") {
+          $singleTarget = if ($printers.Count -ge 2 -and [int]$job.payload.singlePrinter -eq 2) { $routing.sides } else { $routing.skewers }
+          $targets += [pscustomobject]@{ printer=$singleTarget; data=[string]$job.payload.data; route="Pedido completo" }
+        } elseif ($printers.Count -ge 2 -and $job.payload.routes) {
+          $printer1Route = if ($job.payload.routes.printer1) { $job.payload.routes.printer1 } else { $job.payload.routes.skewers }
+          $printer2Route = if ($job.payload.routes.printer2) { $job.payload.routes.printer2 } else { $job.payload.routes.sides }
+          if ($printer1Route.data) {
+            $targets += [pscustomobject]@{ printer=$routing.skewers; data=[string]$printer1Route.data; route="Impressora 1" }
           }
-          if ($job.payload.routes.sides.data) {
-            $targets += [pscustomobject]@{ printer=$routing.sides; data=[string]$job.payload.routes.sides.data; route="Acompanhamentos/outros" }
+          if ($printer2Route.data) {
+            $targets += [pscustomobject]@{ printer=$routing.sides; data=[string]$printer2Route.data; route="Impressora 2" }
           }
         }
         if ($targets.Count -eq 0) {
-          foreach ($printer in $printers) {
-            $targets += [pscustomobject]@{ printer=$printer; data=[string]$job.payload.data; route="Pedido completo" }
-          }
+          # Com apenas uma impressora, ou em trabalhos antigos sem rota, nunca
+          # duplique: envie a comanda completa somente uma vez.
+          $targets += [pscustomobject]@{ printer=$routing.skewers; data=[string]$job.payload.data; route="Pedido completo" }
         }
         $failures = @()
         foreach ($target in $targets) {
