@@ -1,4 +1,7 @@
-param([string]$ActivateCode = "")
+param(
+  [string]$ActivateCode = "",
+  [switch]$ConfigureRouting
+)
 
 $ErrorActionPreference = "Stop"
 $SupabaseUrl = "https://mycahirzxfkejxqpvuco.supabase.co"
@@ -68,6 +71,19 @@ function Resolve-ThermalPrinters {
   return @($selected | ForEach-Object { $_.Name })
 }
 
+function Get-PrinterRouting([string[]]$Printers, [object]$AgentConfig) {
+  if ($Printers.Count -lt 2) {
+    return @{ skewers = $Printers[0]; sides = $Printers[0] }
+  }
+  $skewer = [string]$AgentConfig.skewerPrinter
+  $side = [string]$AgentConfig.sidePrinter
+  if ($Printers -notcontains $skewer) { $skewer = $Printers[0] }
+  if ($Printers -notcontains $side -or $side -eq $skewer) {
+    $side = @($Printers | Where-Object { $_ -ne $skewer })[0]
+  }
+  return @{ skewers = $skewer; sides = $side }
+}
+
 if ($ActivateCode) {
   New-Item -ItemType Directory -Path $DataDir -Force | Out-Null
   $device = "$env:COMPUTERNAME-$env:USERNAME"
@@ -82,6 +98,37 @@ if ($ActivateCode) {
     Write-Host "Falha na ativacao: $($_.Exception.Message)" -ForegroundColor Red
     exit 1
   }
+}
+
+if ($ConfigureRouting) {
+  if (-not (Test-Path $ConfigPath)) {
+    Write-Host "Ative o agente antes de configurar as impressoras." -ForegroundColor Red
+    exit 2
+  }
+  $routingConfig = Get-Content $ConfigPath -Raw | ConvertFrom-Json
+  $availablePrinters = @(Resolve-ThermalPrinters)
+  if ($availablePrinters.Count -ge 2) {
+    Write-Host ""
+    Write-Host "Escolha a impressora dos ESPETINHOS:" -ForegroundColor Yellow
+    Write-Host "  [1] $($availablePrinters[0])"
+    Write-Host "  [2] $($availablePrinters[1])"
+    do { $choice = Read-Host "Digite 1 ou 2" } while ($choice -notin @("1", "2"))
+    $skewerIndex = [int]$choice - 1
+    $sideIndex = if ($skewerIndex -eq 0) { 1 } else { 0 }
+    $routingConfig | Add-Member -NotePropertyName skewerPrinter -NotePropertyValue $availablePrinters[$skewerIndex] -Force
+    $routingConfig | Add-Member -NotePropertyName sidePrinter -NotePropertyValue $availablePrinters[$sideIndex] -Force
+    $routingConfig | ConvertTo-Json | Set-Content -Path $ConfigPath -Encoding UTF8
+    Write-Host "Espetinhos: $($availablePrinters[$skewerIndex])" -ForegroundColor Green
+    Write-Host "Acompanhamentos e demais categorias: $($availablePrinters[$sideIndex])" -ForegroundColor Green
+  } elseif ($availablePrinters.Count -eq 1) {
+    $routingConfig | Add-Member -NotePropertyName skewerPrinter -NotePropertyValue $availablePrinters[0] -Force
+    $routingConfig | Add-Member -NotePropertyName sidePrinter -NotePropertyValue $availablePrinters[0] -Force
+    $routingConfig | ConvertTo-Json | Set-Content -Path $ConfigPath -Encoding UTF8
+    Write-Host "Uma impressora detectada. Ela recebera todos os itens: $($availablePrinters[0])" -ForegroundColor Yellow
+  } else {
+    Write-Host "Nenhuma impressora fisica detectada agora. O agente usara automaticamente as impressoras disponiveis." -ForegroundColor Yellow
+  }
+  exit 0
 }
 
 if (-not (Test-Path $ConfigPath)) { exit 2 }
@@ -106,12 +153,27 @@ while ($true) {
     foreach ($job in $jobs) {
       if (-not $job.job_id) { continue }
       try {
-        $bytes = [Convert]::FromBase64String([string]$job.payload.data)
+        $targets = @()
+        if ($printers.Count -ge 2 -and $job.payload.routes) {
+          $routing = Get-PrinterRouting $printers $Config
+          if ($job.payload.routes.skewers.data) {
+            $targets += [pscustomobject]@{ printer=$routing.skewers; data=[string]$job.payload.routes.skewers.data; route="Espetinhos" }
+          }
+          if ($job.payload.routes.sides.data) {
+            $targets += [pscustomobject]@{ printer=$routing.sides; data=[string]$job.payload.routes.sides.data; route="Acompanhamentos/outros" }
+          }
+        }
+        if ($targets.Count -eq 0) {
+          foreach ($printer in $printers) {
+            $targets += [pscustomobject]@{ printer=$printer; data=[string]$job.payload.data; route="Pedido completo" }
+          }
+        }
         $failures = @()
-        foreach ($printer in $printers) {
-          $result = [CloudRawPrinter]::Send($printer, $bytes)
-          Write-Host ("[{0}] {1} -> {2}" -f (Get-Date -Format "HH:mm:ss"), $printer, $result)
-          if ($result -ne "OK") { $failures += "$printer`: $result" }
+        foreach ($target in $targets) {
+          $bytes = [Convert]::FromBase64String($target.data)
+          $result = [CloudRawPrinter]::Send($target.printer, $bytes)
+          Write-Host ("[{0}] {1} [{2}] -> {3}" -f (Get-Date -Format "HH:mm:ss"), $target.printer, $target.route, $result)
+          if ($result -ne "OK") { $failures += "$($target.printer) [$($target.route)]`: $result" }
           Start-Sleep -Milliseconds 400
         }
         if ($failures.Count -gt 0) { throw ($failures -join " | ") }

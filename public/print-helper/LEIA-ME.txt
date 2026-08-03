@@ -7,7 +7,9 @@ CARDAPIO CLOUD - IMPRESSAO AUTOMATICA
 4. No Cardapio Cloud, abra Impressao e gere um codigo de ativacao.
 5. Clique duas vezes em instalar-impressora.bat.
 6. Autorize a instalacao e digite o codigo quando for solicitado.
-7. Volte ao Cardapio Cloud e use o botao Imprimir teste.
+7. Se duas impressoras forem encontradas, escolha qual recebera os ESPETINHOS.
+8. A outra recebera ACOMPANHAMENTOS, BEBIDAS e categorias futuras.
+9. Volte ao Cardapio Cloud e use o botao Imprimir teste.
 
 Se ja havia uma versao do agente instalada, execute este novo instalador com
 um novo codigo. Ele encerra a versao anterior antes de iniciar a atualizacao.
@@ -23,8 +25,10 @@ Cada loja imprime apenas os pedidos do seu proprio acesso.
 TESTE COM DUAS IMPRESSORAS
 --------------------------
 - O agente detecta ate duas impressoras termicas/USB instaladas no Windows.
-- Cada pedido completo e enviado, em sequencia, para as duas impressoras.
+- Com duas impressoras, o pedido e separado por ponto de preparo: espetinhos
+  vao para a impressora escolhida; acompanhamentos e demais categorias vao
+  para a segunda.
 - No teste inicial, deixe somente as duas impressoras desejadas conectadas.
 - Se uma impressora for removida ou apenas uma estiver conectada, os proximos
-  pedidos serao impressos normalmente somente na impressora disponivel.
+  pedidos completos serao impressos normalmente somente nela.
 - O unico arquivo .bat que deve ser executado e instalar-impressora.bat.

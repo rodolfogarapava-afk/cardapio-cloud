@@ -85,6 +85,25 @@ function Resolve-Printers([object]$requested) {
     ForEach-Object { $_.Name })
 }
 
+function Get-PrinterRouting([string[]]$Printers) {
+  if ($Printers.Count -lt 2) { return @{ skewers=$Printers[0]; sides=$Printers[0] } }
+  $skewer = $Printers[0]
+  $side = $Printers[1]
+  $configPath = Join-Path $env:ProgramData "CardapioCloud\printer-agent.json"
+  if (Test-Path $configPath) {
+    try {
+      $agentConfig = Get-Content $configPath -Raw | ConvertFrom-Json
+      if ($Printers -contains [string]$agentConfig.skewerPrinter) { $skewer = [string]$agentConfig.skewerPrinter }
+      if ($Printers -contains [string]$agentConfig.sidePrinter -and [string]$agentConfig.sidePrinter -ne $skewer) {
+        $side = [string]$agentConfig.sidePrinter
+      } else {
+        $side = @($Printers | Where-Object { $_ -ne $skewer })[0]
+      }
+    } catch {}
+  }
+  return @{ skewers=$skewer; sides=$side }
+}
+
 $listener = New-Object System.Net.HttpListener
 # Escuta somente neste notebook. O telefone envia o pedido ao Supabase e o
 # navegador do notebook repassa a impressao para esta ponte local.
@@ -132,12 +151,27 @@ while ($listener.IsListening) {
       $printers = @(Resolve-Printers $requestedPrinters)
       if ($printers.Count -eq 0) { throw "Nenhuma impressora encontrada" }
 
-      $bytes = [System.Convert]::FromBase64String($payload.data)
+      $targets = @()
+      if ($printers.Count -ge 2 -and $payload.routes) {
+        $routing = Get-PrinterRouting $printers
+        if ($payload.routes.skewers.data) {
+          $targets += [pscustomobject]@{ printer=$routing.skewers; data=[string]$payload.routes.skewers.data; route="Espetinhos" }
+        }
+        if ($payload.routes.sides.data) {
+          $targets += [pscustomobject]@{ printer=$routing.sides; data=[string]$payload.routes.sides.data; route="Acompanhamentos/outros" }
+        }
+      }
+      if ($targets.Count -eq 0) {
+        foreach ($printer in $printers) {
+          $targets += [pscustomobject]@{ printer=$printer; data=[string]$payload.data; route="Pedido completo" }
+        }
+      }
       $results = @()
-      foreach ($printer in $printers) {
-        $result = [RawPrinter]::SendBytes($printer, $bytes)
-        $results += @{ printer = $printer; result = $result; ok = ($result -like "OK:*") }
-        Write-Host ("[{0}] {1} -> {2}" -f (Get-Date -Format "HH:mm:ss"), $printer, $result)
+      foreach ($target in $targets) {
+        $bytes = [System.Convert]::FromBase64String($target.data)
+        $result = [RawPrinter]::SendBytes($target.printer, $bytes)
+        $results += @{ printer = $target.printer; route = $target.route; result = $result; ok = ($result -like "OK:*") }
+        Write-Host ("[{0}] {1} [{2}] -> {3}" -f (Get-Date -Format "HH:mm:ss"), $target.printer, $target.route, $result)
         Start-Sleep -Milliseconds 400
       }
       $failures = @($results | Where-Object { -not $_.ok })
@@ -146,7 +180,7 @@ while ($listener.IsListening) {
         $body = @{ ok = $true; printer = ($printers -join " + "); printers = $printers; results = $results } | ConvertTo-Json -Compress -Depth 4
         $res.StatusCode = 200
       } else {
-        $failureText = ($failures | ForEach-Object { "$($_.printer): $($_.result)" }) -join " | "
+        $failureText = ($failures | ForEach-Object { "$($_.printer) [$($_.route)]: $($_.result)" }) -join " | "
         $body = @{ ok = $false; printer = ($printers -join " + "); printers = $printers; error = $failureText; results = $results } | ConvertTo-Json -Compress -Depth 4
         $res.StatusCode = 500
       }

@@ -1,4 +1,4 @@
-import { buildOrderTicketBase64, buildOrderUpdateBase64, buildReceiptBase64, type OrderChange, type ReceiptItem } from "@/lib/printReceipt";
+import { buildOrderTicketBase64, buildOrderTicketRoutesBase64, buildOrderUpdateBase64, buildOrderUpdateRoutesBase64, buildReceiptBase64, type OrderChange, type ReceiptItem } from "@/lib/printReceipt";
 import { supabase } from "@/lib/supabase";
 
 export async function queueKitchenOrder(input:{
@@ -12,10 +12,11 @@ export async function queueKitchenOrder(input:{
 }) {
   if(!supabase) throw new Error("Supabase não configurado");
   const data=buildOrderTicketBase64({customer:input.customer,waiter:input.waiter,items:input.items,total:input.total});
+  const routes=buildOrderTicketRoutesBase64({customer:input.customer,waiter:input.waiter,items:input.items,total:input.total});
   const {error}=await supabase.rpc("queue_print_job",{
     p_tenant_id:input.tenantId,
     p_command_id:input.commandId,
-    p_payload:{data,customer:input.customer,waiter:input.waiter,total:input.total,createdAt:Date.now()},
+    p_payload:{data,routes,items:input.items,customer:input.customer,waiter:input.waiter,total:input.total,createdAt:Date.now()},
     p_job_kind:input.kind||"new_order",
   });
   if(error)throw error;
@@ -77,10 +78,16 @@ export async function queueOrderUpdate(input:{
     changes:input.changes,
     newTotal:input.newTotal,
   });
+  const routes=buildOrderUpdateRoutesBase64({
+    customer:input.customer,
+    waiter:input.waiter,
+    changes:input.changes,
+    newTotal:input.newTotal,
+  });
   const {error}=await supabase.rpc("queue_print_job",{
     p_tenant_id:input.tenantId,
     p_command_id:input.commandId,
-    p_payload:{data,customer:input.customer,waiter:input.waiter,newTotal:input.newTotal,changes:input.changes,createdAt:Date.now()},
+    p_payload:{data,routes,customer:input.customer,waiter:input.waiter,newTotal:input.newTotal,changes:input.changes,createdAt:Date.now()},
     p_job_kind:`order_update_${Date.now()}`,
   });
   if(error)throw error;

@@ -684,7 +684,7 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
                           commandId:savedCommand.id,
                           customer:name,
                           waiter,
-                          items:savedCommand.items.map((item)=>({name:item.name,qty:item.qty,unitPrice:item.price,total:item.price*item.qty,notes:item.detail})),
+                          items:toReceiptItems(savedCommand.items,products),
                           total:savedCommand.total,
                         }).then(()=>setPrintStatuses((current)=>({...current,[savedCommand.id]:"pending"})))
                           .catch((error)=>{
@@ -730,7 +730,7 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
                       queueKitchenOrder({
                         tenantId:tenantNavigation.tenantId!,commandId:command.id,
                         customer:command.tableLabel||command.name,waiter:command.waiterName,
-                        items:toReceiptItems(command.items),total:command.total,kind:`retry_${Date.now()}`,
+                        items:toReceiptItems(command.items,products),total:command.total,kind:`retry_${Date.now()}`,
                       }).then(()=>setPrintStatuses((current)=>({...current,[command.id]:"pending"})))
                         .catch(()=>setPrintStatuses((current)=>({...current,[command.id]:"failed"})));
                     }}>TENTAR NOVAMENTE</button>}
@@ -968,7 +968,7 @@ function deliveryPaymentLabel(method?:string){
   if(value==="debit"||value==="debito"||value==="débito")return"Cartão Débito";
   return"PIX";
 }
-type IntegratedCommand = {id:number;name:string;tableLabel?:string;waiterName?:string;source?:"waiter"|"delivery";count:number;total:number;createdAt:number;kitchenStatus?:"new"|"preparing"|"ready"|"cancelled";cancelledBy?:"customer"|"store";cancelledAt?:string;delivery?:CommandDelivery;items:{productId?:number|string;name:string;qty:number;price:number;detail?:string;delivered:boolean}[]};
+type IntegratedCommand = {id:number;name:string;tableLabel?:string;waiterName?:string;source?:"waiter"|"delivery";count:number;total:number;createdAt:number;kitchenStatus?:"new"|"preparing"|"ready"|"cancelled";cancelledBy?:"customer"|"store";cancelledAt?:string;delivery?:CommandDelivery;items:{productId?:number|string;category?:string;name:string;qty:number;price:number;detail?:string;delivered:boolean}[]};
 type IntegratedSale = {id:number;name:string;total:number;method:string;createdAt:number;items:{name:string;qty:number;price:number;detail?:string}[]};
 type IntegratedExpense = {id:number;description:string;amount:number;createdAt:number};
 
@@ -1416,7 +1416,7 @@ function IntegratedCommands({tenantId,commands,setCommands,sales,setSales,onChar
         commandId:confirmation.command.id,
         customer:confirmation.command.tableLabel||confirmation.command.name,
         waiter:confirmation.command.waiterName,
-        items:toReceiptItems(confirmation.command.items),
+        items:toReceiptItems(confirmation.command.items,products),
         total:confirmation.command.total,
         kind:`reprint_${Date.now()}`,
       }).catch((error)=>console.error("Não foi possível colocar a impressão na fila:",error));
@@ -1496,7 +1496,7 @@ function IntegratedCommands({tenantId,commands,setCommands,sales,setSales,onChar
           commandId:editing.id,
           customer:editing.tableLabel||editing.name,
           waiter:editing.waiterName,
-          items:toReceiptItems(editing.items),
+          items:toReceiptItems(editing.items,products),
           total:editing.total,
           kind:`reprint_${Date.now()}`,
         });
@@ -1512,26 +1512,27 @@ function IntegratedCommands({tenantId,commands,setCommands,sales,setSales,onChar
   };
   const changeItemQty=async(command:IntegratedCommand,index:number,delta:number)=>{
     const item=command.items[index];
+    const product=products.find((p)=>item.productId!==undefined?String(p.id)===String(item.productId):p.name===item.name);
     if(delta>0){
-      const product=products.find((p)=>item.productId!==undefined?String(p.id)===String(item.productId):p.name===item.name);
       if(product?.trackStock&&Number(product.stock||0)<=0)return;
     }
     const nextQty=item.qty+delta;
     const nextItems=nextQty<=0?command.items.filter((_,i)=>i!==index):command.items.map((it,i)=>i===index?{...it,qty:nextQty}:it);
     if(!await adjustStock([{productId:item.productId,name:item.name,qty:-delta}]))return;
-    applyEdit(command,nextItems,{type:delta>0?"adicionado":"removido",name:item.name,qty:1,notes:item.detail});
+    applyEdit(command,nextItems,{type:delta>0?"adicionado":"removido",name:item.name,qty:1,category:item.category||product?.category,notes:item.detail});
   };
   const removeItem=async(command:IntegratedCommand,index:number)=>{
     const item=command.items[index];
+    const product=products.find((p)=>item.productId!==undefined?String(p.id)===String(item.productId):p.name===item.name);
     if(!await adjustStock([{productId:item.productId,name:item.name,qty:item.qty}]))return;
-    applyEdit(command,command.items.filter((_,i)=>i!==index),{type:"removido",name:item.name,qty:item.qty,notes:item.detail});
+    applyEdit(command,command.items.filter((_,i)=>i!==index),{type:"removido",name:item.name,qty:item.qty,category:item.category||product?.category,notes:item.detail});
   };
   const addProductToCommand=async(command:IntegratedCommand,product:Product,detail=""):Promise<void>=>{
     if(product.trackStock&&Number(product.stock||0)<=0)return;
     const existingIndex=command.items.findIndex((item)=>item.name===product.name&&(item.detail||"")===detail);
-    const nextItems=existingIndex>=0?command.items.map((item,i)=>i===existingIndex?{...item,qty:item.qty+1}:item):[...command.items,{productId:product.id,name:product.name,qty:1,price:product.price,detail,delivered:false}];
+    const nextItems=existingIndex>=0?command.items.map((item,i)=>i===existingIndex?{...item,qty:item.qty+1,category:item.category||product.category}:item):[...command.items,{productId:product.id,category:product.category,name:product.name,qty:1,price:product.price,detail,delivered:false}];
     if(!await adjustStock([{productId:product.id,name:product.name,qty:-1}]))return;
-    applyEdit(command,nextItems,{type:"adicionado",name:product.name,qty:1,notes:detail||undefined});
+    applyEdit(command,nextItems,{type:"adicionado",name:product.name,qty:1,category:product.category,notes:detail||undefined});
   };
   const openAddProduct=(command:IntegratedCommand,product:Product)=>{
     if(usesPreparationPoint(product)){setEditDoneness("");setEditMeatNote("");setPendingEditMeat({command,product});return}
@@ -1566,7 +1567,7 @@ function IntegratedCommands({tenantId,commands,setCommands,sales,setSales,onChar
       commandId:command.id,
       customer:command.tableLabel||command.name,
       waiter:command.waiterName,
-      items:toReceiptItems(command.items),
+      items:toReceiptItems(command.items,products),
       total:command.total,
       kind:`reprint_${Date.now()}`,
     }).catch((error)=>console.error("Não foi possível colocar a reimpressão na fila:",error));
@@ -1921,8 +1922,11 @@ function receiptHtml(title:string,customer:string,items:{name:string;qty:number;
   return `<!doctype html><html><head><meta charset="utf-8"><title>${escapePrintHtml(title)}</title><style>body{font:14px monospace;width:72mm;margin:0 auto;padding:8mm 2mm;color:#000}h2{text-align:center;margin:4px 0}hr{border:0;border-top:1px dashed #000}.item{display:flex;justify-content:space-between;margin:7px 0}.detail{display:block;font-size:12px;margin:2px 0 8px 18px}.total{font-size:20px;font-weight:bold;text-align:right}@media print{button{display:none}}</style></head><body><h2>${escapePrintHtml(title)}</h2><p>${new Date().toLocaleString("pt-BR")}</p><hr><b>Mesa/Cliente: ${escapePrintHtml(customer)}</b><hr>${items.map(i=>`<div class="item"><span>${Number(i.qty)||0}x ${escapePrintHtml(i.name)}</span><span>${total!==undefined?`R$ ${((Number(i.qty)||0)*(Number(i.price)||0)).toFixed(2)}`:""}</span></div>${i.detail?`<span class="detail">${escapePrintHtml(i.detail)}</span>`:""}`).join("")}${total!==undefined?`<hr><p class="total">TOTAL R$ ${Number(total).toFixed(2)}</p><p>Pagamento: ${escapePrintHtml(method||"-")}</p>`:""}<script>window.onload=()=>{window.print();setTimeout(()=>window.close(),500)}</script></body></html>`;
 }
 function openPrintDocument(html:string){const frame=document.createElement("iframe");frame.sandbox.add("allow-scripts","allow-modals");frame.style.position="fixed";frame.style.width="0";frame.style.height="0";frame.style.border="0";frame.srcdoc=html;document.body.appendChild(frame);setTimeout(()=>frame.remove(),2000)}
-function toReceiptItems(items:{name:string;qty:number;price:number;detail?:string}[]){
-  return items.map((item)=>({name:item.name,qty:item.qty,unitPrice:item.price,total:item.price*item.qty,notes:item.detail}));
+function toReceiptItems(items:{productId?:number|string;category?:string;name:string;qty:number;price:number;detail?:string}[],catalog:Product[]=[]){
+  return items.map((item)=>{
+    const product=catalog.find((candidate)=>item.productId!==undefined?String(candidate.id)===String(item.productId):candidate.name===item.name);
+    return {name:item.name,qty:item.qty,unitPrice:item.price,total:item.price*item.qty,category:item.category||product?.category,notes:item.detail};
+  });
 }
 // Tenta imprimir na impressora térmica via ponte local (print-helper); se a
 // ponte não estiver rodando, cai para a impressão pelo navegador.

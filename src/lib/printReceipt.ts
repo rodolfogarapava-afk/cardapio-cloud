@@ -14,6 +14,8 @@ export interface ReceiptItem {
   qty: number;
   unitPrice: number;
   total: number;
+  /** Categoria usada para encaminhar o item ao ponto de preparo correto. */
+  category?: string;
   /** Ponto da carne / observação. Impresso sob o item quando presente. */
   notes?: string;
 }
@@ -142,6 +144,8 @@ export interface OrderChange {
   type: 'removido' | 'adicionado';
   name: string;
   qty: number;
+  /** Categoria usada para encaminhar a alteracao a impressora correta. */
+  category?: string;
   /** Ponto da carne / observação do item. */
   notes?: string;
 }
@@ -274,11 +278,39 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-async function sendToPrintHelper(bytes: Uint8Array) {
+export type PrinterRoutePayload = {
+  skewers?: { data: string; itemCount: number };
+  sides?: { data: string; itemCount: number };
+};
+
+const isSkewerCategory = (category?: string) =>
+  stripAccents(category || '').trim().toLocaleLowerCase('pt-BR').includes('espet');
+
+function buildOrderRoutesBase64(data: { customer: string; waiter?: string; items: ReceiptItem[]; total?: number }): PrinterRoutePayload {
+  const skewers = data.items.filter((item) => isSkewerCategory(item.category));
+  // Para nenhum item desaparecer, bebidas e qualquer categoria futura seguem
+  // junto dos acompanhamentos nesta configuracao inicial de duas impressoras.
+  const sides = data.items.filter((item) => !isSkewerCategory(item.category));
+  return {
+    ...(skewers.length ? { skewers: { data: bytesToBase64(buildOrderTicketEscPos({ ...data, items: skewers })), itemCount: skewers.length } } : {}),
+    ...(sides.length ? { sides: { data: bytesToBase64(buildOrderTicketEscPos({ ...data, items: sides })), itemCount: sides.length } } : {}),
+  };
+}
+
+function buildUpdateRoutesBase64(data: { customer: string; waiter?: string; changes: OrderChange[]; newTotal?: number }): PrinterRoutePayload {
+  const skewers = data.changes.filter((change) => isSkewerCategory(change.category));
+  const sides = data.changes.filter((change) => !isSkewerCategory(change.category));
+  return {
+    ...(skewers.length ? { skewers: { data: bytesToBase64(buildOrderUpdateEscPos({ ...data, changes: skewers })), itemCount: skewers.length } } : {}),
+    ...(sides.length ? { sides: { data: bytesToBase64(buildOrderUpdateEscPos({ ...data, changes: sides })), itemCount: sides.length } } : {}),
+  };
+}
+
+async function sendToPrintHelper(bytes: Uint8Array, routes?: PrinterRoutePayload) {
   const res = await fetch(`${PRINT_HELPER_BASE_URL}/print`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ data: bytesToBase64(bytes) }),
+    body: JSON.stringify({ data: bytesToBase64(bytes), ...(routes ? { routes } : {}) }),
   });
   if (!res.ok) {
     const detail = await res.json().catch(() => ({}));
@@ -315,11 +347,15 @@ export async function sendReceiptToPrinter(data: ReceiptData) {
  */
 export async function sendOrderTicketToPrinter(data: { customer: string; waiter?: string; items: ReceiptItem[]; total?: number }) {
   const bytes = buildOrderTicketEscPos(data);
-  await sendToPrintHelper(bytes);
+  await sendToPrintHelper(bytes, buildOrderRoutesBase64(data));
 }
 
 export function buildOrderTicketBase64(data: { customer: string; waiter?: string; items: ReceiptItem[]; total?: number }) {
   return bytesToBase64(buildOrderTicketEscPos(data));
+}
+
+export function buildOrderTicketRoutesBase64(data: { customer: string; waiter?: string; items: ReceiptItem[]; total?: number }) {
+  return buildOrderRoutesBase64(data);
 }
 
 export function buildReceiptBase64(data: ReceiptData) {
@@ -330,11 +366,15 @@ export function buildOrderUpdateBase64(data: { customer: string; waiter?: string
   return bytesToBase64(buildOrderUpdateEscPos(data));
 }
 
+export function buildOrderUpdateRoutesBase64(data: { customer: string; waiter?: string; changes: OrderChange[]; newTotal?: number }) {
+  return buildUpdateRoutesBase64(data);
+}
+
 /**
  * Envia só o bloco de ATUALIZAÇÃO (item removido/adicionado numa edição de
  * comanda já aberta) para a impressora térmica via ponte local.
  */
 export async function sendOrderUpdateToPrinter(data: { customer: string; waiter?: string; changes: OrderChange[]; newTotal?: number }) {
   const bytes = buildOrderUpdateEscPos(data);
-  await sendToPrintHelper(bytes);
+  await sendToPrintHelper(bytes, buildUpdateRoutesBase64(data));
 }

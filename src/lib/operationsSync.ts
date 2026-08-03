@@ -13,7 +13,7 @@ export type CloudCommand = {
   kitchenStatus?: "new" | "preparing" | "ready" | "cancelled";
   cancelledBy?: "customer" | "store";
   cancelledAt?: string;
-  items: { productId?: number | string; name: string; qty: number; price: number; detail?: string; delivered: boolean }[];
+  items: { productId?: number | string; category?: string; name: string; qty: number; price: number; detail?: string; delivered: boolean }[];
 };
 
 export type CloudSale = {

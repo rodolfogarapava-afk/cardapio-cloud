@@ -40,7 +40,7 @@ if not exist "%PASTA%print-helper.ps1" (
   exit /b 1
 )
 
-echo [1/6] Instalando os arquivos em uma pasta permanente...
+echo [1/7] Instalando os arquivos em uma pasta permanente...
 if not exist "%INSTALLDIR%" mkdir "%INSTALLDIR%"
 copy /Y "%PASTA%cloud-print-agent.ps1" "%INSTALLDIR%\cloud-print-agent.ps1" >nul
 if errorlevel 1 goto :copy_error
@@ -51,7 +51,7 @@ if errorlevel 1 goto :copy_error
 echo      OK - arquivos instalados em %INSTALLDIR%.
 echo.
 
-echo [2/6] Vinculando este notebook a loja...
+echo [2/7] Vinculando este notebook a loja...
 set /p "CODIGO=Digite o codigo mostrado no site: "
 powershell -NoProfile -ExecutionPolicy Bypass -File "%INSTALLDIR%\cloud-print-agent.ps1" -ActivateCode "%CODIGO%"
 if errorlevel 1 (
@@ -62,13 +62,22 @@ if errorlevel 1 (
 )
 echo.
 
-echo [3/6] Autorizando comunicacao local segura...
+echo [3/7] Configurando os pontos de preparo...
+powershell -NoProfile -ExecutionPolicy Bypass -File "%INSTALLDIR%\cloud-print-agent.ps1" -ConfigureRouting
+if errorlevel 1 (
+  echo [ERRO] Nao foi possivel configurar as impressoras.
+  pause
+  exit /b 1
+)
+echo.
+
+echo [4/7] Autorizando comunicacao local segura...
 netsh http delete urlacl url=http://127.0.0.1:9100/ >nul 2>&1
 netsh http add urlacl url=http://127.0.0.1:9100/ user=Everyone >nul
 echo      OK.
 echo.
 
-echo [4/6] Configurando inicio automatico com o Windows...
+echo [5/7] Configurando inicio automatico com o Windows...
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$s=New-Object -ComObject WScript.Shell; $dest=[IO.Path]::Combine($env:APPDATA,'Microsoft\Windows\Start Menu\Programs\Startup','Impressora Cardapio Cloud.lnk'); $l=$s.CreateShortcut($dest); $l.TargetPath='%INSTALLEDVBS%'; $l.WorkingDirectory='%INSTALLDIR%'; $l.Description='Agente de impressao Cardapio Cloud'; $l.Save()"
 if errorlevel 1 (
   echo      [AVISO] Nao consegui criar o inicio automatico.
@@ -77,12 +86,12 @@ if errorlevel 1 (
 )
 echo.
 
-echo [5/6] Iniciando o agente agora...
+echo [6/7] Iniciando o agente agora...
 start "" wscript "%INSTALLEDVBS%"
 echo      OK.
 echo.
 
-echo [6/6] Procurando ate duas impressoras USB...
+echo [7/7] Conferindo o agente e as impressoras USB...
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$r=$null; for($i=1; $i -le 10 -and -not $r; $i++){ try { $r=Invoke-RestMethod -Uri 'http://127.0.0.1:9100/status' -TimeoutSec 2 } catch { if($i -lt 10){ Start-Sleep -Seconds 2 } } }; if(-not $r){ Write-Host '      [ERRO] O agente nao respondeu na porta 9100 apos varias tentativas.' -ForegroundColor Red; exit 1 }; $p=@($r.printers); if($p.Count -ge 2){ Write-Host ('      OK - 2 impressoras detectadas: ' + ($p -join ' + ')) -ForegroundColor Green } elseif($p.Count -eq 1){ Write-Host ('      [AVISO] Apenas 1 impressora detectada: ' + $p[0]) -ForegroundColor Yellow } else { Write-Host '      Agente ativo, mas nenhuma impressora fisica foi detectada.' -ForegroundColor Yellow }; exit 0"
 if errorlevel 1 (
   echo.
