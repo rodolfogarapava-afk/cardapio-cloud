@@ -17,6 +17,11 @@ echo   Agente de impressao - Cardapio Cloud
 echo ============================================================
 echo.
 
+echo Encerrando uma versao anterior do agente, se estiver aberta...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$self=$PID; Get-CimInstance Win32_Process -ErrorAction SilentlyContinue ^| Where-Object { $_.ProcessId -ne $self -and $_.Name -match '^(powershell|pwsh)\.exe$' -and $_.CommandLine -match '(cloud-print-agent|print-helper)\.ps1' } ^| ForEach-Object { Invoke-CimMethod -InputObject $_ -MethodName Terminate -ErrorAction SilentlyContinue ^| Out-Null }"
+echo      OK.
+echo.
+
 if not exist "%VBS%" (
   echo [ERRO] Extraia todos os arquivos do ZIP antes de instalar.
   echo.
@@ -60,8 +65,8 @@ start "" wscript "%VBS%"
 echo      OK.
 echo.
 
-echo [5/5] Procurando a impressora USB...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Sleep -Seconds 3; try { $r=Invoke-RestMethod -Uri 'http://127.0.0.1:9100/status' -TimeoutSec 5; if($r.printer){ Write-Host ('      OK - Impressora detectada: ' + $r.printer) -ForegroundColor Green } else { Write-Host '      Agente ativo, mas nenhuma impressora foi detectada.' -ForegroundColor Yellow } } catch { Write-Host '      [AVISO] O agente nao respondeu. Instale o driver da Knup e tente novamente.' -ForegroundColor Yellow }"
+echo [5/5] Procurando ate duas impressoras USB...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Sleep -Seconds 3; try { $r=Invoke-RestMethod -Uri 'http://127.0.0.1:9100/status' -TimeoutSec 5; $p=@($r.printers); if($p.Count -ge 2){ Write-Host ('      OK - 2 impressoras detectadas: ' + ($p -join ' + ')) -ForegroundColor Green } elseif($p.Count -eq 1){ Write-Host ('      [AVISO] Apenas 1 impressora detectada: ' + $p[0]) -ForegroundColor Yellow } else { Write-Host '      Agente ativo, mas nenhuma impressora foi detectada.' -ForegroundColor Yellow } } catch { Write-Host '      [AVISO] O agente nao respondeu. Instale os drivers das impressoras e tente novamente.' -ForegroundColor Yellow }"
 echo.
 
 echo ============================================================

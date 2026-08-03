@@ -10,7 +10,7 @@
 
 param(
   [int]$Port = 9100,
-  [string]$PrinterName = ""   # vazio = auto-detecta a impressora termica
+  [string[]]$PrinterName = @() # vazio = auto-detecta ate duas impressoras termicas
 )
 
 $ErrorActionPreference = "Stop"
@@ -60,19 +60,29 @@ public class RawPrinter {
 }
 '@
 
-function Resolve-Printer([string]$requested) {
-  if ($requested) { return $requested }
-  $all = Get-Printer -ErrorAction SilentlyContinue
-  # 1) impressora numa porta USB com nome tipico de termica
-  $p = $all | Where-Object { $_.Name -match 'POS|58|IM60|thermal|termic' } | Select-Object -First 1
-  if ($p) { return $p.Name }
-  # 2) impressora ligada a uma porta USB
-  $p = $all | Where-Object { $_.PortName -match 'USB' } | Select-Object -First 1
-  if ($p) { return $p.Name }
-  # 3) impressora padrao do Windows
-  $def = Get-CimInstance Win32_Printer -Filter "Default=True" -ErrorAction SilentlyContinue
-  if ($def) { return $def.Name }
-  return $null
+function Resolve-Printers([object]$requested) {
+  $requestedNames = @($requested) | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) }
+  if ($requestedNames.Count -gt 0) { return @($requestedNames | Select-Object -Unique -First 2) }
+
+  $virtualPattern = 'PDF|XPS|OneNote|Fax|Microsoft Print|Adobe PDF|CutePDF|doPDF|RustDesk|AnyDesk|Remote Printer'
+  $all = @(Get-Printer -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -notmatch $virtualPattern -and $_.PortName -notmatch 'PORTPROMPT:|FILE:|NUL:' })
+
+  # 1) modelos termicos conhecidos; 2) demais impressoras USB; 3) padrao.
+  $preferred = @($all | Where-Object { $_.Name -match 'OASIS|OIA|KNUP|POS|58|80|IM60|thermal|termic' } | Sort-Object Name)
+  $usb = @($all | Where-Object { $_.PortName -match 'USB' } | Sort-Object Name)
+  $candidates = @($preferred + $usb)
+  if ($candidates.Count -eq 0) {
+    $default = Get-CimInstance Win32_Printer -Filter "Default=True" -ErrorAction SilentlyContinue
+    $safeDefault = $all | Where-Object { $_.Name -eq $default.Name } | Select-Object -First 1
+    if ($safeDefault) { $candidates = @($safeDefault) }
+  }
+
+  return @($candidates |
+    Group-Object Name |
+    ForEach-Object { $_.Group | Select-Object -First 1 } |
+    Select-Object -First 2 |
+    ForEach-Object { $_.Name })
 }
 
 $listener = New-Object System.Net.HttpListener
@@ -81,7 +91,8 @@ $listener = New-Object System.Net.HttpListener
 $listener.Prefixes.Add("http://127.0.0.1:$Port/")
 $listener.Start()
 Write-Host "Agente de impressao ativo em http://127.0.0.1:$Port/  (Ctrl+C para sair)"
-Write-Host "Impressora alvo: $((Resolve-Printer $PrinterName))"
+$startupPrinters = @(Resolve-Printers $PrinterName)
+Write-Host "Impressoras alvo: $($startupPrinters -join ' + ')"
 
 while ($listener.IsListening) {
   $ctx = $listener.GetContext()
@@ -102,8 +113,8 @@ while ($listener.IsListening) {
     }
 
     if ($req.HttpMethod -eq "GET" -and $req.Url.AbsolutePath -eq "/status") {
-      $printer = Resolve-Printer $PrinterName
-      $body = @{ ok = $true; printer = $printer } | ConvertTo-Json -Compress
+      $printers = @(Resolve-Printers $PrinterName)
+      $body = @{ ok = $true; printer = ($printers -join " + "); printers = $printers } | ConvertTo-Json -Compress
       $buf = [System.Text.Encoding]::UTF8.GetBytes($body)
       $res.ContentType = "application/json"
       $res.OutputStream.Write($buf, 0, $buf.Length)
@@ -117,24 +128,32 @@ while ($listener.IsListening) {
       $reader.Close()
       $payload = $raw | ConvertFrom-Json
 
-      $printer = Resolve-Printer $payload.printer
-      if (-not $printer) { throw "Nenhuma impressora encontrada" }
+      $requestedPrinters = if ($payload.printers) { @($payload.printers) } elseif ($payload.printer) { @($payload.printer) } else { $PrinterName }
+      $printers = @(Resolve-Printers $requestedPrinters)
+      if ($printers.Count -eq 0) { throw "Nenhuma impressora encontrada" }
 
       $bytes = [System.Convert]::FromBase64String($payload.data)
-      $result = [RawPrinter]::SendBytes($printer, $bytes)
+      $results = @()
+      foreach ($printer in $printers) {
+        $result = [RawPrinter]::SendBytes($printer, $bytes)
+        $results += @{ printer = $printer; result = $result; ok = ($result -like "OK:*") }
+        Write-Host ("[{0}] {1} -> {2}" -f (Get-Date -Format "HH:mm:ss"), $printer, $result)
+        Start-Sleep -Milliseconds 400
+      }
+      $failures = @($results | Where-Object { -not $_.ok })
 
-      if ($result -like "OK:*") {
-        $body = @{ ok = $true; printer = $printer; bytes = [int]($result.Split(':')[1]) } | ConvertTo-Json -Compress
+      if ($failures.Count -eq 0) {
+        $body = @{ ok = $true; printer = ($printers -join " + "); printers = $printers; results = $results } | ConvertTo-Json -Compress -Depth 4
         $res.StatusCode = 200
       } else {
-        $body = @{ ok = $false; printer = $printer; error = $result } | ConvertTo-Json -Compress
+        $failureText = ($failures | ForEach-Object { "$($_.printer): $($_.result)" }) -join " | "
+        $body = @{ ok = $false; printer = ($printers -join " + "); printers = $printers; error = $failureText; results = $results } | ConvertTo-Json -Compress -Depth 4
         $res.StatusCode = 500
       }
       $buf = [System.Text.Encoding]::UTF8.GetBytes($body)
       $res.ContentType = "application/json"
       $res.OutputStream.Write($buf, 0, $buf.Length)
       $res.Close()
-      Write-Host ("[{0}] {1} -> {2}" -f (Get-Date -Format "HH:mm:ss"), $printer, $result)
       continue
     }
 

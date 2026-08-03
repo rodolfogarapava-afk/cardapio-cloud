@@ -1,15 +1,26 @@
 CARDAPIO CLOUD - IMPRESSAO AUTOMATICA
 =====================================
 
-1. Conecte a impressora Knup ao notebook por USB.
-2. Instale o driver da impressora no Windows.
+1. Conecte as duas impressoras termicas ao notebook por USB.
+2. Instale o driver de cada impressora no Windows.
 3. Extraia todos os arquivos deste ZIP.
 4. No Cardapio Cloud, abra Impressao e gere um codigo de ativacao.
 5. Clique duas vezes em instalar-impressora.bat.
 6. Autorize a instalacao e digite o codigo quando for solicitado.
 7. Volte ao Cardapio Cloud e use o botao Imprimir teste.
 
+Se ja havia uma versao do agente instalada, execute este novo instalador com
+um novo codigo. Ele encerra a versao anterior antes de iniciar a atualizacao.
+
 O notebook precisa estar ligado e conectado a internet. O site nao precisa
 permanecer aberto para receber os pedidos feitos pelo telefone.
 
 Cada loja imprime apenas os pedidos do seu proprio acesso.
+
+TESTE COM DUAS IMPRESSORAS
+--------------------------
+- O agente detecta ate duas impressoras termicas/USB instaladas no Windows.
+- Cada pedido completo e enviado, em sequencia, para as duas impressoras.
+- No teste inicial, deixe somente as duas impressoras desejadas conectadas.
+- Se apenas uma for detectada, o pedido sera impresso somente nela e o
+  instalador mostrara um aviso.

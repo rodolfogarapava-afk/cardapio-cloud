@@ -49,14 +49,23 @@ function Invoke-AgentRpc([string]$Name, [hashtable]$Body) {
     -Headers $Headers -ContentType "application/json" -Body ($Body | ConvertTo-Json -Compress) -TimeoutSec 15
 }
 
-function Resolve-ThermalPrinter {
-  $virtualPattern = 'PDF|XPS|OneNote|Fax|Microsoft Print|Adobe PDF|CutePDF|doPDF'
-  $all = Get-Printer -ErrorAction SilentlyContinue |
+function Resolve-ThermalPrinters {
+  $virtualPattern = 'PDF|XPS|OneNote|Fax|Microsoft Print|Adobe PDF|CutePDF|doPDF|RustDesk|AnyDesk|Remote Printer'
+  $all = @(Get-Printer -ErrorAction SilentlyContinue |
     Where-Object { $_.Name -notmatch $virtualPattern -and $_.PortName -notmatch 'PORTPROMPT:|FILE:|NUL:' }
-  $printer = $all | Where-Object { $_.Name -match 'KNUP|POS|58|80|IM60|thermal|termic' } | Select-Object -First 1
-  if (-not $printer) { $printer = $all | Where-Object { $_.PortName -match 'USB' } | Select-Object -First 1 }
-  if (-not $printer) { return $null }
-  return $printer.Name
+  )
+
+  # Teste inicial com duas impressoras: prioriza modelos termicos conhecidos e
+  # completa a lista com outras impressoras USB. O nome e usado como chave para
+  # impedir que a mesma impressora seja incluida duas vezes.
+  $preferred = @($all | Where-Object { $_.Name -match 'OASIS|OIA|KNUP|POS|58|80|IM60|thermal|termic' } | Sort-Object Name)
+  $usb = @($all | Where-Object { $_.PortName -match 'USB' } | Sort-Object Name)
+  $selected = @($preferred + $usb) |
+    Group-Object Name |
+    ForEach-Object { $_.Group | Select-Object -First 1 } |
+    Select-Object -First 2
+
+  return @($selected | ForEach-Object { $_.Name })
 }
 
 if ($ActivateCode) {
@@ -83,11 +92,12 @@ $InterJobDelaySeconds = 5
 
 while ($true) {
   try {
-    $printer = Resolve-ThermalPrinter
-    if (-not $printer) { throw "Nenhuma impressora USB encontrada" }
+    $printers = @(Resolve-ThermalPrinters)
+    if ($printers.Count -eq 0) { throw "Nenhuma impressora USB encontrada" }
+    $printerLabel = $printers -join " + "
 
     if (((Get-Date) - $LastHeartbeat).TotalSeconds -ge 15) {
-      Invoke-AgentRpc "printer_agent_heartbeat" @{ p_token=$Token; p_printer_name=$printer } | Out-Null
+      Invoke-AgentRpc "printer_agent_heartbeat" @{ p_token=$Token; p_printer_name=$printerLabel } | Out-Null
       $LastHeartbeat = Get-Date
     }
 
@@ -97,8 +107,14 @@ while ($true) {
       if (-not $job.job_id) { continue }
       try {
         $bytes = [Convert]::FromBase64String([string]$job.payload.data)
-        $result = [CloudRawPrinter]::Send($printer, $bytes)
-        if ($result -ne "OK") { throw $result }
+        $failures = @()
+        foreach ($printer in $printers) {
+          $result = [CloudRawPrinter]::Send($printer, $bytes)
+          Write-Host ("[{0}] {1} -> {2}" -f (Get-Date -Format "HH:mm:ss"), $printer, $result)
+          if ($result -ne "OK") { $failures += "$printer`: $result" }
+          Start-Sleep -Milliseconds 400
+        }
+        if ($failures.Count -gt 0) { throw ($failures -join " | ") }
         $confirmed = $false
         for ($attempt = 1; $attempt -le 5 -and -not $confirmed; $attempt++) {
           try {

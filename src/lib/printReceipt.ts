@@ -289,7 +289,7 @@ async function sendToPrintHelper(bytes: Uint8Array) {
 export async function getPrintHelperStatus() {
   const response = await fetch(`${PRINT_HELPER_BASE_URL}/status`, { signal: AbortSignal.timeout(3500) });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  return response.json() as Promise<{ ok: boolean; printer?: string | null }>;
+  return response.json() as Promise<{ ok: boolean; printer?: string | null; printers?: string[] }>;
 }
 
 export async function sendPrinterTest() {
