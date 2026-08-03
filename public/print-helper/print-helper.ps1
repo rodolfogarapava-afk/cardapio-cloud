@@ -108,7 +108,15 @@ $listener = New-Object System.Net.HttpListener
 # Escuta somente neste notebook. O telefone envia o pedido ao Supabase e o
 # navegador do notebook repassa a impressao para esta ponte local.
 $listener.Prefixes.Add("http://127.0.0.1:$Port/")
-$listener.Start()
+$startupErrorLog = Join-Path $PSScriptRoot "print-helper-error.log"
+try {
+  $listener.Start()
+  Remove-Item -LiteralPath $startupErrorLog -Force -ErrorAction SilentlyContinue
+} catch {
+  $startupMessage = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Nao foi possivel abrir a porta $Port`: $($_.Exception.Message)"
+  Set-Content -LiteralPath $startupErrorLog -Value $startupMessage -Encoding UTF8
+  throw
+}
 Write-Host "Agente de impressao ativo em http://127.0.0.1:$Port/  (Ctrl+C para sair)"
 $startupPrinters = @(Resolve-Printers $PrinterName)
 Write-Host "Impressoras alvo: $($startupPrinters -join ' + ')"
