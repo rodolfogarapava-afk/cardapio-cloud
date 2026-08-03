@@ -14,6 +14,26 @@ insert into public.tenant_printer_settings (tenant_id)
 select id from public.tenants
 on conflict (tenant_id) do nothing;
 
+-- Toda loja criada futuramente ja nasce com o modo seguro de uma impressora.
+create or replace function public.initialize_tenant_printer_settings()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  insert into public.tenant_printer_settings (tenant_id, mode, single_printer)
+  values (new.id, 'single', 1)
+  on conflict (tenant_id) do nothing;
+  return new;
+end;
+$$;
+
+drop trigger if exists tenants_initialize_printer_settings on public.tenants;
+create trigger tenants_initialize_printer_settings
+after insert on public.tenants
+for each row execute function public.initialize_tenant_printer_settings();
+
 alter table public.tenant_printer_settings enable row level security;
 
 drop policy if exists "members manage printer settings" on public.tenant_printer_settings;
