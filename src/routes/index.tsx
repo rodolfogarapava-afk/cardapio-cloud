@@ -638,8 +638,17 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
                         </div>;
                       })}
                     </div>
-                    <label className="customer-field">Mesa ou cliente
-                      <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Ex.: Mesa 35" />
+                    <label className="customer-field">Número da mesa
+                      <input
+                        value={customerName}
+                        onChange={(e) => setCustomerName(e.target.value.replace(/\D/g,""))}
+                        placeholder="Ex.: 35"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        autoComplete="off"
+                        aria-label="Número da mesa"
+                        required
+                      />
                     </label>
                     <label className="customer-field">Garçom responsável
                       <input value={waiterName} onChange={(e) => {
@@ -651,7 +660,7 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
                     <div className="cart-total"><span>Total</span><strong>R$ {total.toFixed(2).replace(".", ",")}</strong></div>
                     <div className="cart-actions save-command-actions">
                       {commandError&&<p className="form-error">{commandError}</p>}
-                      <button className="primary" disabled={!customerName.trim()||!waiterName.trim()||commandSubmitting} onClick={async() => {
+                      <button className="primary" disabled={!/^\d+$/.test(customerName)||!waiterName.trim()||commandSubmitting} onClick={async() => {
                         setCommandSubmitting(true);
                         setCommandError("");
                         const name=customerName.trim();
