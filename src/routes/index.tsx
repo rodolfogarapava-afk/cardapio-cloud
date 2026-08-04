@@ -405,6 +405,7 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
   const customPaymentAmount=Number(paymentCustomAmount.replace(",","."));
   const paymentAmount=paymentMode==="full"?selectedDue:paymentMode==="split"?selectedDue/splitCount:(Number.isFinite(customPaymentAmount)?customPaymentAmount:0);
   const paymentAmountValid=paymentAmount>0&&paymentAmount<=selectedDue+0.001;
+  const paymentWillComplete=paymentAmountValid&&paymentAmount>=commandDue-0.001;
   const cashAmount=Number(cashReceived.replace(",","."));
   const cashPaymentValid=paymentMethod!=="Dinheiro"||(Number.isFinite(cashAmount)&&cashAmount>=paymentAmount);
   const cancelPayment=()=>{
@@ -859,7 +860,7 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
                   }).catch((error)=>console.error("Pagamento confirmado, mas o comprovante não entrou na fila de impressão:",error));
                   else printCustomerReceipt(sale);
                   playNotificationSound("success"); setCart({}); setCartDetails({}); setCustomerName(""); setCashReceived(""); setPaymentCommandId(null); setPaymentCommandBackup(null); setSent(true); setModal(null);setPaymentProcessing(false);
-                }}>{paymentProcessing?"REGISTRANDO...":isComplete?"CONFIRMAR PAGAMENTO E IMPRIMIR":"REGISTRAR PAGAMENTO PARCIAL"}</button>
+                }}>{paymentProcessing?"REGISTRANDO...":paymentWillComplete?"CONFIRMAR PAGAMENTO E IMPRIMIR":"REGISTRAR PAGAMENTO PARCIAL"}</button>
               </>
             )}
             {modal === "about" && (
