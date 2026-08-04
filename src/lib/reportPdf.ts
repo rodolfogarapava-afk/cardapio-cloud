@@ -2,9 +2,15 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 
 const BUSINESS = "Burguer House";
-const brl = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+const brl = (v: number) =>
+  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 const formatDateTime = (timestamp: number) =>
-  new Date(timestamp).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  new Date(timestamp).toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 const formatDate = (timestamp: number) => new Date(timestamp).toLocaleDateString("pt-BR");
 
 export interface ReportSale {
@@ -23,6 +29,7 @@ export interface ReportExpense {
 }
 
 export interface ReportPdfData {
+  businessName?: string;
   periodLabel: string;
   sales: ReportSale[];
   expenses: ReportExpense[];
@@ -33,7 +40,15 @@ export interface ReportPdfData {
 
 // Gera um relatório PDF completo (A4, letra legível) com resumo financeiro,
 // ranking de produtos, vendas detalhadas e custos — para consulta fora do app.
-export function generateReportPdf({ periodLabel, sales, expenses, pendingCommands }: ReportPdfData) {
+export function generateReportPdf({
+  businessName = BUSINESS,
+  periodLabel,
+  sales,
+  expenses,
+  pendingCommands,
+  includeItems = true,
+  includeCharts = true,
+}: ReportPdfData) {
   const totalSales = sales.reduce((sum, sale) => sum + sale.total, 0);
   const totalExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0);
   const profit = totalSales - totalExpenses;
@@ -46,7 +61,7 @@ export function generateReportPdf({ periodLabel, sales, expenses, pendingCommand
   // Cabeçalho
   doc.setFont("helvetica", "bold");
   doc.setFontSize(20);
-  doc.text(BUSINESS, pageW / 2, 18, { align: "center" });
+  doc.text(businessName, pageW / 2, 18, { align: "center" });
   doc.setFontSize(13);
   doc.text("Relatório de Vendas e Custos", pageW / 2, 26, { align: "center" });
   doc.setFont("helvetica", "normal");
@@ -76,58 +91,90 @@ export function generateReportPdf({ periodLabel, sales, expenses, pendingCommand
     margin: { left: margin, right: margin },
   });
 
-  // Produtos vendidos
-  const grouped = new Map<string, { qty: number; revenue: number }>();
-  sales.flatMap((sale) => sale.items).forEach((item) => {
-    const old = grouped.get(item.name) || { qty: 0, revenue: 0 };
-    grouped.set(item.name, { qty: old.qty + item.qty, revenue: old.revenue + item.qty * item.price });
-  });
-  const ranking = Array.from(grouped.entries()).sort((a, b) => b[1].revenue - a[1].revenue);
-
   let y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(13);
-  doc.text("Produtos vendidos", margin, y);
-  autoTable(doc, {
-    startY: y + 2,
-    head: [["Produto", "Qtd", "Receita"]],
-    body: ranking.length
-      ? ranking.map(([name, data]) => [name, String(data.qty), brl(data.revenue)])
-      : [["-", "-", "Nenhuma venda no período"]],
-    theme: "striped",
-    styles: { fontSize: 10, cellPadding: 2 },
-    headStyles: { fillColor: [55, 65, 81], textColor: 255 },
-    columnStyles: { 1: { halign: "right" }, 2: { halign: "right" } },
-    margin: { left: margin, right: margin },
-  });
+  if (includeCharts) {
+    const methods = new Map<string, number>();
+    sales.forEach((sale) => methods.set(sale.method, (methods.get(sale.method) || 0) + sale.total));
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.text("Resumo por forma de pagamento", margin, y);
+    autoTable(doc, {
+      startY: y + 2,
+      head: [["Forma de pagamento", "Valor", "Participação"]],
+      body: methods.size
+        ? Array.from(methods.entries()).map(([method, total]) => [
+            method,
+            brl(total),
+            `${totalSales > 0 ? ((total / totalSales) * 100).toFixed(1) : "0.0"}%`,
+          ])
+        : [["-", brl(0), "0.0%"]],
+      theme: "striped",
+      styles: { fontSize: 10, cellPadding: 2 },
+      headStyles: { fillColor: [55, 65, 81], textColor: 255 },
+      columnStyles: { 1: { halign: "right" }, 2: { halign: "right" } },
+      margin: { left: margin, right: margin },
+    });
+  }
 
-  // Vendas detalhadas (uma linha por item)
-  y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(13);
-  doc.text("Vendas detalhadas", margin, y);
-  const sortedSales = [...sales].sort((a, b) => a.createdAt - b.createdAt);
-  const saleRows = sortedSales.flatMap((sale) =>
-    sale.items.map((item) => [
-      formatDateTime(sale.createdAt),
-      sale.name,
-      item.name,
-      item.detail || "-",
-      String(item.qty),
-      brl(item.qty * item.price),
-      sale.method,
-    ])
-  );
-  autoTable(doc, {
-    startY: y + 2,
-    head: [["Data/Hora", "Mesa", "Produto", "Ponto / Obs.", "Qtd", "Valor", "Pgto"]],
-    body: saleRows.length ? saleRows : [["-", "-", "-", "-", "-", "-", "-"]],
-    theme: "striped",
-    styles: { fontSize: 9, cellPadding: 1.6 },
-    headStyles: { fillColor: [55, 65, 81], textColor: 255 },
-    columnStyles: { 4: { halign: "right" }, 5: { halign: "right" } },
-    margin: { left: margin, right: margin },
-  });
+  // Produtos vendidos
+  if (includeItems) {
+    const grouped = new Map<string, { qty: number; revenue: number }>();
+    sales
+      .flatMap((sale) => sale.items)
+      .forEach((item) => {
+        const old = grouped.get(item.name) || { qty: 0, revenue: 0 };
+        grouped.set(item.name, {
+          qty: old.qty + item.qty,
+          revenue: old.revenue + item.qty * item.price,
+        });
+      });
+    const ranking = Array.from(grouped.entries()).sort((a, b) => b[1].revenue - a[1].revenue);
+
+    y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.text("Produtos vendidos", margin, y);
+    autoTable(doc, {
+      startY: y + 2,
+      head: [["Produto", "Qtd", "Receita"]],
+      body: ranking.length
+        ? ranking.map(([name, data]) => [name, String(data.qty), brl(data.revenue)])
+        : [["-", "-", "Nenhuma venda no período"]],
+      theme: "striped",
+      styles: { fontSize: 10, cellPadding: 2 },
+      headStyles: { fillColor: [55, 65, 81], textColor: 255 },
+      columnStyles: { 1: { halign: "right" }, 2: { halign: "right" } },
+      margin: { left: margin, right: margin },
+    });
+
+    // Vendas detalhadas (uma linha por item)
+    y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.text("Vendas detalhadas", margin, y);
+    const sortedSales = [...sales].sort((a, b) => a.createdAt - b.createdAt);
+    const saleRows = sortedSales.flatMap((sale) =>
+      sale.items.map((item) => [
+        formatDateTime(sale.createdAt),
+        sale.name,
+        item.name,
+        item.detail || "-",
+        String(item.qty),
+        brl(item.qty * item.price),
+        sale.method,
+      ]),
+    );
+    autoTable(doc, {
+      startY: y + 2,
+      head: [["Data/Hora", "Mesa", "Produto", "Ponto / Obs.", "Qtd", "Valor", "Pgto"]],
+      body: saleRows.length ? saleRows : [["-", "-", "-", "-", "-", "-", "-"]],
+      theme: "striped",
+      styles: { fontSize: 9, cellPadding: 1.6 },
+      headStyles: { fillColor: [55, 65, 81], textColor: 255 },
+      columnStyles: { 4: { halign: "right" }, 5: { halign: "right" } },
+      margin: { left: margin, right: margin },
+    });
+  }
 
   // Custos detalhados
   y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
@@ -139,7 +186,11 @@ export function generateReportPdf({ periodLabel, sales, expenses, pendingCommand
     startY: y + 2,
     head: [["Data", "Descrição", "Valor"]],
     body: sortedExpenses.length
-      ? sortedExpenses.map((expense) => [formatDate(expense.createdAt), expense.description, brl(expense.amount)])
+      ? sortedExpenses.map((expense) => [
+          formatDate(expense.createdAt),
+          expense.description,
+          brl(expense.amount),
+        ])
       : [["-", "Nenhum custo no período", "-"]],
     theme: "striped",
     styles: { fontSize: 10, cellPadding: 2 },
@@ -154,7 +205,12 @@ export function generateReportPdf({ periodLabel, sales, expenses, pendingCommand
     doc.setPage(i);
     doc.setFontSize(8);
     doc.setTextColor(150);
-    doc.text(`${BUSINESS}  •  página ${i} de ${pages}`, pageW / 2, doc.internal.pageSize.getHeight() - 8, { align: "center" });
+    doc.text(
+      `${businessName}  •  página ${i} de ${pages}`,
+      pageW / 2,
+      doc.internal.pageSize.getHeight() - 8,
+      { align: "center" },
+    );
   }
 
   const safe = periodLabel.replace(/[^\w-]+/g, "-");
