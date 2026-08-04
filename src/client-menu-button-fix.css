@@ -1,7 +1,7 @@
 /* Ajuste isolado do botão circular de adicionar no cardápio do cliente. */
 .client-menu-content.compact-menu .add-button {
-  /* Compacto e próximo à ponta direita da imagem lateral. */
-  right: 26px;
+  /* Canto inferior direito da foto. */
+  right: -2px;
   bottom: 15px;
   width: 28px;
   min-width: 28px;
@@ -26,7 +26,7 @@
 }
 @media (max-width: 640px) {
   .client-menu-content.compact-menu .add-button {
-    right: 25px;
+    right: -1px;
     bottom: 15px;
   }
 }
