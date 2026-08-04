@@ -1,0 +1,27 @@
+/* Ajuste isolado do botão circular de adicionar no cardápio do cliente. */
+.client-menu-content.compact-menu .add-button {
+  right: 24px;
+  bottom: 15px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  justify-content: center;
+  justify-items: center;
+  line-height: 1;
+  text-indent: 0;
+}
+.client-menu-content.compact-menu .add-button svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+  margin: 0 !important;
+  padding: 0;
+  transform: none;
+  translate: 0 0;
+}
+@media (max-width: 640px) {
+  .client-menu-content.compact-menu .add-button {
+    right: 23px;
+    bottom: 15px;
+  }
+}
