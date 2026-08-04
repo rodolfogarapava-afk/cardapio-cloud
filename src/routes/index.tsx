@@ -496,24 +496,24 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
             <button className={systemView === "commands" ? "active system-nav" : "system-nav"} onClick={() => { tenantNavigation?.setPage("operation"); setSystemView("commands"); setMenuOpen(false); }}>
               <ShoppingBag size={24} /><span>Comandas</span>
             </button>
-            <button className={systemView === "products" ? "active system-nav" : "system-nav"} onClick={() => { tenantNavigation?.setPage("operation"); setSystemView("products"); setMenuOpen(false); }}>
+            <button className={systemView === "products" ? "active system-nav desktop-only-nav" : "system-nav desktop-only-nav"} onClick={() => { tenantNavigation?.setPage("operation"); setSystemView("products"); setMenuOpen(false); }}>
               <Tags size={24} /><span>Produtos</span>
             </button>
-            <button className={systemView === "stock" ? "active system-nav" : "system-nav"} onClick={() => { tenantNavigation?.setPage("operation"); setSystemView("stock"); setMenuOpen(false); }}>
+            <button className={systemView === "stock" ? "active system-nav desktop-only-nav" : "system-nav desktop-only-nav"} onClick={() => { tenantNavigation?.setPage("operation"); setSystemView("stock"); setMenuOpen(false); }}>
               <Store size={24} /><span>Estoque</span>
             </button>
-            <button className={systemView === "cash" ? "active system-nav" : "system-nav"} onClick={() => { tenantNavigation?.setPage("operation"); setSystemView("cash"); setMenuOpen(false); }}>
+            <button className={systemView === "cash" ? "active system-nav desktop-only-nav" : "system-nav desktop-only-nav"} onClick={() => { tenantNavigation?.setPage("operation"); setSystemView("cash"); setMenuOpen(false); }}>
               <Banknote size={24} /><span>Caixa</span>
             </button>
-            <button className={systemView === "reports" ? "active system-nav" : "system-nav"} onClick={() => { tenantNavigation?.setPage("operation"); setSystemView("reports"); setMenuOpen(false); }}>
+            <button className={systemView === "reports" ? "active system-nav desktop-only-nav" : "system-nav desktop-only-nav"} onClick={() => { tenantNavigation?.setPage("operation"); setSystemView("reports"); setMenuOpen(false); }}>
               <BarChart3 size={24} /><span>Relatórios</span>
             </button>
             {tenantNavigation && <>
-              <div className="platform-nav-divider" />
-              <button className={tenantNavigation.page === "billing" ? "active system-nav platform-nav" : "system-nav platform-nav"} onClick={() => { tenantNavigation.setPage("billing"); setSystemView(null); setMenuOpen(false); }}>
+              <div className="platform-nav-divider desktop-only-nav" />
+              <button className={tenantNavigation.page === "billing" ? "active system-nav platform-nav desktop-only-nav" : "system-nav platform-nav desktop-only-nav"} onClick={() => { tenantNavigation.setPage("billing"); setSystemView(null); setMenuOpen(false); }}>
                 <CreditCard size={24} /><span>Assinatura</span>
               </button>
-              <button className={tenantNavigation.page === "printing" ? "active system-nav platform-nav" : "system-nav platform-nav"} onClick={() => { tenantNavigation.setPage("printing"); setSystemView(null); setMenuOpen(false); }}>
+              <button className={tenantNavigation.page === "printing" ? "active system-nav platform-nav desktop-only-nav" : "system-nav platform-nav desktop-only-nav"} onClick={() => { tenantNavigation.setPage("printing"); setSystemView(null); setMenuOpen(false); }}>
                 <Printer size={24} /><span>Impressão</span>
               </button>
               <button className="system-nav platform-nav" onClick={tenantNavigation.onExit}>

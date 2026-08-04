@@ -374,6 +374,7 @@ button { cursor:pointer;touch-action:manipulation; }
 @media (max-width: 900px) {
   .sidebar-backdrop{display:block;position:fixed;top:0;right:0;bottom:0;left:220px;z-index:19;margin:0;padding:0;border:0;border-radius:0;background:#0008;backdrop-filter:blur(2px)}
   .sidebar{overflow-y:auto;overscroll-behavior:contain}
+  .sidebar .desktop-only-nav{display:none!important}
   .nav-list button{min-height:60px}
   .side-bottom{padding-bottom:12px}
   .content{width:100%;min-height:calc(100vh - 68px)}
