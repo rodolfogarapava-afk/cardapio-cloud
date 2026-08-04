@@ -13,6 +13,8 @@ import appCss from "../styles.css?url";
 import clientMenuButtonFixCss from "../client-menu-button-fix.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 
+const STYLE_CACHE_VERSION = "20260804";
+
 function NotFoundComponent() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -95,9 +97,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" },
       {
         rel: "stylesheet",
-        href: appCss,
+        href: `${appCss}?v=${STYLE_CACHE_VERSION}`,
       },
-      { rel: "stylesheet", href: clientMenuButtonFixCss },
+      { rel: "stylesheet", href: `${clientMenuButtonFixCss}?v=${STYLE_CACHE_VERSION}` },
       { rel: "icon", href: "/favicon.svg?v=2", type: "image/svg+xml" },
     ],
   }),
