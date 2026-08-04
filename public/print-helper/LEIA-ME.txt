@@ -1,13 +1,13 @@
 CARDAPIO CLOUD - IMPRESSAO AUTOMATICA
 =====================================
 
-1. Conecte uma ou duas impressoras ao notebook por USB ou Bluetooth.
+1. Conecte as impressoras ao notebook por USB, Bluetooth ou rede.
 2. Instale no Windows o driver de cada impressora que sera utilizada.
 3. Extraia todos os arquivos deste ZIP.
 4. No Cardapio Cloud, abra Impressao e gere um codigo de ativacao.
 5. Clique duas vezes em instalar-impressora.bat.
 6. Autorize a instalacao e digite o codigo quando for solicitado.
-7. O instalador detecta e numera as impressoras automaticamente, sem perguntas.
+7. O instalador detecta todas as impressoras fisicas automaticamente, sem perguntas.
 8. No painel do site, selecione 1 ou 2 impressoras e direcione as categorias.
 9. Volte ao Cardapio Cloud e use o botao Imprimir teste.
 
@@ -27,9 +27,10 @@ Cada loja imprime apenas os pedidos do seu proprio acesso.
 
 TESTE COM DUAS IMPRESSORAS
 --------------------------
-- O agente detecta ate duas impressoras fisicas USB ou Bluetooth instaladas no Windows.
-- A deteccao nao depende da marca ou do modelo: qualquer fila fisica USB ou
-  Bluetooth instalada no Windows pode ser utilizada.
+- O agente detecta todas as impressoras fisicas instaladas no Windows (USB,
+  Bluetooth, rede ou compartilhadas) e ignora PDF, XPS, Fax, OneNote e filas
+  virtuais.
+- A deteccao nao depende da marca ou do modelo.
 - No modo 2 impressoras, cada categoria pode ser enviada para a impressora 1
   ou para a impressora 2 conforme a configuracao salva no painel.
 - A escolha das categorias e feita exclusivamente no site; o instalador nao

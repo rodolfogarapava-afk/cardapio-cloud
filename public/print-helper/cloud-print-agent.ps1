@@ -53,9 +53,15 @@ function Invoke-AgentRpc([string]$Name, [hashtable]$Body) {
 }
 
 function Resolve-ThermalPrinters {
-  $virtualPattern = 'PDF|XPS|OneNote|Fax|Microsoft Print|Adobe PDF|CutePDF|doPDF|RustDesk|AnyDesk|Remote Printer'
+  # Apenas filas de impressao fisicas. A regra nao depende de marca/modelo:
+  # USB, Bluetooth, rede e compartilhadas entram; PDF e impressoras virtuais saem.
+  $virtualPattern = 'PDF|XPS|OneNote|Fax|Microsoft Print|Adobe PDF|CutePDF|doPDF|PDFCreator|PrimoPDF|Bullzip|Foxit PDF|Nitro PDF|Wondershare PDF|Remote Printer|Remote Desktop|RustDesk|AnyDesk'
   $all = @(Get-Printer -ErrorAction SilentlyContinue |
-    Where-Object { $_.Name -notmatch $virtualPattern -and $_.PortName -notmatch 'PORTPROMPT:|FILE:|NUL:' }
+    Where-Object {
+      $_.Name -notmatch $virtualPattern -and
+      $_.DriverName -notmatch $virtualPattern -and
+      $_.PortName -notmatch '^(PORTPROMPT:|FILE:|NUL:|XPSPort:)$'
+    }
   )
 
   # Detecta pela conexao, nunca pela marca ou pelo modelo. USB, Bluetooth e
@@ -67,8 +73,7 @@ function Resolve-ThermalPrinters {
   } | Sort-Object Name)
   $selected = @($direct + ($all | Sort-Object Name)) |
     Group-Object Name |
-    ForEach-Object { $_.Group | Select-Object -First 1 } |
-    Select-Object -First 2
+    ForEach-Object { $_.Group | Select-Object -First 1 }
 
   return @($selected | ForEach-Object { $_.Name })
 }
@@ -117,6 +122,9 @@ if ($ConfigureRouting) {
     $routingConfig | ConvertTo-Json | Set-Content -Path $ConfigPath -Encoding UTF8
     Write-Host "Impressora 1 detectada: $($availablePrinters[0])" -ForegroundColor Green
     Write-Host "Impressora 2 detectada: $($availablePrinters[1])" -ForegroundColor Green
+    if ($availablePrinters.Count -gt 2) {
+      Write-Host "Outras impressoras fisicas detectadas: $($availablePrinters[2..($availablePrinters.Count - 1)] -join ' + ')" -ForegroundColor Cyan
+    }
     Write-Host "As categorias sao configuradas somente no painel do site." -ForegroundColor Cyan
   } elseif ($availablePrinters.Count -eq 1) {
     $routingConfig | Add-Member -NotePropertyName skewerPrinter -NotePropertyValue $availablePrinters[0] -Force

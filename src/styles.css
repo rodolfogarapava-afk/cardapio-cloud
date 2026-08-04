@@ -1262,3 +1262,6 @@ body.kitchen-focus-active .topbar,body.kitchen-focus-active .sidebar{display:non
     padding:9px 5px;
   }
 }
+
+/* Mantem as colunas da cozinha compactas quando chegam muitas comandas. */
+.kitchen-column-more{display:flex;align-items:center;justify-content:center;gap:6px;width:calc(100% - 20px);min-height:34px;margin:0 10px 10px;border:1px solid #ffc90045;border-radius:7px;background:#ffc9000d;color:var(--yellow);font-size:8px;font-weight:900;letter-spacing:.04em;cursor:pointer}.kitchen-column-more:hover{background:#ffc90018}.kitchen-column-more svg{width:13px;transition:transform .18s ease}

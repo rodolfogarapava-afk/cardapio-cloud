@@ -10,7 +10,7 @@
 
 param(
   [int]$Port = 19100,
-  [string[]]$PrinterName = @() # vazio = auto-detecta ate duas impressoras termicas
+  [string[]]$PrinterName = @() # vazio = detecta todas as filas fisicas instaladas
 )
 
 $ErrorActionPreference = "Stop"
@@ -61,12 +61,15 @@ public class RawPrinter {
 '@
 
 function Resolve-Printers([object]$requested) {
-  $requestedNames = @($requested) | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) }
-  if ($requestedNames.Count -gt 0) { return @($requestedNames | Select-Object -Unique -First 2) }
-
-  $virtualPattern = 'PDF|XPS|OneNote|Fax|Microsoft Print|Adobe PDF|CutePDF|doPDF|RustDesk|AnyDesk|Remote Printer'
+  # Nao filtra por marca: qualquer fila fisica instalada no Windows e aceita.
+  # Filas PDF/virtuais e portas de gravacao em arquivo nunca aparecem.
+  $virtualPattern = 'PDF|XPS|OneNote|Fax|Microsoft Print|Adobe PDF|CutePDF|doPDF|PDFCreator|PrimoPDF|Bullzip|Foxit PDF|Nitro PDF|Wondershare PDF|Remote Printer|Remote Desktop|RustDesk|AnyDesk'
   $all = @(Get-Printer -ErrorAction SilentlyContinue |
-    Where-Object { $_.Name -notmatch $virtualPattern -and $_.PortName -notmatch 'PORTPROMPT:|FILE:|NUL:' })
+    Where-Object {
+      $_.Name -notmatch $virtualPattern -and
+      $_.DriverName -notmatch $virtualPattern -and
+      $_.PortName -notmatch '^(PORTPROMPT:|FILE:|NUL:|XPSPort:)$'
+    })
 
   # Detecta pela conexao, sem limitar marcas ou modelos. Inclui USB,
   # Bluetooth, adaptadores seriais e filas fisicas cujo driver nao informa
@@ -82,11 +85,17 @@ function Resolve-Printers([object]$requested) {
     if ($safeDefault) { $candidates = @($safeDefault) }
   }
 
-  return @($candidates |
+  $physicalNames = @($candidates |
     Group-Object Name |
     ForEach-Object { $_.Group | Select-Object -First 1 } |
-    Select-Object -First 2 |
     ForEach-Object { $_.Name })
+  $requestedNames = @($requested) | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) }
+  if ($requestedNames.Count -gt 0) {
+    # Mesmo quando uma fila e pedida explicitamente, ela precisa fazer parte
+    # da lista fisica detectada: PDF e filas virtuais nao podem ser usadas.
+    return @($physicalNames | Where-Object { $_ -in $requestedNames })
+  }
+  return $physicalNames
 }
 
 function Get-PrinterRouting([string[]]$Printers) {

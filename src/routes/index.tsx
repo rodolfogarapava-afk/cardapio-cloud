@@ -1413,6 +1413,7 @@ function IntegratedCommands({tenantId,commands,setCommands,sales,setSales,onChar
   const [confirmation,setConfirmation]=useState<{action:"print"|"cancel"|"dismiss";command:IntegratedCommand}|null>(null);
   const [editing,setEditing]=useState<IntegratedCommand|null>(null);
   const [commandFilter,setCommandFilter]=useState<"all"|"waiter"|"delivery"|"pickup"|"late"|"print-failed">("all");
+  const [expandedKitchenColumns,setExpandedKitchenColumns]=useState<Record<string,boolean>>({});
   const [now,setNow]=useState(Date.now());
   const [kitchenMode,setKitchenMode]=useState(false);
   const [historyOpen,setHistoryOpen]=useState(false);
@@ -1426,6 +1427,7 @@ function IntegratedCommands({tenantId,commands,setCommands,sales,setSales,onChar
     const timer=window.setInterval(()=>setNow(Date.now()),15000);
     return()=>window.clearInterval(timer);
   },[]);
+  useEffect(()=>setExpandedKitchenColumns({}),[commandFilter]);
   useEffect(()=>{
     document.body.classList.toggle("kitchen-focus-active",kitchenMode);
     const close=(event:KeyboardEvent)=>{if(event.key==="Escape")setKitchenMode(false)};
@@ -1661,12 +1663,13 @@ function IntegratedCommands({tenantId,commands,setCommands,sales,setSales,onChar
     return printStatuses[command.id]==="failed";
   };
   const visibleCommands=[...commands].filter(matchesFilter).sort((a,b)=>Number(a.createdAt||0)-Number(b.createdAt||0));
+  const kitchenCardLimit=3;
   const kitchenColumns=[
     {id:"new" as const,title:"NOVAS",description:"Aguardando recebimento",commands:visibleCommands.filter((command)=>(command.kitchenStatus||"new")==="new")},
     {id:"preparing" as const,title:"PREPARANDO",description:"Em produção",commands:visibleCommands.filter((command)=>command.kitchenStatus==="preparing")},
     {id:"ready" as const,title:"PRONTAS",description:"Aguardando entrega ou cobrança",commands:visibleCommands.filter((command)=>command.kitchenStatus==="ready")},
     {id:"cancelled" as const,title:"CANCELADAS",description:"Canceladas no delivery",commands:visibleCommands.filter((command)=>command.kitchenStatus==="cancelled")},
-  ];
+  ].map((column)=>({...column,visibleCommands:expandedKitchenColumns[column.id]?column.commands:column.commands.slice(0,kitchenCardLimit)}));
   const openCommandsCount=commands.filter((command)=>command.kitchenStatus!=="cancelled").length;
   const lateCount=commands.filter((command)=>command.kitchenStatus!=="cancelled"&&ageInMinutes(command)>=20).length;
   const failedCount=commands.filter((command)=>printStatuses[command.id]==="failed").length;
@@ -1698,7 +1701,7 @@ function IntegratedCommands({tenantId,commands,setCommands,sales,setSales,onChar
     {!commands.length ? <div className="integrated-empty"><ShoppingBag/><h3>Nenhuma comanda aberta</h3><p>Adicione itens pelo cardápio e escolha “Salvar comanda”.</p></div> :
     <div className="kitchen-board">{kitchenColumns.map((column)=><section className={`kitchen-column ${column.id}`} key={column.id}>
       <header className="kitchen-column-head"><div><b>{column.title}</b><span>{column.commands.length}</span></div><small>{column.description}</small></header>
-      <div className="kitchen-column-list">{column.commands.length?column.commands.map((command)=><article className={`kitchen-command-card age-${ageClass(command)}${column.id==="new"?" requires-ack":""}`} key={command.id}>
+      <div className="kitchen-column-list">{column.commands.length?column.visibleCommands.map((command)=><article className={`kitchen-command-card age-${ageClass(command)}${column.id==="new"?" requires-ack":""}`} key={command.id}>
         <div className="command-card-meta"><span className={`command-source ${command.delivery?.fulfillment||"waiter"}`}>{command.delivery?.fulfillment==="delivery"?<><Truck/> DELIVERY</>:command.delivery?.fulfillment==="pickup"?<><Store/> RETIRADA</>:<><Utensils/> MESA / BALCÃO</>}</span><span className={`command-age ${ageClass(command)}`}><Clock3/>{ageInMinutes(command)<1?"AGORA":`HÁ ${ageInMinutes(command)} MIN`}</span></div>
         <header><div><small>COMANDA #{String(command.id).slice(-6)}</small><h2>{command.name}</h2>{command.waiterName&&<small>GARÇOM: {command.waiterName}</small>}</div><strong>R$ {command.total.toFixed(2).replace(".",",")}</strong></header>
         <span className={`command-print-status ${printStatuses[command.id]||"checking"}`}>{
@@ -1723,6 +1726,7 @@ function IntegratedCommands({tenantId,commands,setCommands,sales,setSales,onChar
         </div>
         {column.id!=="cancelled"?<footer><button onClick={()=>{setEditing(command);setEditCategory((current)=>current||editCategories[0]||"")}}>EDITAR</button><button onClick={()=>reprintCommand(command)}>REIMPRIMIR</button><button className="danger" onClick={()=>setConfirmation({action:"cancel",command})}>CANCELAR</button></footer>:<footer><button className="danger" onClick={()=>setConfirmation({action:"dismiss",command})}>REMOVER DA LISTA</button></footer>}
       </article>):<div className="kitchen-column-empty"><ShoppingBag/><span>Nenhuma comanda</span></div>}</div>
+      {column.commands.length>kitchenCardLimit&&<button className="kitchen-column-more" onClick={()=>setExpandedKitchenColumns((current)=>({...current,[column.id]:!current[column.id]}))}>{expandedKitchenColumns[column.id]?"MOSTRAR MENOS":`VER MAIS (${column.commands.length-kitchenCardLimit})`} <ChevronDown/></button>}
     </section>)}</div>}
     {historyOpen&&<div className="modal-backdrop" onMouseDown={()=>setHistoryOpen(false)}><section className="modal command-history-modal" onMouseDown={(event)=>event.stopPropagation()}>
       <button className="modal-close" onClick={()=>setHistoryOpen(false)} aria-label="Fechar"><X/></button>
