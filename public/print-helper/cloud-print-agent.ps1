@@ -58,12 +58,14 @@ function Resolve-ThermalPrinters {
     Where-Object { $_.Name -notmatch $virtualPattern -and $_.PortName -notmatch 'PORTPROMPT:|FILE:|NUL:' }
   )
 
-  # Teste inicial com duas impressoras: prioriza modelos termicos conhecidos e
-  # completa a lista com outras impressoras USB. O nome e usado como chave para
-  # impedir que a mesma impressora seja incluida duas vezes.
-  $preferred = @($all | Where-Object { $_.Name -match 'OASIS|OIA|KNUP|POS|58|80|IM60|thermal|termic' } | Sort-Object Name)
-  $usb = @($all | Where-Object { $_.PortName -match 'USB' } | Sort-Object Name)
-  $selected = @($preferred + $usb) |
+  # Detecta pela conexao, nunca pela marca ou pelo modelo. USB, Bluetooth e
+  # adaptadores seriais sao priorizados; filas fisicas com portas diferentes
+  # continuam como alternativa para drivers que ocultam o tipo da conexao.
+  $direct = @($all | Where-Object {
+    $_.PortName -match 'USB|DOT4|BTH|BLUETOOTH|COM\d+' -or
+    $_.Name -match 'Bluetooth' -or $_.DriverName -match 'Bluetooth'
+  } | Sort-Object Name)
+  $selected = @($direct + ($all | Sort-Object Name)) |
     Group-Object Name |
     ForEach-Object { $_.Group | Select-Object -First 1 } |
     Select-Object -First 2
@@ -136,7 +138,7 @@ $InterJobDelaySeconds = 5
 while ($true) {
   try {
     $printers = @(Resolve-ThermalPrinters)
-    if ($printers.Count -eq 0) { throw "Nenhuma impressora USB encontrada" }
+    if ($printers.Count -eq 0) { throw "Nenhuma impressora USB ou Bluetooth encontrada" }
     $routing = Get-PrinterRouting $printers $Config
     $printerLabel = if ($printers.Count -ge 2) { "$($routing.skewers) + $($routing.sides)" } else { $printers -join " + " }
 

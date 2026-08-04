@@ -68,10 +68,14 @@ function Resolve-Printers([object]$requested) {
   $all = @(Get-Printer -ErrorAction SilentlyContinue |
     Where-Object { $_.Name -notmatch $virtualPattern -and $_.PortName -notmatch 'PORTPROMPT:|FILE:|NUL:' })
 
-  # 1) modelos termicos conhecidos; 2) demais impressoras USB; 3) padrao.
-  $preferred = @($all | Where-Object { $_.Name -match 'OASIS|OIA|KNUP|POS|58|80|IM60|thermal|termic' } | Sort-Object Name)
-  $usb = @($all | Where-Object { $_.PortName -match 'USB' } | Sort-Object Name)
-  $candidates = @($preferred + $usb)
+  # Detecta pela conexao, sem limitar marcas ou modelos. Inclui USB,
+  # Bluetooth, adaptadores seriais e filas fisicas cujo driver nao informa
+  # claramente o tipo de porta.
+  $direct = @($all | Where-Object {
+    $_.PortName -match 'USB|DOT4|BTH|BLUETOOTH|COM\d+' -or
+    $_.Name -match 'Bluetooth' -or $_.DriverName -match 'Bluetooth'
+  } | Sort-Object Name)
+  $candidates = @($direct + ($all | Sort-Object Name))
   if ($candidates.Count -eq 0) {
     $default = Get-CimInstance Win32_Printer -Filter "Default=True" -ErrorAction SilentlyContinue
     $safeDefault = $all | Where-Object { $_.Name -eq $default.Name } | Select-Object -First 1
