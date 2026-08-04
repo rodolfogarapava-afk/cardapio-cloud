@@ -29,7 +29,51 @@ export interface ReceiptData {
   paymentMethod?: string;
 }
 
-const COMBINING_DIACRITICS = new RegExp('[̀-ͯ]', 'g');
+const QUANTITY_PRECISION = 1000;
+const MONEY_PRECISION = 100;
+const COMBINING_DIACRITICS = /[\u0300-\u036f]/g;
+
+/**
+ * Evita que erros binarios do JavaScript (ex.: 14.9 / 14.9 resultar em
+ * 0.9999999999999999) sejam gravados ou impressos no cupom.
+ */
+export function normalizeReceiptQuantity(value: unknown): number {
+  const quantity = Number(value);
+  if (!Number.isFinite(quantity) || quantity <= 0) return 0;
+  const rounded = Math.round(quantity * QUANTITY_PRECISION) / QUANTITY_PRECISION;
+  return Object.is(rounded, -0) ? 0 : rounded;
+}
+
+export function formatReceiptQuantity(value: unknown): string {
+  const quantity = normalizeReceiptQuantity(value);
+  if (Number.isInteger(quantity)) return String(quantity);
+  return quantity.toLocaleString('pt-BR', {
+    useGrouping: false,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 3,
+  });
+}
+
+export function roundReceiptMoney(value: unknown): number {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return 0;
+  const rounded = Math.round((amount + Number.EPSILON) * MONEY_PRECISION) / MONEY_PRECISION;
+  return Object.is(rounded, -0) ? 0 : rounded;
+}
+
+export function normalizeReceiptItems(items: ReceiptItem[]): ReceiptItem[] {
+  return items.map((item) => {
+    const qty = normalizeReceiptQuantity(item.qty);
+    const unitPrice = roundReceiptMoney(item.unitPrice);
+    const suppliedTotal = Number(item.total);
+    const total = roundReceiptMoney(Number.isFinite(suppliedTotal) ? suppliedTotal : qty * unitPrice);
+    return { ...item, qty, unitPrice, total };
+  });
+}
+
+export function normalizeOrderChanges(changes: OrderChange[]): OrderChange[] {
+  return changes.map((change) => ({ ...change, qty: normalizeReceiptQuantity(change.qty) }));
+}
 
 function stripAccents(value: string) {
   return value.normalize('NFD').replace(COMBINING_DIACRITICS, '')
@@ -105,6 +149,8 @@ class EscPosBuilder {
 function buildReceiptEscPos({ customer, items, total, paymentMethod }: ReceiptData): Uint8Array {
   const now = new Date();
   const b = new EscPosBuilder();
+  const safeItems = normalizeReceiptItems(items);
+  const safeTotal = roundReceiptMoney(total);
   b.init();
 
   b.align('center');
@@ -117,8 +163,8 @@ function buildReceiptEscPos({ customer, items, total, paymentMethod }: ReceiptDa
   b.bold(false);
   b.divider();
 
-  for (const item of items) {
-    b.line(`${item.qty}x ${item.name}`);
+  for (const item of safeItems) {
+    b.line(`${formatReceiptQuantity(item.qty)}x ${item.name}`);
     if (item.notes) b.line(`  > ${item.notes}`);
     b.line(padLine(`  R$ ${item.unitPrice.toFixed(2)} un.`, `R$ ${item.total.toFixed(2)}`));
   }
@@ -126,13 +172,13 @@ function buildReceiptEscPos({ customer, items, total, paymentMethod }: ReceiptDa
 
   b.doubleSize(true);
   b.bold(true);
-  b.line(padLine('TOTAL', `R$ ${total.toFixed(2)}`, Math.floor(PAPER_WIDTH_CHARS / 2)));
+  b.line(padLine('TOTAL', `R$ ${safeTotal.toFixed(2)}`, Math.floor(PAPER_WIDTH_CHARS / 2)));
   b.doubleSize(false);
   b.bold(false);
   if (paymentMethod) b.line(padLine('Pagamento', paymentMethod));
   b.divider();
 
-  const notes = items.map((item) => item.notes).filter((note): note is string => Boolean(note));
+  const notes = safeItems.map((item) => item.notes).filter((note): note is string => Boolean(note));
   if (notes.length > 0) {
     b.align('center');
     b.line(`Obs: ${notes.join(', ')}`);
@@ -169,6 +215,7 @@ function buildOrderTicketEscPos({
 }): Uint8Array {
   const now = new Date();
   const b = new EscPosBuilder();
+  const safeItems = normalizeReceiptItems(items);
   b.init();
 
   b.align('center');
@@ -189,9 +236,9 @@ function buildOrderTicketEscPos({
   if (waiter) b.line(`Garcom: ${waiter}`);
   b.divider();
 
-  for (const item of items) {
+  for (const item of safeItems) {
     b.bold(true);
-    b.line(`${item.qty}x ${item.name}`);
+    b.line(`${formatReceiptQuantity(item.qty)}x ${item.name}`);
     b.bold(false);
     if (item.notes) b.line(`   >> ${item.notes}`);
   }
@@ -199,7 +246,7 @@ function buildOrderTicketEscPos({
 
   if (total !== undefined) {
     b.bold(true);
-    b.line(padLine('Total', `R$ ${total.toFixed(2)}`));
+    b.line(padLine('Total', `R$ ${roundReceiptMoney(total).toFixed(2)}`));
     b.bold(false);
     b.divider();
   }
@@ -225,6 +272,7 @@ function buildOrderUpdateEscPos({
   newTotal?: number;
 }): Uint8Array {
   const b = new EscPosBuilder();
+  const safeChanges = normalizeOrderChanges(changes);
   b.init();
 
   b.align('center');
@@ -243,8 +291,8 @@ function buildOrderUpdateEscPos({
   b.bold(false);
   if (waiter) b.line(`Garcom: ${waiter}`);
 
-  const removed = changes.filter((c) => c.type === 'removido');
-  const added = changes.filter((c) => c.type === 'adicionado');
+  const removed = safeChanges.filter((c) => c.type === 'removido');
+  const added = safeChanges.filter((c) => c.type === 'adicionado');
 
   const renderGroup = (title: string, list: OrderChange[]) => {
     if (!list.length) return;
@@ -254,7 +302,7 @@ function buildOrderUpdateEscPos({
     b.bold(false);
     b.line('-'.repeat(PAPER_WIDTH_CHARS));
     for (const change of list) {
-      b.line(`${change.qty}x ${change.name}`);
+      b.line(`${formatReceiptQuantity(change.qty)}x ${change.name}`);
       if (change.notes) b.line(`   >> ${change.notes}`);
     }
   };
@@ -265,7 +313,7 @@ function buildOrderUpdateEscPos({
   if (newTotal !== undefined) {
     b.line('');
     b.bold(true);
-    b.line(padLine('Novo total', `R$ ${newTotal.toFixed(2)}`));
+    b.line(padLine('Novo total', `R$ ${roundReceiptMoney(newTotal).toFixed(2)}`));
     b.bold(false);
   }
   b.divider();

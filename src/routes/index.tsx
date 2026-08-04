@@ -38,7 +38,7 @@ import {
   WifiOff,
 } from "lucide-react";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { sendOrderTicketToPrinter, sendOrderUpdateToPrinter, sendReceiptToPrinter, type OrderChange } from "@/lib/printReceipt";
+import { formatReceiptQuantity, normalizeReceiptItems, normalizeReceiptQuantity, roundReceiptMoney, sendOrderTicketToPrinter, sendOrderUpdateToPrinter, sendReceiptToPrinter, type OrderChange } from "@/lib/printReceipt";
 import { queueCustomerReceipt, queueKitchenOrder, queueOrderUpdate } from "@/lib/printQueue";
 import { generateReportPdf } from "@/lib/reportPdf";
 import { initAudioContext, playNotificationSound } from "@/lib/sounds";
@@ -395,15 +395,15 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
     },
   };
   const paymentLines=paymentItems.map((item,index)=>{
-    const lineTotal=item.qty*item.price;
-    const paid=Math.min(lineTotal,Math.max(0,item.paidAmount||0));
-    return {...item,index,lineTotal,paid,due:Math.max(0,lineTotal-paid),selected:paymentSelection[index]!==false};
+    const lineTotal=roundReceiptMoney(item.qty*item.price);
+    const paid=roundReceiptMoney(Math.min(lineTotal,Math.max(0,item.paidAmount||0)));
+    return {...item,index,lineTotal,paid,due:roundReceiptMoney(Math.max(0,lineTotal-paid)),selected:paymentSelection[index]!==false};
   });
-  const commandDue=paymentLines.reduce((sum,item)=>sum+item.due,0);
-  const selectedDue=paymentLines.filter(item=>item.selected).reduce((sum,item)=>sum+item.due,0);
+  const commandDue=roundReceiptMoney(paymentLines.reduce((sum,item)=>sum+item.due,0));
+  const selectedDue=roundReceiptMoney(paymentLines.filter(item=>item.selected).reduce((sum,item)=>sum+item.due,0));
   const splitCount=Math.max(2,Math.floor(Number(paymentSplitCount)||2));
   const customPaymentAmount=Number(paymentCustomAmount.replace(",","."));
-  const paymentAmount=paymentMode==="full"?selectedDue:paymentMode==="split"?selectedDue/splitCount:(Number.isFinite(customPaymentAmount)?customPaymentAmount:0);
+  const paymentAmount=roundReceiptMoney(paymentMode==="full"?selectedDue:paymentMode==="split"?selectedDue/splitCount:(Number.isFinite(customPaymentAmount)?customPaymentAmount:0));
   const paymentAmountValid=paymentAmount>0&&paymentAmount<=selectedDue+0.001;
   const paymentWillComplete=paymentAmountValid&&paymentAmount>=commandDue-0.001;
   const cashAmount=Number(cashReceived.replace(",","."));
@@ -814,20 +814,20 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
                   setPaymentProcessing(true);setPaymentError("");
                   const now=Date.now();
                   const saleId=now*1000+Math.floor(Math.random()*1000);
-                  let remainingToAllocate=Math.round(paymentAmount*100)/100;
+                  let remainingToAllocate=roundReceiptMoney(paymentAmount);
                   const paidItems=paymentLines.filter(item=>item.selected&&item.due>0).map(item=>{
-                    const amount=Math.min(item.due,remainingToAllocate);
-                    remainingToAllocate=Math.max(0,remainingToAllocate-amount);
-                    const qty=item.price>0?amount/item.price:1;
+                    const amount=roundReceiptMoney(Math.min(item.due,remainingToAllocate));
+                    remainingToAllocate=roundReceiptMoney(Math.max(0,remainingToAllocate-amount));
+                    const qty=normalizeReceiptQuantity(item.price>0?amount/item.price:1);
                     return {...item,amount,qty};
                   }).filter(item=>item.amount>0.0001);
                   const nextItems=paymentItems.map((item,index)=>{
                     const paid=paidItems.find(entry=>entry.index===index)?.amount||0;
-                    return {...item,paidAmount:Math.min(item.qty*item.price,(item.paidAmount||0)+paid)};
+                    return {...item,paidAmount:roundReceiptMoney(Math.min(item.qty*item.price,(item.paidAmount||0)+paid))};
                   });
-                  const nextDue=nextItems.reduce((sum,item)=>sum+Math.max(0,item.qty*item.price-(item.paidAmount||0)),0);
+                  const nextDue=roundReceiptMoney(nextItems.reduce((sum,item)=>sum+Math.max(0,item.qty*item.price-(item.paidAmount||0)),0));
                   const isComplete=nextDue<0.01;
-                  const sale={id:saleId,name:customerName,total:paymentAmount,method:paymentMethod,createdAt:now,sourceCommandId:paymentCommandId??undefined,partial:!isComplete,items:paidItems.map(item=>({name:item.name,qty:item.qty,price:item.price,detail:item.detail,category:item.category,amount:item.amount}))};
+                  const sale={id:saleId,name:customerName,total:roundReceiptMoney(paymentAmount),method:paymentMethod,createdAt:now,sourceCommandId:paymentCommandId??undefined,partial:!isComplete,items:paidItems.map(item=>({name:item.name,qty:normalizeReceiptQuantity(item.qty),price:roundReceiptMoney(item.price),detail:item.detail,category:item.category,amount:roundReceiptMoney(item.amount)}))};
                   if(paymentCommandId!==null&&supabase){
                     if(!tenantNavigation?.tenantId){
                       setPaymentError("Não foi possível identificar a loja desta comanda.");
@@ -839,7 +839,7 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
                       p_command_id:paymentCommandId,
                       p_sale_id:saleId,
                       p_payment_method:paymentMethod,
-                      p_amount:paymentAmount,
+                      p_amount:sale.total,
                       p_payment_items:sale.items,
                       p_next_command_payload:{...paymentCommandBackup,items:nextItems},
                       p_complete:isComplete,
@@ -2083,15 +2083,15 @@ function IntegratedReportsLegacy({sales,expenses,commands,sync}:{sales:Integrate
 }
 
 function escapePrintHtml(value:unknown){return String(value??"").replace(/[&<>"']/g,(char)=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]||char))}
-function receiptHtml(title:string,customer:string,items:{name:string;qty:number;price:number;detail?:string}[],total?:number,method?:string){
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapePrintHtml(title)}</title><style>body{font:14px monospace;width:72mm;margin:0 auto;padding:8mm 2mm;color:#000}h2{text-align:center;margin:4px 0}hr{border:0;border-top:1px dashed #000}.item{display:flex;justify-content:space-between;margin:7px 0}.detail{display:block;font-size:12px;margin:2px 0 8px 18px}.total{font-size:20px;font-weight:bold;text-align:right}@media print{button{display:none}}</style></head><body><h2>${escapePrintHtml(title)}</h2><p>${new Date().toLocaleString("pt-BR")}</p><hr><b>Mesa/Cliente: ${escapePrintHtml(customer)}</b><hr>${items.map(i=>`<div class="item"><span>${Number(i.qty)||0}x ${escapePrintHtml(i.name)}</span><span>${total!==undefined?`R$ ${((Number(i.qty)||0)*(Number(i.price)||0)).toFixed(2)}`:""}</span></div>${i.detail?`<span class="detail">${escapePrintHtml(i.detail)}</span>`:""}`).join("")}${total!==undefined?`<hr><p class="total">TOTAL R$ ${Number(total).toFixed(2)}</p><p>Pagamento: ${escapePrintHtml(method||"-")}</p>`:""}<script>window.onload=()=>{window.print();setTimeout(()=>window.close(),500)}</script></body></html>`;
+function receiptHtml(title:string,customer:string,items:{name:string;qty:number;price:number;amount?:number;detail?:string}[],total?:number,method?:string){
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapePrintHtml(title)}</title><style>body{font:14px monospace;width:72mm;margin:0 auto;padding:8mm 2mm;color:#000}h2{text-align:center;margin:4px 0}hr{border:0;border-top:1px dashed #000}.item{display:flex;justify-content:space-between;margin:7px 0}.detail{display:block;font-size:12px;margin:2px 0 8px 18px}.total{font-size:20px;font-weight:bold;text-align:right}@media print{button{display:none}}</style></head><body><h2>${escapePrintHtml(title)}</h2><p>${new Date().toLocaleString("pt-BR")}</p><hr><b>Mesa/Cliente: ${escapePrintHtml(customer)}</b><hr>${items.map(i=>`<div class="item"><span>${formatReceiptQuantity(i.qty)}x ${escapePrintHtml(i.name)}</span><span>${total!==undefined?`R$ ${roundReceiptMoney(i.amount??normalizeReceiptQuantity(i.qty)*Number(i.price)).toFixed(2)}`:""}</span></div>${i.detail?`<span class="detail">${escapePrintHtml(i.detail)}</span>`:""}`).join("")}${total!==undefined?`<hr><p class="total">TOTAL R$ ${roundReceiptMoney(total).toFixed(2)}</p><p>Pagamento: ${escapePrintHtml(method||"-")}</p>`:""}<script>window.onload=()=>{window.print();setTimeout(()=>window.close(),500)}</script></body></html>`;
 }
 function openPrintDocument(html:string){const frame=document.createElement("iframe");frame.sandbox.add("allow-scripts","allow-modals");frame.style.position="fixed";frame.style.width="0";frame.style.height="0";frame.style.border="0";frame.srcdoc=html;document.body.appendChild(frame);setTimeout(()=>frame.remove(),2000)}
-function toReceiptItems(items:{productId?:number|string;category?:string;name:string;qty:number;price:number;detail?:string}[],catalog:Product[]=[]){
-  return items.map((item)=>{
+function toReceiptItems(items:{productId?:number|string;category?:string;name:string;qty:number;price:number;amount?:number;detail?:string}[],catalog:Product[]=[]){
+  return normalizeReceiptItems(items.map((item)=>{
     const product=catalog.find((candidate)=>item.productId!==undefined?String(candidate.id)===String(item.productId):candidate.name===item.name);
-    return {name:item.name,qty:item.qty,unitPrice:item.price,total:item.price*item.qty,category:item.category||product?.category,notes:item.detail};
-  });
+    return {name:item.name,qty:item.qty,unitPrice:item.price,total:item.amount??item.price*item.qty,category:item.category||product?.category,notes:item.detail};
+  }));
 }
 // Tenta imprimir na impressora térmica via ponte local (print-helper); se a
 // ponte não estiver rodando, cai para a impressão pelo navegador.
@@ -2114,7 +2114,7 @@ async function printCustomerReceipt(sale:IntegratedSale){
 function orderChangeHtml(customer:string,changes:OrderChange[],newTotal?:number){
   const removed=changes.filter((c)=>c.type==="removido");
   const added=changes.filter((c)=>c.type==="adicionado");
-  const list=(items:OrderChange[])=>items.map((c)=>`<div class="item">${Number(c.qty)||0}x ${escapePrintHtml(c.name)}</div>${c.notes?`<span class="detail">&gt;&gt; ${escapePrintHtml(c.notes)}</span>`:""}`).join("");
+  const list=(items:OrderChange[])=>items.map((c)=>`<div class="item">${formatReceiptQuantity(c.qty)}x ${escapePrintHtml(c.name)}</div>${c.notes?`<span class="detail">&gt;&gt; ${escapePrintHtml(c.notes)}</span>`:""}`).join("");
   const section=(title:string,items:OrderChange[])=>items.length?`<h3 class="sec">${title}</h3>${list(items)}`:"";
   return `<!doctype html><html><head><meta charset="utf-8"><title>ATUALIZAÇÃO</title><style>body{font:14px monospace;width:72mm;margin:0 auto;padding:8mm 2mm;color:#000}h2,h3{text-align:center;margin:4px 0}h3.sec{text-align:left;margin:10px 0 4px;border-bottom:1px dashed #000;padding-bottom:2px;font-size:14px}hr{border:0;border-top:1px dashed #000}.item{margin:5px 0}.detail{display:block;font-size:12px;margin:2px 0 6px 12px}.total{font-size:18px;font-weight:bold;text-align:right}@media print{button{display:none}}</style></head><body><h2>PEDIDO ATUALIZADO</h2><p>${new Date().toLocaleString("pt-BR")}</p><hr><b>Mesa/Cliente: ${escapePrintHtml(customer)}</b>${section("SAIU (removido)",removed)}${section("ENTROU (adicionado)",added)}${newTotal!==undefined?`<hr><p class="total">NOVO TOTAL R$ ${Number(newTotal).toFixed(2)}</p>`:""}<script>window.onload=()=>{window.print();setTimeout(()=>window.close(),500)}</script></body></html>`;
 }

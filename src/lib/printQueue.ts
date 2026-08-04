@@ -1,4 +1,4 @@
-import { buildOrderTicketBase64, buildOrderTicketRoutesBase64, buildOrderUpdateBase64, buildOrderUpdateRoutesBase64, buildReceiptBase64, type OrderChange, type ReceiptItem } from "@/lib/printReceipt";
+import { buildOrderTicketBase64, buildOrderTicketRoutesBase64, buildOrderUpdateBase64, buildOrderUpdateRoutesBase64, buildReceiptBase64, normalizeOrderChanges, normalizeReceiptItems, roundReceiptMoney, type OrderChange, type ReceiptItem } from "@/lib/printReceipt";
 import { supabase } from "@/lib/supabase";
 
 type PrinterSettings = {
@@ -37,12 +37,14 @@ export async function queueKitchenOrder(input:{
 }) {
   if(!supabase) throw new Error("Supabase não configurado");
   const settings=await loadPrinterSettings(input.tenantId);
-  const data=buildOrderTicketBase64({customer:input.customer,waiter:input.waiter,items:input.items,total:input.total});
-  const routes=settings.mode==="split"?buildOrderTicketRoutesBase64({customer:input.customer,waiter:input.waiter,items:input.items,total:input.total},settings.printerOneCategories):undefined;
+  const items=normalizeReceiptItems(input.items);
+  const total=roundReceiptMoney(input.total);
+  const data=buildOrderTicketBase64({customer:input.customer,waiter:input.waiter,items,total});
+  const routes=settings.mode==="split"?buildOrderTicketRoutesBase64({customer:input.customer,waiter:input.waiter,items,total},settings.printerOneCategories):undefined;
   const {error}=await supabase.rpc("queue_print_job",{
     p_tenant_id:input.tenantId,
     p_command_id:input.commandId,
-    p_payload:{data,...(routes?{routes}:{}),routingMode:settings.mode,singlePrinter:settings.singlePrinter,items:input.items,customer:input.customer,waiter:input.waiter,total:input.total,createdAt:Date.now()},
+    p_payload:{data,...(routes?{routes}:{}),routingMode:settings.mode,singlePrinter:settings.singlePrinter,items,customer:input.customer,waiter:input.waiter,total,createdAt:Date.now()},
     p_job_kind:input.kind||"new_order",
   });
   if(error)throw error;
@@ -85,16 +87,18 @@ export async function queueCustomerReceipt(input:{
 }) {
   if(!supabase) throw new Error("Supabase não configurado");
   const settings=await loadPrinterSettings(input.tenantId);
+  const items=normalizeReceiptItems(input.items);
+  const total=roundReceiptMoney(input.total);
   const data=buildReceiptBase64({
     customer:input.customer,
-    items:input.items,
-    total:input.total,
+    items,
+    total,
     paymentMethod:input.paymentMethod,
   });
   const {error}=await supabase.rpc("queue_print_job",{
     p_tenant_id:input.tenantId,
     p_command_id:input.saleId,
-    p_payload:{data,routingMode:"single",singlePrinter:settings.singlePrinter,customer:input.customer,total:input.total,paymentMethod:input.paymentMethod,createdAt:Date.now()},
+    p_payload:{data,routingMode:"single",singlePrinter:settings.singlePrinter,customer:input.customer,total,paymentMethod:input.paymentMethod,createdAt:Date.now()},
     p_job_kind:"customer_receipt",
   });
   if(error)throw error;
@@ -110,22 +114,24 @@ export async function queueOrderUpdate(input:{
 }) {
   if(!supabase) throw new Error("Supabase não configurado");
   const settings=await loadPrinterSettings(input.tenantId);
+  const changes=normalizeOrderChanges(input.changes);
+  const newTotal=roundReceiptMoney(input.newTotal);
   const data=buildOrderUpdateBase64({
     customer:input.customer,
     waiter:input.waiter,
-    changes:input.changes,
-    newTotal:input.newTotal,
+    changes,
+    newTotal,
   });
   const routes=settings.mode==="split"?buildOrderUpdateRoutesBase64({
     customer:input.customer,
     waiter:input.waiter,
-    changes:input.changes,
-    newTotal:input.newTotal,
+    changes,
+    newTotal,
   },settings.printerOneCategories):undefined;
   const {error}=await supabase.rpc("queue_print_job",{
     p_tenant_id:input.tenantId,
     p_command_id:input.commandId,
-    p_payload:{data,...(routes?{routes}:{}),routingMode:settings.mode,singlePrinter:settings.singlePrinter,customer:input.customer,waiter:input.waiter,newTotal:input.newTotal,changes:input.changes,createdAt:Date.now()},
+    p_payload:{data,...(routes?{routes}:{}),routingMode:settings.mode,singlePrinter:settings.singlePrinter,customer:input.customer,waiter:input.waiter,newTotal,changes,createdAt:Date.now()},
     p_job_kind:`order_update_${Date.now()}`,
   });
   if(error)throw error;
