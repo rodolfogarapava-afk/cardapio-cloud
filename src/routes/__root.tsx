@@ -80,14 +80,18 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Burguer House — Cardápio digital" },
-      { property: "og:title", content: "Burguer House — Cardápio digital" },
-      { name: "twitter:title", content: "Burguer House — Cardápio digital" },
-      { name: "description", content: "Cardápio digital da Burguer House com comandas, PDV, controle de estoque, caixa e relatórios." },
-      { property: "og:description", content: "Cardápio digital da Burguer House com comandas, PDV, controle de estoque, caixa e relatórios." },
-      { name: "twitter:description", content: "Cardápio digital da Burguer House com comandas, PDV, controle de estoque, caixa e relatórios." },
-      { property: "og:image", content: "/og.png" },
-      { name: "twitter:image", content: "/og.png" },
+      { title: "Cardápio Digital" },
+      { property: "og:title", content: "Cardápio Digital" },
+      { name: "twitter:title", content: "Cardápio Digital" },
+      { name: "description", content: "Cardápio digital com comandas, delivery, impressão, estoque, caixa e relatórios." },
+      { property: "og:description", content: "Cardápio digital com comandas, delivery, impressão, estoque, caixa e relatórios." },
+      { name: "twitter:description", content: "Cardápio digital com comandas, delivery, impressão, estoque, caixa e relatórios." },
+      { property: "og:image", content: "https://cardapio-cloud-lovat.vercel.app/og-cardapio-digital.png?v=20260804" },
+      { property: "og:image:type", content: "image/png" },
+      { property: "og:image:width", content: "1731" },
+      { property: "og:image:height", content: "909" },
+      { property: "og:image:alt", content: "Cardápio Digital — Gestão simples. Operação sob controle." },
+      { name: "twitter:image", content: "https://cardapio-cloud-lovat.vercel.app/og-cardapio-digital.png?v=20260804" },
       { name: "twitter:card", content: "summary_large_image" },
       { property: "og:type", content: "website" },
     ],
@@ -111,7 +115,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="pt-BR">
       <head>
         <HeadContent />
       </head>

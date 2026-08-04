@@ -1,7 +1,7 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 
-const BUSINESS = "Burguer House";
+const BUSINESS = "Cardápio Digital";
 const brl = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 const formatDateTime = (timestamp: number) =>

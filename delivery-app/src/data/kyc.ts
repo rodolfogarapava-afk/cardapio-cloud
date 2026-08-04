@@ -27,8 +27,8 @@ export interface KycApplication {
 
 const seed: KycApplication[] = [
   {
-    id: 'kyc-1', kind: 'vendor', name: 'Burger House', legalName: 'Burger House Ltda', document: '12.345.678/0001-90',
-    category: 'Lanches', city: 'São Paulo', email: 'contato@burgerhouse.com', phone: '(11) 99999-1111',
+    id: 'kyc-1', kind: 'vendor', name: 'Cardápio Digital', legalName: 'Cardápio Digital Ltda', document: '12.345.678/0001-90',
+    category: 'Tecnologia', city: 'São Paulo', email: 'contato@cardapiodigital.com', phone: '(11) 99999-1111',
     submittedAt: '2026-06-24T10:00:00Z', status: 'pending',
     documents: [
       { label: 'CNPJ', file: 'cnpj.pdf', uploadedAt: '2026-06-24' },

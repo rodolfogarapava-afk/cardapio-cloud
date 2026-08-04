@@ -53,10 +53,10 @@ export const Route = createFileRoute("/")({
   },
   head: () => ({
     meta: [
-      { title: "Burguer House — Cardápio digital" },
-      { name: "description", content: "Cardápio digital da Burguer House com comandas, PDV, controle de estoque, caixa e relatórios." },
-      { property: "og:title", content: "Burguer House — Cardápio digital" },
-      { property: "og:description", content: "Cardápio digital da Burguer House com comandas, PDV, controle de estoque, caixa e relatórios." },
+      { title: "Cardápio Digital" },
+      { name: "description", content: "Cardápio digital com comandas, delivery, impressão, estoque, caixa e relatórios." },
+      { property: "og:title", content: "Cardápio Digital" },
+      { property: "og:description", content: "Cardápio digital com comandas, delivery, impressão, estoque, caixa e relatórios." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -880,7 +880,7 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
             {modal === "about" && (
               <>
                 <span className="modal-icon"><Info /></span>
-                <h3>Sobre a Burguer House</h3>
+                <h3>Sobre o Cardápio Digital</h3>
                 <p>Smash burgers feitos na hora, ingredientes selecionados e um atendimento pensado para você aproveitar cada mordida.</p>
                 <button className="primary" onClick={() => setModal(null)}>VOLTAR AO CARDÁPIO</button>
               </>
@@ -972,7 +972,7 @@ function PdvPanel({ menuProducts, onClose }: { menuProducts: Product[]; onClose:
       <div className="online"><i /> 1 dispositivo online</div>
     </aside>
     <section className="pdv-main">
-      <header className="pdv-head"><div><small>BURGuer HOUSE · OPERAÇÃO</small><h2>{tab}</h2></div><button onClick={onClose}><X /> Voltar ao cardápio</button></header>
+      <header className="pdv-head"><div><small>CARDÁPIO DIGITAL · OPERAÇÃO</small><h2>{tab}</h2></div><button onClick={onClose}><X /> Voltar ao cardápio</button></header>
 
       {tab === "Dashboard" && <div className="dash-view">
         <div className="stats">
