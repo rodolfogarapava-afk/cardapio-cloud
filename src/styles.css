@@ -212,6 +212,7 @@ button { cursor:pointer;touch-action:manipulation; }
 .nav-list button.active svg { color:var(--yellow); }
 .side-bottom { margin-top:auto;display:grid;gap:8px; }
 .side-bottom button { background:#ffffff06;border:1px solid #ffffff18;color:#d7d7dc;border-radius:9px;padding:12px;display:flex;justify-content:center;gap:8px;font-weight:600; }
+.side-bottom .mobile-exit-nav{display:none}
 .nav-list button.management-entry { margin-top:8px;border-color:#ffc90044;background:linear-gradient(135deg,#ffc90018,#ffffff05);color:var(--yellow); }
 .nav-list button.system-nav{min-height:66px}.nav-list button.system-nav:first-of-type{margin-top:8px;border-top:1px solid #ffffff0e}
 .platform-nav-divider{height:1px;background:#ffffff12;margin:9px 8px 7px}
@@ -375,8 +376,11 @@ button { cursor:pointer;touch-action:manipulation; }
   .sidebar-backdrop{display:block;position:fixed;top:0;right:0;bottom:0;left:220px;z-index:19;margin:0;padding:0;border:0;border-radius:0;background:#0008;backdrop-filter:blur(2px)}
   .sidebar{overflow-y:auto;overscroll-behavior:contain}
   .sidebar .desktop-only-nav{display:none!important}
+  .sidebar .desktop-exit-nav{display:none!important}
   .nav-list button{min-height:60px}
   .side-bottom{padding-bottom:12px}
+  .side-bottom .mobile-exit-nav{display:flex;align-items:center}
+  .side-bottom .about{display:none}
   .content{width:100%;min-height:calc(100vh - 68px)}
   .integrated-view{min-height:calc(100vh - 120px)}
   .modal-backdrop{overflow-y:auto;align-items:center}

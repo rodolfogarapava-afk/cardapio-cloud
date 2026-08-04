@@ -516,12 +516,13 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
               <button className={tenantNavigation.page === "printing" ? "active system-nav platform-nav desktop-only-nav" : "system-nav platform-nav desktop-only-nav"} onClick={() => { tenantNavigation.setPage("printing"); setSystemView(null); setMenuOpen(false); }}>
                 <Printer size={24} /><span>Impressão</span>
               </button>
-              <button className="system-nav platform-nav" onClick={tenantNavigation.onExit}>
+              <button className="system-nav platform-nav desktop-exit-nav" onClick={tenantNavigation.onExit}>
                 <LogOut size={24} /><span>Sair</span>
               </button>
             </>}
           </div>
           <div className="side-bottom">
+            {tenantNavigation && <button className="mobile-exit-nav" onClick={tenantNavigation.onExit}><LogOut size={18} /> Sair</button>}
             <button className="about" onClick={() => { setModal("about"); setMenuOpen(false); }}><Info size={17} /> Sobre</button>
           </div>
         </aside>}
