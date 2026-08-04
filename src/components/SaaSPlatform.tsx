@@ -201,7 +201,7 @@ function DemoLanding({ onMaster, onTenant, onBlocked }: { onMaster: () => void; 
     <main className="saas-login">
       <div className="saas-login-glow" />
       <section className="saas-login-card">
-        <div className="saas-brand"><span><ChefHat /></span><div><strong>Cardápio Cloud</strong><small>GESTÃO & PEDIDOS</small></div></div>
+        <div className="saas-brand"><span><ChefHat /></span><div><strong>Cardápio Digital</strong><small>GESTÃO & PEDIDOS</small></div></div>
         <div className="saas-login-copy">
           <span className="saas-eyebrow"><ShieldCheck /> AMBIENTE DE DEMONSTRAÇÃO</span>
           <h1>Seu restaurante conectado, do pedido à cozinha.</h1>
@@ -249,7 +249,7 @@ function MasterConsole({ page, setPage, tenants, jobs, onStatus, onEnterTenant, 
   return (
     <main className="saas-master">
       <aside className="saas-master-side">
-        <div className="saas-brand"><span><ChefHat /></span><div><strong>Cardápio Cloud</strong><small>PAINEL MASTER</small></div></div>
+        <div className="saas-brand"><span><ChefHat /></span><div><strong>Cardápio Digital</strong><small>PAINEL MASTER</small></div></div>
         <nav>{nav.map(([id, Icon, label]) => <button key={id} className={page === id ? "active" : ""} onClick={() => setPage(id)}><Icon />{label}</button>)}</nav>
         <div className="saas-side-account"><span>SA</span><div><b>Super Admin</b><small>admin@admin.com</small></div><button onClick={onExit} aria-label="Sair"><LogOut /></button></div>
       </aside>
@@ -541,10 +541,10 @@ function JobTable({ jobs, tenants }: { jobs:PrintJob[]; tenants:Tenant[] }) {
 
 function BlockedScreen({ tenant, onPaid, onExit }: { tenant: Tenant; onPaid:()=>void; onExit:()=>void }) {
   const [checking,setChecking]=useState(false);
-  const pix=useMemo(()=>`00020126580014BR.GOV.BCB.PIX0136${tenant.id}-mensalidade-0720265204000053039865406${tenant.monthly.toFixed(2)}5802BR5914CARDAPIO CLOUD6009SAO PAULO62070503***6304ABCD`,[tenant]);
+  const pix=useMemo(()=>`00020126580014BR.GOV.BCB.PIX0136${tenant.id}-mensalidade-0720265204000053039865406${tenant.monthly.toFixed(2)}5802BR5916CARDAPIO DIGITAL6009SAO PAULO62070503***6304ABCD`,[tenant]);
   const confirm=()=>{setChecking(true);onPaid()};
   return <main className="saas-blocked">
-    <header><div className="saas-brand"><span><ChefHat/></span><div><strong>Cardápio Cloud</strong><small>GESTÃO & PEDIDOS</small></div></div><button onClick={onExit}><LogOut/> Sair da demo</button></header>
+    <header><div className="saas-brand"><span><ChefHat/></span><div><strong>Cardápio Digital</strong><small>GESTÃO & PEDIDOS</small></div></div><button onClick={onExit}><LogOut/> Sair da demo</button></header>
     <section className="saas-blocked-card">
       <div className="saas-lock-copy"><span className="saas-lock-icon"><Clock3/></span><p>ASSINATURA PENDENTE</p><h1>Regularize para continuar usando o sistema.</h1><span>A mensalidade de <b>{tenant.name}</b> venceu em {tenant.due}. Seus dados estão seguros e serão liberados assim que o pagamento for confirmado.</span>
         <ul><li><ShieldCheck/>Nenhum dado ou pedido foi apagado</li><li><RefreshCw/>Liberação automática após a confirmação</li><li><CheckCircle2/>Pagamento processado em ambiente seguro</li></ul>

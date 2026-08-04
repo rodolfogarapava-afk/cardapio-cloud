@@ -1,4 +1,4 @@
-# Cardapio Cloud - Agente de impressao RAW ESC/POS
+# Cardapio Digital - Agente de impressao RAW ESC/POS
 # ------------------------------------------------------------------
 # Pequeno servidor HTTP local que recebe bytes ESC/POS (em base64) do
 # navegador e os envia em modo RAW direto para a impressora termica,
@@ -47,7 +47,7 @@ public class RawPrinter {
     if (!OpenPrinter(printerName, out h, IntPtr.Zero))
       return "ERRO OpenPrinter: " + Marshal.GetLastWin32Error();
     DOCINFOA di = new DOCINFOA();
-    di.pDocName = "Pedido Cardapio Cloud";
+    di.pDocName = "Pedido Cardapio Digital";
     di.pDataType = "RAW";
     if (!StartDocPrinter(h, 1, di)) { ClosePrinter(h); return "ERRO StartDoc: " + Marshal.GetLastWin32Error(); }
     if (!StartPagePrinter(h)) { EndDocPrinter(h); ClosePrinter(h); return "ERRO StartPage: " + Marshal.GetLastWin32Error(); }

@@ -1,15 +1,15 @@
-CARDAPIO CLOUD - IMPRESSAO AUTOMATICA
+CARDAPIO DIGITAL - IMPRESSAO AUTOMATICA
 =====================================
 
 1. Conecte as impressoras ao notebook por USB, Bluetooth ou rede.
 2. Instale no Windows o driver de cada impressora que sera utilizada.
 3. Extraia todos os arquivos deste ZIP.
-4. No Cardapio Cloud, abra Impressao e gere um codigo de ativacao.
+4. No Cardapio Digital, abra Impressao e gere um codigo de ativacao.
 5. Clique duas vezes em instalar-impressora.bat.
 6. Autorize a instalacao e digite o codigo quando for solicitado.
 7. O instalador detecta todas as impressoras fisicas automaticamente, sem perguntas.
 8. No painel do site, selecione 1 ou 2 impressoras e direcione as categorias.
-9. Volte ao Cardapio Cloud e use o botao Imprimir teste.
+9. Volte ao Cardapio Digital e use o botao Imprimir teste.
 
 Se ja havia uma versao do agente instalada, execute este novo instalador com
 um novo codigo. Ele encerra a versao anterior antes de iniciar a atualizacao.

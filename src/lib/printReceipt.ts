@@ -414,7 +414,7 @@ export async function getPrintHelperStatus() {
 export async function sendPrinterTest() {
   const builder = new EscPosBuilder();
   builder.init().align("center").bold(true).doubleSize(true).line("TESTE OK");
-  builder.doubleSize(false).bold(false).line("Cardapio Cloud").line(new Date().toLocaleString("pt-BR")).feedLines(4);
+  builder.doubleSize(false).bold(false).line("Cardapio Digital").line(new Date().toLocaleString("pt-BR")).feedLines(4);
   await sendToPrintHelper(builder.build());
 }
 

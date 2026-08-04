@@ -1,5 +1,5 @@
 @echo off
-title Instalar agente de impressao - Cardapio Cloud
+title Instalar agente de impressao - Cardapio Digital
 setlocal
 
 net session >nul 2>&1
@@ -14,7 +14,7 @@ set "INSTALLDIR=%ProgramData%\CardapioCloud\Agent"
 set "INSTALLEDVBS=%INSTALLDIR%\iniciar-impressora.vbs"
 
 echo ============================================================
-echo   Agente de impressao - Cardapio Cloud
+echo   Agente de impressao - Cardapio Digital
 echo ============================================================
 echo.
 
@@ -88,7 +88,7 @@ echo      OK - porta 19100 autorizada para o agente local.
 echo.
 
 echo [5/7] Configurando inicio automatico com o Windows...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$s=New-Object -ComObject WScript.Shell; $dest=[IO.Path]::Combine($env:APPDATA,'Microsoft\Windows\Start Menu\Programs\Startup','Impressora Cardapio Cloud.lnk'); $l=$s.CreateShortcut($dest); $l.TargetPath='%INSTALLEDVBS%'; $l.WorkingDirectory='%INSTALLDIR%'; $l.Description='Agente de impressao Cardapio Cloud'; $l.Save()"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$s=New-Object -ComObject WScript.Shell; $dest=[IO.Path]::Combine($env:APPDATA,'Microsoft\Windows\Start Menu\Programs\Startup','Impressora Cardapio Digital.lnk'); $l=$s.CreateShortcut($dest); $l.TargetPath='%INSTALLEDVBS%'; $l.WorkingDirectory='%INSTALLDIR%'; $l.Description='Agente de impressao Cardapio Digital'; $l.Save()"
 if errorlevel 1 (
   echo      [AVISO] Nao consegui criar o inicio automatico.
 ) else (

@@ -56,7 +56,7 @@ export async function queuePrinterTest(tenantId:string) {
   const now=Date.now();
   const data=buildOrderTicketBase64({
     customer:"TESTE DA IMPRESSORA",
-    items:[{name:"Conexão com Cardápio Cloud OK",qty:1,unitPrice:0,total:0}],
+    items:[{name:"Conexão com Cardápio Digital OK",qty:1,unitPrice:0,total:0}],
     total:0,
   });
   const {error}=await supabase.rpc("queue_print_job",{

@@ -94,7 +94,7 @@ function LoginScreen({ area }: { area: "admin" | "cliente" | "sistema" }) {
   return (
     <main className="auth-screen">
       <section className="auth-brand-panel">
-        <div className="auth-brand"><span><ChefHat /></span><div><b>CARDÁPIO CLOUD</b></div></div>
+        <div className="auth-brand"><span><ChefHat /></span><div><b>CARDÁPIO DIGITAL</b></div></div>
         <div className="auth-brand-copy">
           <p>ACESSO ADMINISTRATIVO</p>
           <h1>Gestão simples.<br />Operação sob controle.</h1>
@@ -104,7 +104,7 @@ function LoginScreen({ area }: { area: "admin" | "cliente" | "sistema" }) {
       </section>
       <section className="auth-form-panel">
         <form className="auth-form" onSubmit={submit}>
-          <div className="auth-mobile-brand"><span><ChefHat /></span><b>CARDÁPIO CLOUD</b></div>
+          <div className="auth-mobile-brand"><span><ChefHat /></span><b>CARDÁPIO DIGITAL</b></div>
           <p>{area === "admin" ? "ADMINISTRAÇÃO DA PLATAFORMA" : area === "cliente" ? "ÁREA DO CLIENTE" : "ENTRAR NO SISTEMA"}</p>
           <h2>{area === "admin" ? "Acesso administrativo" : "Bem-vindo de volta"}</h2>
           <span className="auth-subtitle">{area === "cliente" ? "Entre para acessar a operação da sua loja." : "Informe seus dados para acessar o painel."}</span>

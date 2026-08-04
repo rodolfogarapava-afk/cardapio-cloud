@@ -37,7 +37,7 @@ public class CloudRawPrinter {
   public static string Send(string printerName, byte[] bytes) {
     IntPtr h;
     if (!OpenPrinter(printerName, out h, IntPtr.Zero)) return "OpenPrinter: " + Marshal.GetLastWin32Error();
-    DOCINFOA di = new DOCINFOA(); di.pDocName = "Pedido Cardapio Cloud"; di.pDataType = "RAW";
+    DOCINFOA di = new DOCINFOA(); di.pDocName = "Pedido Cardapio Digital"; di.pDataType = "RAW";
     if (!StartDocPrinter(h, 1, di)) { ClosePrinter(h); return "StartDoc: " + Marshal.GetLastWin32Error(); }
     if (!StartPagePrinter(h)) { EndDocPrinter(h); ClosePrinter(h); return "StartPage: " + Marshal.GetLastWin32Error(); }
     int written; bool ok = WritePrinter(h, bytes, bytes.Length, out written);

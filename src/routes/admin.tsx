@@ -6,10 +6,10 @@ import AuthGate from "@/components/AuthGate";
 export const Route = createFileRoute("/admin")({
   head: () => ({
     meta: [
-      { title: "Administração — Cardápio Cloud" },
+      { title: "Administração — Cardápio Digital" },
       {
         name: "description",
-        content: "Administração de clientes, assinaturas, pagamentos e impressão do Cardápio Cloud.",
+        content: "Administração de clientes, assinaturas, pagamentos e impressão do Cardápio Digital.",
       },
       { name: "robots", content: "noindex, nofollow" },
     ],

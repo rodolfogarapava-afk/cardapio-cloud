@@ -6,7 +6,7 @@ import { RestaurantApp } from "./index";
 export const Route = createFileRoute("/cliente")({
   head: () => ({
     meta: [
-      { title: "Área do Cliente — Cardápio Cloud" },
+      { title: "Área do Cliente — Cardápio Digital" },
       { name: "description", content: "Operação do restaurante: cardápio, comandas, caixa, relatórios e impressão." },
       { name: "robots", content: "noindex, nofollow" },
     ],
