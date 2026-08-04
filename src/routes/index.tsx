@@ -615,7 +615,7 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
 
       {modal && (
         <div className="modal-backdrop" onMouseDown={() => { if(modal==="payment")cancelPayment();else setModal(null); }}>
-          <section className="modal" onMouseDown={(e) => e.stopPropagation()}>
+          <section className={`modal${modal === "payment" ? " payment-modal" : ""}`} onMouseDown={(e) => e.stopPropagation()}>
             <button className="modal-close" onClick={() => { if(modal==="payment")cancelPayment();else setModal(null); }} aria-label="Fechar"><X /></button>
             {modal === "review" && (
               sent ? <Success title="Avaliação enviada!" text="Obrigado por compartilhar sua experiência com a gente." /> :
@@ -774,33 +774,43 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
             )}
             {modal === "payment" && (
               <>
-                <span className="modal-icon"><Banknote /></span>
-                <h3>Finalizar {customerName}</h3>
-                <p className="payment-subtitle">Selecione os itens desta cobrança. A comanda fica aberta até quitar o saldo.</p>
-                <div className="checkout-total">Restante: R$ {commandDue.toFixed(2).replace(".", ",")}</div>
-                <div className="split-payment-items">
-                  {paymentLines.map((item)=><label key={`${item.name}-${item.index}`} className={`split-payment-item${item.selected?" selected":""}${item.due<=0.001?" paid":""}`}>
-                    <input type="checkbox" checked={item.selected} disabled={item.due<=0.001} onChange={()=>setPaymentSelection(current=>current.map((value,index)=>index===item.index?!value:value))}/>
-                    <span><b>{item.qty}× {item.name}</b>{item.paid>0&&<small>Já pago: R$ {item.paid.toFixed(2).replace(".",",")}</small>}</span>
-                    <strong>{item.due<=0.001?"PAGO":`R$ ${item.due.toFixed(2).replace(".",",")}`}</strong>
-                  </label>)}
+                <div className="payment-modal-header">
+                  <span className="modal-icon"><Banknote /></span>
+                  <div>
+                    <h3>Finalizar {customerName}</h3>
+                    <p className="payment-subtitle">Selecione os itens desta cobrança. A comanda fica aberta até quitar o saldo.</p>
+                  </div>
+                  <div className="checkout-total">Restante: R$ {commandDue.toFixed(2).replace(".", ",")}</div>
                 </div>
-                <div className="payment-mode-options">
+                <div className="payment-modal-grid">
+                  <div className="payment-modal-panel payment-items-panel">
+                    <strong className="payment-panel-title">Itens desta cobrança</strong>
+                    <div className="split-payment-items">
+                      {paymentLines.map((item)=><label key={`${item.name}-${item.index}`} className={`split-payment-item${item.selected?" selected":""}${item.due<=0.001?" paid":""}`}>
+                        <input type="checkbox" checked={item.selected} disabled={item.due<=0.001} onChange={()=>setPaymentSelection(current=>current.map((value,index)=>index===item.index?!value:value))}/>
+                        <span><b>{item.qty}× {item.name}</b>{item.paid>0&&<small>Já pago: R$ {item.paid.toFixed(2).replace(".",",")}</small>}</span>
+                        <strong>{item.due<=0.001?"PAGO":`R$ ${item.due.toFixed(2).replace(".",",")}`}</strong>
+                      </label>)}
+                    </div>
+                  </div>
+                  <div className="payment-modal-panel payment-options-panel">
+                    <strong className="payment-panel-title">Como deseja cobrar?</strong>
+                    <div className="payment-mode-options">
                   <label className={paymentMode==="full"?"active":""}><input type="radio" checked={paymentMode==="full"} onChange={()=>setPaymentMode("full")}/><span><b>Valor cheio</b><small>Quita os itens selecionados</small></span></label>
                   <label className={paymentMode==="split"?"active":""}><input type="radio" checked={paymentMode==="split"} onChange={()=>setPaymentMode("split")}/><span><b>Dividir valor</b><small>Divide entre pessoas</small></span>{paymentMode==="split"&&<input aria-label="Quantidade de pessoas" type="number" min="2" max="20" inputMode="numeric" value={paymentSplitCount} onChange={event=>setPaymentSplitCount(event.target.value.replace(/\D/g,""))}/>}</label>
                   <label className={paymentMode==="custom"?"active":""}><input type="radio" checked={paymentMode==="custom"} onChange={()=>setPaymentMode("custom")}/><span><b>Valor personalizado</b><small>Informe quanto será pago agora</small></span>{paymentMode==="custom"&&<input aria-label="Valor personalizado" inputMode="decimal" placeholder="0,00" value={paymentCustomAmount} onChange={event=>setPaymentCustomAmount(event.target.value)}/>}</label>
-                </div>
-                {!paymentAmountValid&&<p className="form-error">Selecione ao menos um item e informe um valor válido.</p>}
-                <div className="payment-selected-total">Esta cobrança: <b>R$ {Math.max(0,paymentAmount).toFixed(2).replace(".",",")}</b></div>
-                <div className="payment-methods">{["PIX","Dinheiro","Cartão Débito","Cartão Crédito"].map((method) =>
-                  <button key={method} className={paymentMethod === method ? "active" : ""} onClick={() => {setPaymentMethod(method);setPaymentError("")}}>{method}</button>)}
-                </div>
-                {paymentMethod === "Dinheiro" && <>
-                  <input className="cash-input" value={cashReceived} onChange={(e) => setCashReceived(e.target.value)} inputMode="decimal" placeholder="Valor recebido" />
-                  {!!cashReceived && <p className="change">{Number.isFinite(cashAmount) ? cashAmount >= paymentAmount ? `Troco: R$ ${(cashAmount-paymentAmount).toFixed(2).replace(".", ",")}` : `Faltam R$ ${(paymentAmount-cashAmount).toFixed(2).replace(".", ",")}` : "Informe um valor válido"}</p>}
-                </>}
-                {paymentError&&<p className="form-error">{paymentError}</p>}
-                <button className="primary" disabled={!paymentAmountValid||!cashPaymentValid||paymentProcessing} onClick={async() => {
+                    </div>
+                    {!paymentAmountValid&&<p className="form-error">Selecione ao menos um item e informe um valor válido.</p>}
+                    <div className="payment-selected-total">Esta cobrança: <b>R$ {Math.max(0,paymentAmount).toFixed(2).replace(".",",")}</b></div>
+                    <div className="payment-methods">{["PIX","Dinheiro","Cartão Débito","Cartão Crédito"].map((method) =>
+                      <button key={method} className={paymentMethod === method ? "active" : ""} onClick={() => {setPaymentMethod(method);setPaymentError("")}}>{method}</button>)}
+                    </div>
+                    {paymentMethod === "Dinheiro" && <>
+                      <input className="cash-input" value={cashReceived} onChange={(e) => setCashReceived(e.target.value)} inputMode="decimal" placeholder="Valor recebido" />
+                      {!!cashReceived && <p className="change">{Number.isFinite(cashAmount) ? cashAmount >= paymentAmount ? `Troco: R$ ${(cashAmount-paymentAmount).toFixed(2).replace(".", ",")}` : `Faltam R$ ${(paymentAmount-cashAmount).toFixed(2).replace(".", ",")}` : "Informe um valor válido"}</p>}
+                    </>}
+                    {paymentError&&<p className="form-error">{paymentError}</p>}
+                    <button className="primary" disabled={!paymentAmountValid||!cashPaymentValid||paymentProcessing} onClick={async() => {
                   setPaymentProcessing(true);setPaymentError("");
                   const now=Date.now();
                   const saleId=now*1000+Math.floor(Math.random()*1000);
@@ -861,7 +871,9 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
                   }).catch((error)=>console.error("Pagamento confirmado, mas o comprovante não entrou na fila de impressão:",error));
                   else printCustomerReceipt(sale);
                   playNotificationSound("success"); setCart({}); setCartDetails({}); setCustomerName(""); setCashReceived(""); setPaymentCommandId(null); setPaymentCommandBackup(null); setSent(true); setModal(null);setPaymentProcessing(false);
-                }}>{paymentProcessing?"REGISTRANDO...":paymentWillComplete?"CONFIRMAR PAGAMENTO E IMPRIMIR":"REGISTRAR PAGAMENTO PARCIAL"}</button>
+                    }}>{paymentProcessing?"REGISTRANDO...":paymentWillComplete?"CONFIRMAR PAGAMENTO E IMPRIMIR":"REGISTRAR PAGAMENTO PARCIAL"}</button>
+                  </div>
+                </div>
               </>
             )}
             {modal === "about" && (
