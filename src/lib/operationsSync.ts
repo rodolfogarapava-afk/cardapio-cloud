@@ -13,7 +13,7 @@ export type CloudCommand = {
   kitchenStatus?: "new" | "preparing" | "ready" | "cancelled";
   cancelledBy?: "customer" | "store";
   cancelledAt?: string;
-  items: { productId?: number | string; category?: string; name: string; qty: number; price: number; detail?: string; delivered: boolean }[];
+  items: { productId?: number | string; category?: string; name: string; qty: number; price: number; detail?: string; delivered: boolean; paidAmount?: number }[];
 };
 
 export type CloudSale = {
@@ -22,7 +22,9 @@ export type CloudSale = {
   total: number;
   method: string;
   createdAt: number;
-  items: { name: string; qty: number; price: number; detail?: string }[];
+  sourceCommandId?: number;
+  partial?: boolean;
+  items: { name: string; qty: number; price: number; detail?: string; category?: string; amount?: number }[];
 };
 
 export type CloudExpense = {

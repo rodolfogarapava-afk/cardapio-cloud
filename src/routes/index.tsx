@@ -158,22 +158,41 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
   const [paymentMethod, setPaymentMethod] = useState("PIX");
   const [cashReceived, setCashReceived] = useState("");
   const [paymentTotal, setPaymentTotal] = useState(0);
-  const [paymentItems, setPaymentItems] = useState<{name:string;qty:number;price:number;detail?:string}[]>([]);
+  const [paymentItems, setPaymentItems] = useState<{productId?:number|string;category?:string;name:string;qty:number;price:number;detail?:string;paidAmount?:number}[]>([]);
   const [paymentCommandId, setPaymentCommandId] = useState<number | null>(null);
   const [paymentProcessing, setPaymentProcessing] = useState(false);
   const [paymentError, setPaymentError] = useState("");
+  const [paymentSelection, setPaymentSelection] = useState<boolean[]>([]);
+  const [paymentMode, setPaymentMode] = useState<"full"|"split"|"custom">("full");
+  const [paymentSplitCount, setPaymentSplitCount] = useState("2");
+  const [paymentCustomAmount, setPaymentCustomAmount] = useState("");
   const [commandSubmitting, setCommandSubmitting] = useState(false);
   const [commandError, setCommandError] = useState("");
   const [paymentCommandBackup, setPaymentCommandBackup] = useState<IntegratedCommand|null>(null);
   const [systemView, setSystemView] = useState<"products" | "stock" | "commands" | "cash" | "reports" | null>(null);
   const [savedCommands, setSavedCommands] = useState<IntegratedCommand[]>([]);
-  const [salesHistory, setSalesHistory] = useState<{id:number;name:string;total:number;method:string;createdAt:number;items:{name:string;qty:number;price:number;detail?:string}[]}[]>([]);
+  const [salesHistory, setSalesHistory] = useState<IntegratedSale[]>([]);
   const [expenses, setExpenses] = useState<{id:number;description:string;amount:number;createdAt:number}[]>([]);
   const [printStatuses, setPrintStatuses] = useState<Record<number,"sending"|"pending"|"processing"|"printed"|"failed">>({});
   const [printerConnection,setPrinterConnection]=useState<{checking:boolean;online:boolean;printer:string;lastSeen:number|null}>({checking:true,online:false,printer:"",lastSeen:null});
   const [storageReady, setStorageReady] = useState(false);
   const knownCommandIds = useRef<Set<number>>(new Set());
   const commandNotificationsReady = useRef(false);
+
+  const openPaymentForCommand = (command: IntegratedCommand) => {
+    setCustomerName(command.name);
+    setPaymentTotal(command.total);
+    setPaymentItems(command.items.map(item=>({...item})));
+    setPaymentSelection(command.items.map(()=>true));
+    setPaymentMode("full");
+    setPaymentSplitCount("2");
+    setPaymentCustomAmount("");
+    setPaymentMethod(deliveryPaymentLabel(command.delivery?.payment));
+    setPaymentCommandId(command.id);
+    setPaymentCommandBackup(command);
+    setPaymentError("");
+    setModal("payment");
+  };
 
   useEffect(() => {
     if (publicCatalog) return;
@@ -375,10 +394,20 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
       description: "Bebidas geladas para acompanhar seu pedido.",
     },
   };
+  const paymentLines=paymentItems.map((item,index)=>{
+    const lineTotal=item.qty*item.price;
+    const paid=Math.min(lineTotal,Math.max(0,item.paidAmount||0));
+    return {...item,index,lineTotal,paid,due:Math.max(0,lineTotal-paid),selected:paymentSelection[index]!==false};
+  });
+  const commandDue=paymentLines.reduce((sum,item)=>sum+item.due,0);
+  const selectedDue=paymentLines.filter(item=>item.selected).reduce((sum,item)=>sum+item.due,0);
+  const splitCount=Math.max(2,Math.floor(Number(paymentSplitCount)||2));
+  const customPaymentAmount=Number(paymentCustomAmount.replace(",","."));
+  const paymentAmount=paymentMode==="full"?selectedDue:paymentMode==="split"?selectedDue/splitCount:(Number.isFinite(customPaymentAmount)?customPaymentAmount:0);
+  const paymentAmountValid=paymentAmount>0&&paymentAmount<=selectedDue+0.001;
   const cashAmount=Number(cashReceived.replace(",","."));
-  const cashPaymentValid=paymentMethod!=="Dinheiro"||(Number.isFinite(cashAmount)&&cashAmount>=paymentTotal);
+  const cashPaymentValid=paymentMethod!=="Dinheiro"||(Number.isFinite(cashAmount)&&cashAmount>=paymentAmount);
   const cancelPayment=()=>{
-    if(paymentCommandBackup)setSavedCommands((all)=>all.some((command)=>command.id===paymentCommandBackup.id)?mergeOpenCommands(all):mergeOpenCommands([...all,paymentCommandBackup]));
     setPaymentCommandId(null);
     setPaymentCommandBackup(null);
     setCashReceived("");
@@ -499,9 +528,9 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
           {tenantNavigation && tenantNavigation.page !== "operation" ? tenantNavigation.content :
           systemView === "products" ? <IntegratedProducts tenantId={tenantNavigation?.tenantId} products={products} categories={categories} onChange={persistProducts} onAddCategory={(name)=>persistCategories([...categories,name])} onRenameCategory={renameCategory} onDeleteCategory={(name)=>{const next=categories.filter((c)=>c!==name);persistCategories(next);if(activeMain===name)setActiveMain(next[0]||"")}} /> :
           systemView === "stock" ? <IntegratedStock products={products} onChange={persistProducts} /> :
-          systemView === "commands" ? <IntegratedCommands tenantId={tenantNavigation?.tenantId} commands={savedCommands} setCommands={setSavedCommands} sales={salesHistory} setSales={setSalesHistory} products={products} adjustStock={adjustStock} printStatuses={printStatuses} printerConnection={printerConnection} onCharge={(command) => { setCustomerName(command.name); setPaymentTotal(command.total); setPaymentItems(command.items); setPaymentMethod(deliveryPaymentLabel(command.delivery?.payment)); setPaymentCommandId(command.id); setPaymentCommandBackup(command); setPaymentError(""); setModal("payment"); }} /> :
+          systemView === "commands" ? <IntegratedCommands tenantId={tenantNavigation?.tenantId} commands={savedCommands} setCommands={setSavedCommands} sales={salesHistory} setSales={setSalesHistory} products={products} adjustStock={adjustStock} printStatuses={printStatuses} printerConnection={printerConnection} onCharge={openPaymentForCommand} /> :
           systemView === "cash" ? <IntegratedCash sales={salesHistory} expenses={expenses} sync={operationsSync} onAddExpense={(description,amount) => setExpenses((all)=>[...all,{id:Date.now(),description,amount,createdAt:Date.now()}])} onDeleteExpense={(id)=>setExpenses((all)=>all.filter(expense=>expense.id!==id))} /> :
-          systemView === "reports" ? <IntegratedReports sales={salesHistory} expenses={expenses} commands={savedCommands} sync={operationsSync} /> : <>
+          systemView === "reports" ? <IntegratedReports sales={salesHistory} expenses={expenses} commands={savedCommands} products={products} sync={operationsSync} /> : <>
           {!categories.length && <div className="integrated-empty new-store-empty"><Store/><h3>{publicMenu ? "Cardápio em preparação" : "Seu cardápio está vazio"}</h3><p>{publicMenu ? "Esta loja ainda não publicou produtos." : "Esta é uma loja nova. Cadastre a primeira categoria e os produtos para começar."}</p>{!publicMenu && <button className="primary" onClick={()=>setSystemView("products")}>CADASTRAR PRODUTOS</button>}</div>}
           {!publicMenu && !!categories.length && <div className="client-menu-toolbar">
             <label className="client-menu-search"><Search size={17}/><input value={query} onChange={(event)=>setQuery(event.target.value)} placeholder="Buscar no cardápio..." aria-label="Buscar no cardápio" /></label>
@@ -725,15 +754,7 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
                       {command.waiterName&&<small>Garçom: {command.waiterName}</small>}
                     </div>
                     <strong>R$ {command.total.toFixed(2).replace(".", ",")}</strong>
-                    <button onClick={() => {
-                      setCustomerName(command.name);
-                      setPaymentTotal(command.total);
-                      setPaymentItems(command.items);
-                      setPaymentMethod(deliveryPaymentLabel(command.delivery?.payment));
-                      setPaymentCommandId(command.id);
-                      setPaymentCommandBackup(command);
-                      setModal("payment");
-                    }}>COBRAR</button>
+                    <button onClick={() => openPaymentForCommand(command)}>COBRAR</button>
                     {printStatuses[command.id]==="failed"&&tenantNavigation?.tenantId&&<button onClick={()=>{
                       setPrintStatuses((current)=>({...current,[command.id]:"sending"}));
                       queueKitchenOrder({
@@ -753,27 +774,63 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
               <>
                 <span className="modal-icon"><Banknote /></span>
                 <h3>Finalizar {customerName}</h3>
-                <div className="checkout-total">R$ {paymentTotal.toFixed(2).replace(".", ",")}</div>
+                <p className="payment-subtitle">Selecione os itens desta cobrança. A comanda fica aberta até quitar o saldo.</p>
+                <div className="checkout-total">Restante: R$ {commandDue.toFixed(2).replace(".", ",")}</div>
+                <div className="split-payment-items">
+                  {paymentLines.map((item)=><label key={`${item.name}-${item.index}`} className={`split-payment-item${item.selected?" selected":""}${item.due<=0.001?" paid":""}`}>
+                    <input type="checkbox" checked={item.selected} disabled={item.due<=0.001} onChange={()=>setPaymentSelection(current=>current.map((value,index)=>index===item.index?!value:value))}/>
+                    <span><b>{item.qty}× {item.name}</b>{item.paid>0&&<small>Já pago: R$ {item.paid.toFixed(2).replace(".",",")}</small>}</span>
+                    <strong>{item.due<=0.001?"PAGO":`R$ ${item.due.toFixed(2).replace(".",",")}`}</strong>
+                  </label>)}
+                </div>
+                <div className="payment-mode-options">
+                  <label className={paymentMode==="full"?"active":""}><input type="radio" checked={paymentMode==="full"} onChange={()=>setPaymentMode("full")}/><span><b>Valor cheio</b><small>Quita os itens selecionados</small></span></label>
+                  <label className={paymentMode==="split"?"active":""}><input type="radio" checked={paymentMode==="split"} onChange={()=>setPaymentMode("split")}/><span><b>Dividir valor</b><small>Divide entre pessoas</small></span>{paymentMode==="split"&&<input aria-label="Quantidade de pessoas" type="number" min="2" max="20" inputMode="numeric" value={paymentSplitCount} onChange={event=>setPaymentSplitCount(event.target.value.replace(/\D/g,""))}/>}</label>
+                  <label className={paymentMode==="custom"?"active":""}><input type="radio" checked={paymentMode==="custom"} onChange={()=>setPaymentMode("custom")}/><span><b>Valor personalizado</b><small>Informe quanto será pago agora</small></span>{paymentMode==="custom"&&<input aria-label="Valor personalizado" inputMode="decimal" placeholder="0,00" value={paymentCustomAmount} onChange={event=>setPaymentCustomAmount(event.target.value)}/>}</label>
+                </div>
+                {!paymentAmountValid&&<p className="form-error">Selecione ao menos um item e informe um valor válido.</p>}
+                <div className="payment-selected-total">Esta cobrança: <b>R$ {Math.max(0,paymentAmount).toFixed(2).replace(".",",")}</b></div>
                 <div className="payment-methods">{["PIX","Dinheiro","Cartão Débito","Cartão Crédito"].map((method) =>
                   <button key={method} className={paymentMethod === method ? "active" : ""} onClick={() => {setPaymentMethod(method);setPaymentError("")}}>{method}</button>)}
                 </div>
                 {paymentMethod === "Dinheiro" && <>
                   <input className="cash-input" value={cashReceived} onChange={(e) => setCashReceived(e.target.value)} inputMode="decimal" placeholder="Valor recebido" />
-                  {!!cashReceived && <p className="change">{Number.isFinite(cashAmount) ? cashAmount >= paymentTotal ? `Troco: R$ ${(cashAmount-paymentTotal).toFixed(2).replace(".", ",")}` : `Faltam R$ ${(paymentTotal-cashAmount).toFixed(2).replace(".", ",")}` : "Informe um valor válido"}</p>}
+                  {!!cashReceived && <p className="change">{Number.isFinite(cashAmount) ? cashAmount >= paymentAmount ? `Troco: R$ ${(cashAmount-paymentAmount).toFixed(2).replace(".", ",")}` : `Faltam R$ ${(paymentAmount-cashAmount).toFixed(2).replace(".", ",")}` : "Informe um valor válido"}</p>}
                 </>}
                 {paymentError&&<p className="form-error">{paymentError}</p>}
-                <button className="primary" disabled={!cashPaymentValid||paymentProcessing} onClick={async() => {
+                <button className="primary" disabled={!paymentAmountValid||!cashPaymentValid||paymentProcessing} onClick={async() => {
                   setPaymentProcessing(true);setPaymentError("");
+                  const now=Date.now();
+                  const saleId=now*1000+Math.floor(Math.random()*1000);
+                  let remainingToAllocate=Math.round(paymentAmount*100)/100;
+                  const paidItems=paymentLines.filter(item=>item.selected&&item.due>0).map(item=>{
+                    const amount=Math.min(item.due,remainingToAllocate);
+                    remainingToAllocate=Math.max(0,remainingToAllocate-amount);
+                    const qty=item.price>0?amount/item.price:1;
+                    return {...item,amount,qty};
+                  }).filter(item=>item.amount>0.0001);
+                  const nextItems=paymentItems.map((item,index)=>{
+                    const paid=paidItems.find(entry=>entry.index===index)?.amount||0;
+                    return {...item,paidAmount:Math.min(item.qty*item.price,(item.paidAmount||0)+paid)};
+                  });
+                  const nextDue=nextItems.reduce((sum,item)=>sum+Math.max(0,item.qty*item.price-(item.paidAmount||0)),0);
+                  const isComplete=nextDue<0.01;
+                  const sale={id:saleId,name:customerName,total:paymentAmount,method:paymentMethod,createdAt:now,sourceCommandId:paymentCommandId??undefined,partial:!isComplete,items:paidItems.map(item=>({name:item.name,qty:item.qty,price:item.price,detail:item.detail,category:item.category,amount:item.amount}))};
                   if(paymentCommandId!==null&&supabase){
                     if(!tenantNavigation?.tenantId){
                       setPaymentError("Não foi possível identificar a loja desta comanda.");
                       setPaymentProcessing(false);
                       return;
                     }
-                    const {data,error}=await supabase.rpc("finalize_restaurant_command",{
+                    const {data,error}=await supabase.rpc("record_command_payment",{
                       p_tenant_id:tenantNavigation.tenantId,
                       p_command_id:paymentCommandId,
+                      p_sale_id:saleId,
                       p_payment_method:paymentMethod,
+                      p_amount:paymentAmount,
+                      p_payment_items:sale.items,
+                      p_next_command_payload:{...paymentCommandBackup,items:nextItems},
+                      p_complete:isComplete,
                     });
                     if(error){
                       console.error("Não foi possível finalizar a comanda:",error);
@@ -790,9 +847,8 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
                       return;
                     }
                   }
-                  const sale={id:paymentCommandId??Date.now(),name:customerName,total:paymentTotal,method:paymentMethod,createdAt:Date.now(),items:paymentItems};
                   setSalesHistory((all)=>[...all.filter((item)=>item.id!==sale.id),sale]);
-                  if(paymentCommandId!==null)setSavedCommands((all)=>all.filter((command)=>command.id!==paymentCommandId));
+                  if(paymentCommandId!==null)setSavedCommands((all)=>isComplete?all.filter((command)=>command.id!==paymentCommandId):all.map((command)=>command.id===paymentCommandId?{...command,items:nextItems}:command));
                   if(tenantNavigation?.tenantId)queueCustomerReceipt({
                     tenantId:tenantNavigation.tenantId,
                     saleId:sale.id,
@@ -803,7 +859,7 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
                   }).catch((error)=>console.error("Pagamento confirmado, mas o comprovante não entrou na fila de impressão:",error));
                   else printCustomerReceipt(sale);
                   playNotificationSound("success"); setCart({}); setCartDetails({}); setCustomerName(""); setCashReceived(""); setPaymentCommandId(null); setPaymentCommandBackup(null); setSent(true); setModal(null);setPaymentProcessing(false);
-                }}>{paymentProcessing?"FINALIZANDO...":"CONFIRMAR PAGAMENTO E IMPRIMIR"}</button>
+                }}>{paymentProcessing?"REGISTRANDO...":isComplete?"CONFIRMAR PAGAMENTO E IMPRIMIR":"REGISTRAR PAGAMENTO PARCIAL"}</button>
               </>
             )}
             {modal === "about" && (
@@ -995,8 +1051,8 @@ function deliveryPaymentLabel(method?:string){
   if(value==="debit"||value==="debito"||value==="débito")return"Cartão Débito";
   return"PIX";
 }
-type IntegratedCommand = {id:number;name:string;tableLabel?:string;waiterName?:string;source?:"waiter"|"delivery";count:number;total:number;createdAt:number;kitchenStatus?:"new"|"preparing"|"ready"|"cancelled";cancelledBy?:"customer"|"store";cancelledAt?:string;delivery?:CommandDelivery;items:{productId?:number|string;category?:string;name:string;qty:number;price:number;detail?:string;delivered:boolean}[]};
-type IntegratedSale = {id:number;name:string;total:number;method:string;createdAt:number;items:{name:string;qty:number;price:number;detail?:string}[]};
+type IntegratedCommand = {id:number;name:string;tableLabel?:string;waiterName?:string;source?:"waiter"|"delivery";count:number;total:number;createdAt:number;kitchenStatus?:"new"|"preparing"|"ready"|"cancelled";cancelledBy?:"customer"|"store";cancelledAt?:string;delivery?:CommandDelivery;items:{productId?:number|string;category?:string;name:string;qty:number;price:number;detail?:string;delivered:boolean;paidAmount?:number}[]};
+type IntegratedSale = {id:number;name:string;total:number;method:string;createdAt:number;sourceCommandId?:number;partial?:boolean;items:{name:string;qty:number;price:number;detail?:string;category?:string;amount?:number}[]};
 type IntegratedExpense = {id:number;description:string;amount:number;createdAt:number};
 
 function mergeOpenCommands(commands:IntegratedCommand[]){
@@ -1845,7 +1901,61 @@ function IntegratedCash({sales,expenses,onAddExpense,onDeleteExpense,sync}:{sale
   </div>
 }
 
-function IntegratedReports({sales,expenses,commands,sync}:{sales:IntegratedSale[];expenses:IntegratedExpense[];commands:IntegratedCommand[];sync:OperationsSyncView}) {
+function IntegratedReports({sales,expenses,commands,products,sync}:{sales:IntegratedSale[];expenses:IntegratedExpense[];commands:IntegratedCommand[];products:Product[];sync:OperationsSyncView}) {
+  const brl=(value:number)=>`R$ ${value.toFixed(2).replace(".",",")}`;
+  type Period="today"|"7d"|"month"|"custom";
+  const [mode,setMode]=useState<"simple"|"advanced">("simple");
+  const [period,setPeriod]=useState<Period>("today");
+  const toISO=(date:Date)=>new Date(date.getTime()-date.getTimezoneOffset()*60000).toISOString().slice(0,10);
+  const [from,setFrom]=useState(toISO(new Date()));
+  const [to,setTo]=useState(toISO(new Date()));
+  const [itemFilter,setItemFilter]=useState("all");
+  const [categoryFilter,setCategoryFilter]=useState("all");
+  const [exportOpen,setExportOpen]=useState(false);
+  const [includeCharts,setIncludeCharts]=useState(true);
+  const [includeItems,setIncludeItems]=useState(true);
+  const [includePeriod,setIncludePeriod]=useState(true);
+  const range=useMemo(()=>{
+    const end=new Date();end.setHours(23,59,59,999);const start=new Date();start.setHours(0,0,0,0);
+    if(period==="7d")start.setDate(start.getDate()-6);
+    if(period==="month")start.setDate(1);
+    if(period==="custom"){const f=new Date(`${from}T00:00:00`);const t=new Date(`${to}T23:59:59`);if(!isNaN(+f))start.setTime(+f);if(!isNaN(+t))end.setTime(+t)}
+    return {start:+start,end:+end};
+  },[period,from,to]);
+  const within=(createdAt:number)=>createdAt>=range.start&&createdAt<=range.end;
+  const allSales=sales.filter(sale=>within(sale.createdAt));
+  const allExpenses=expenses.filter(expense=>within(expense.createdAt));
+  const categoryOf=(item:IntegratedSale["items"][number])=>item.category||products.find(product=>product.name===item.name)?.category||"Outros";
+  const itemNames=Array.from(new Set(allSales.flatMap(sale=>sale.items.map(item=>item.name)))).sort();
+  const categories=Array.from(new Set(allSales.flatMap(sale=>sale.items.map(categoryOf)))).sort();
+  const filteredSales=allSales.map(sale=>({...sale,items:sale.items.filter(item=>(itemFilter==="all"||item.name===itemFilter)&&(categoryFilter==="all"||categoryOf(item)===categoryFilter))})).filter(sale=>sale.items.length>0);
+  const revenue=filteredSales.reduce((sum,sale)=>sum+sale.items.reduce((sub,item)=>sub+(item.amount??item.qty*item.price),0),0);
+  const costs=allExpenses.reduce((sum,expense)=>sum+expense.amount,0);
+  const grouped=new Map<string,{qty:number;revenue:number;category:string}>();
+  filteredSales.flatMap(sale=>sale.items).forEach(item=>{const old=grouped.get(item.name)||{qty:0,revenue:0,category:categoryOf(item)};grouped.set(item.name,{...old,qty:old.qty+item.qty,revenue:old.revenue+(item.amount??item.qty*item.price)})});
+  const itemRows=Array.from(grouped.entries()).sort((a,b)=>b[1].revenue-a[1].revenue);
+  const categoryTotals=new Map<string,number>();itemRows.forEach(([,data])=>categoryTotals.set(data.category,(categoryTotals.get(data.category)||0)+data.revenue));
+  const methods=["Dinheiro","PIX","Cartão Crédito","Cartão Débito"];
+  const methodTotals=methods.map(method=>({method,total:filteredSales.filter(sale=>sale.method===method).reduce((sum,sale)=>sum+sale.items.reduce((sub,item)=>sub+(item.amount??item.qty*item.price),0),0)}));
+  const pieTotal=Math.max(1,methodTotals.reduce((sum,item)=>sum+item.total,0));
+  const periodLabel=period==="today"?"Hoje":period==="7d"?"Últimos 7 dias":period==="month"?"Mês atual":`${from} a ${to}`;
+  const downloadXls=()=>{
+    const esc=(value:unknown)=>String(value??"").replace(/[&<>]/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[char]||char));
+    const rows=[`<tr><th colspan="4">Relatório financeiro ${esc(periodLabel)}</th></tr>`,`<tr><td>Entradas</td><td>${revenue}</td><td>Saídas</td><td>${costs}</td></tr>`];
+    if(includeItems){rows.push("<tr><th>Item</th><th>Categoria</th><th>Quantidade</th><th>Arrecadado</th></tr>",...itemRows.map(([name,data])=>`<tr><td>${esc(name)}</td><td>${esc(data.category)}</td><td>${data.qty}</td><td>${data.revenue}</td></tr>`));}
+    const blob=new Blob([`<html><meta charset="utf-8"><table>${rows.join("")}</table></html>`],{type:"application/vnd.ms-excel"});const url=URL.createObjectURL(blob);const link=document.createElement("a");link.href=url;link.download=`financeiro-${periodLabel.replace(/[^a-z0-9]+/gi,"-")}.xls`;link.click();URL.revokeObjectURL(url);setExportOpen(false);
+  };
+  return <div className="integrated-view modern-reports">
+    <div className="integrated-heading"><div><p>FINANCEIRO · {periodLabel.toUpperCase()}</p><h1>Relatórios</h1><span>Resultados da sua loja com filtros por período, item e forma de pagamento.</span><SyncBadge sync={sync}/></div><button onClick={()=>setExportOpen(true)}>EXPORTAR DADOS</button></div>
+    <div className="report-controls"><div className="report-mode-tabs"><button className={mode==="simple"?"active":""} onClick={()=>setMode("simple")}>SIMPLIFICADA</button><button className={mode==="advanced"?"active":""} onClick={()=>setMode("advanced")}>AVANÇADA</button></div><div className="period-tags">{([['today','Hoje'],['7d','Semana'],['month','Mês'],['custom','Período']] as [Period,string][]).map(([key,label])=><button className={period===key?"active":""} onClick={()=>setPeriod(key)} key={key}>{label}</button>)}</div>{period==="custom"&&<div className="period-custom"><label>De <input type="date" value={from} onChange={event=>setFrom(event.target.value)}/></label><label>Até <input type="date" value={to} onChange={event=>setTo(event.target.value)}/></label></div>}</div>
+    {mode==="advanced"&&<div className="report-filters"><label>Categoria<select value={categoryFilter} onChange={event=>setCategoryFilter(event.target.value)}><option value="all">Todas</option>{categories.map(category=><option key={category}>{category}</option>)}</select></label><label>Item<select value={itemFilter} onChange={event=>setItemFilter(event.target.value)}><option value="all">Todos os itens</option>{itemNames.map(item=><option key={item}>{item}</option>)}</select></label></div>}
+    <div className="cash-summary report-summary"><article><small>Entradas</small><strong>{brl(revenue)}</strong></article><article><small>Saídas</small><strong className="red">{brl(costs)}</strong></article><article><small>Entrada - saída</small><strong>{brl(revenue-costs)}</strong></article><article><small>Vendas</small><strong>{filteredSales.length}</strong></article></div>
+    {mode==="simple"?<div className="finance-panels reports-panels simple-report"><section><h3>5 itens mais vendidos</h3>{itemRows.slice(0,5).map(([name,data],index)=><div className="finance-row" key={name}><span><b>{index+1}. {name}</b><small>{data.qty.toFixed(data.qty%1?2:0)} vendidos</small></span><b>{brl(data.revenue)}</b></div>)||<p>Nenhuma venda no período.</p>}</section><section><h3>5 maiores custos</h3>{allExpenses.slice().sort((a,b)=>b.amount-a.amount).slice(0,5).map(expense=><div className="finance-row expense-row" key={expense.id}><span>{expense.description}<small>{new Date(expense.createdAt).toLocaleDateString("pt-BR")}</small></span><b className="red">- {brl(expense.amount)}</b></div>)||<p>Nenhum custo no período.</p>}</section></div>:<div className="advanced-report-grid"><section className="report-card"><h3>Recebimentos por pagamento</h3><div className="payment-pie" style={{background:`conic-gradient(#ffca00 0 ${(methodTotals[0].total/pieTotal)*100}%, #00c27a ${(methodTotals[0].total/pieTotal)*100}% ${((methodTotals[0].total+methodTotals[1].total)/pieTotal)*100}%, #6c8cff ${((methodTotals[0].total+methodTotals[1].total)/pieTotal)*100}% ${((methodTotals[0].total+methodTotals[1].total+methodTotals[2].total)/pieTotal)*100}%, #f1784b ${((methodTotals[0].total+methodTotals[1].total+methodTotals[2].total)/pieTotal)*100}% 100%)`}}><span>{brl(revenue)}</span></div><div className="pie-legend">{methodTotals.map((row,index)=><span key={row.method}><i className={`c${index}`}/>{row.method}: <b>{brl(row.total)}</b></span>)}</div></section><section className="report-card report-item-table"><h3>Itens e participação na categoria</h3>{itemRows.map(([name,data])=><div className="item-report-row" key={name}><div><b>{name}</b><small>{data.category} · {data.qty.toFixed(data.qty%1?2:0)} un.</small></div><div><strong>{brl(data.revenue)}</strong><small>{(((data.revenue/(categoryTotals.get(data.category)||1))*100)).toFixed(1)}% da categoria</small></div></div>)||<p>Nenhuma venda no período.</p>}</section><section className="report-card"><h3>Formas de pagamento</h3>{methodTotals.map(row=><div className="report-metric" key={row.method}><span>{row.method}</span><b>{brl(row.total)} · {((row.total/pieTotal)*100).toFixed(1)}%</b></div>)}<div className="report-metric"><span>Ticket médio</span><b>{brl(filteredSales.length?revenue/filteredSales.length:0)}</b></div><div className="report-metric"><span>Comandas em aberto</span><b>{commands.length}</b></div></section></div>}
+    {exportOpen&&<div className="modal-backdrop" onMouseDown={()=>setExportOpen(false)}><section className="modal export-modal" onMouseDown={event=>event.stopPropagation()}><button className="modal-close" onClick={()=>setExportOpen(false)}><X/></button><span className="modal-icon"><BarChart3/></span><h3>Exportar relatório</h3><p>Escolha o que deve entrar no arquivo.</p><label><input type="checkbox" checked={includePeriod} onChange={event=>setIncludePeriod(event.target.checked)}/> Período selecionado</label><label><input type="checkbox" checked={includeItems} onChange={event=>setIncludeItems(event.target.checked)}/> Itens e quantidades</label><label><input type="checkbox" checked={includeCharts} onChange={event=>setIncludeCharts(event.target.checked)}/> Resumo de gráficos</label><div className="confirmation-actions"><button onClick={()=>{generateReportPdf({periodLabel:includePeriod?periodLabel:"Relatório completo",sales:filteredSales,expenses:allExpenses,pendingCommands:commands.length,includeItems,includeCharts});setExportOpen(false)}}>PDF</button><button className="primary" onClick={downloadXls}>EXCEL (.XLS)</button></div></section></div>}
+  </div>
+}
+
+function IntegratedReportsLegacy({sales,expenses,commands,sync}:{sales:IntegratedSale[];expenses:IntegratedExpense[];commands:IntegratedCommand[];sync:OperationsSyncView}) {
   const brl=(v:number)=>`R$ ${v.toFixed(2).replace(".",",")}`;
   type Period="today"|"7d"|"30d"|"month"|"custom";
   const [period,setPeriod]=useState<Period>("today");

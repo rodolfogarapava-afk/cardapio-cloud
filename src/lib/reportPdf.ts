@@ -27,6 +27,8 @@ export interface ReportPdfData {
   sales: ReportSale[];
   expenses: ReportExpense[];
   pendingCommands: number;
+  includeItems?: boolean;
+  includeCharts?: boolean;
 }
 
 // Gera um relatório PDF completo (A4, letra legível) com resumo financeiro,
