@@ -1484,6 +1484,7 @@ function IntegratedCommands({tenantId,commands,setCommands,sales,setSales,onChar
   const [editing,setEditing]=useState<IntegratedCommand|null>(null);
   const [commandFilter,setCommandFilter]=useState<"all"|"waiter"|"delivery"|"pickup"|"late"|"print-failed">("all");
   const [expandedKitchenColumns,setExpandedKitchenColumns]=useState<Record<string,boolean>>({});
+  const [expandedCommandItems,setExpandedCommandItems]=useState<Record<number,boolean>>({});
   const [now,setNow]=useState(Date.now());
   const [kitchenMode,setKitchenMode]=useState(false);
   const [historyOpen,setHistoryOpen]=useState(false);
@@ -1734,6 +1735,7 @@ function IntegratedCommands({tenantId,commands,setCommands,sales,setSales,onChar
   };
   const visibleCommands=[...commands].filter(matchesFilter).sort((a,b)=>Number(a.createdAt||0)-Number(b.createdAt||0));
   const kitchenCardLimit=3;
+  const kitchenItemLimit=2;
   const kitchenColumns=[
     {id:"new" as const,title:"NOVAS",description:"Aguardando recebimento",commands:visibleCommands.filter((command)=>(command.kitchenStatus||"new")==="new")},
     {id:"preparing" as const,title:"PREPARANDO",description:"Em produção",commands:visibleCommands.filter((command)=>command.kitchenStatus==="preparing")},
@@ -1788,7 +1790,8 @@ function IntegratedCommands({tenantId,commands,setCommands,sales,setSales,onChar
           {command.delivery.notes&&<small>OBS.: {command.delivery.notes}</small>}
         </div>}
         {command.delivery?.fulfillment==="pickup"&&<div className="command-delivery is-pickup"><b><Store/>RETIRADA NO BALCÃO</b>{command.delivery.phone&&<span><Phone/>{command.delivery.phone}</span>}{command.delivery.notes&&<small>OBS.: {command.delivery.notes}</small>}</div>}
-        <div className="command-products">{command.items.map((item,index)=><label key={`${item.name}-${index}`}><input type="checkbox" disabled={column.id==="cancelled"} checked={item.delivered} onChange={()=>setCommands((all)=>all.map((c)=>c.id===command.id?{...c,items:c.items.map((x,i)=>i===index?{...x,delivered:!x.delivered}:x)}:c))}/><span><b>{item.qty}×</b> {item.name}{item.detail&&<small>{item.detail}</small>}</span><em>{column.id==="cancelled"?"Cancelado":item.delivered?"Entregue":column.id==="ready"?"Pronto":column.id==="new"?"Novo":"Preparando"}</em></label>)}</div>
+        <div className="command-products">{command.items.slice(0,expandedCommandItems[command.id]?command.items.length:kitchenItemLimit).map((item,index)=><label key={`${item.name}-${index}`}><input type="checkbox" disabled={column.id==="cancelled"} checked={item.delivered} onChange={()=>setCommands((all)=>all.map((c)=>c.id===command.id?{...c,items:c.items.map((x,i)=>i===index?{...x,delivered:!x.delivered}:x)}:c))}/><span><b>{item.qty}×</b> {item.name}{item.detail&&<small>{item.detail}</small>}</span><em>{column.id==="cancelled"?"Cancelado":item.delivered?"Entregue":column.id==="ready"?"Pronto":column.id==="new"?"Novo":"Preparando"}</em></label>)}</div>
+        {command.items.length>kitchenItemLimit&&<button type="button" className={`command-products-more${expandedCommandItems[command.id]?" expanded":""}`} onClick={()=>setExpandedCommandItems((current)=>({...current,[command.id]:!current[command.id]}))}>{expandedCommandItems[command.id]?"VER MENOS":`VER MAIS (${command.items.length-kitchenItemLimit})`} <ChevronDown/></button>}
         <div className="kitchen-flow-actions">
           {column.id==="new"&&<button className="flow-main receive-order" onClick={()=>void setKitchenStatus(command.id,"preparing")}>RECEBER E INICIAR PREPARO</button>}
           {column.id==="preparing"&&<><button onClick={()=>void setKitchenStatus(command.id,"new")}>VOLTAR</button><button className="flow-main" onClick={()=>void setKitchenStatus(command.id,"ready")}>MARCAR PRONTO</button></>}
