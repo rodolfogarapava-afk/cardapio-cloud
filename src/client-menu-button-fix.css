@@ -1,8 +1,12 @@
 /* Ajuste isolado do botão circular de adicionar no cardápio do cliente. */
 .client-menu-content.compact-menu .add-button {
-  /* Ligeiramente à direita do centro da imagem lateral. */
-  right: 42px;
+  /* Compacto e próximo à ponta direita da imagem lateral. */
+  right: 26px;
   bottom: 15px;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
   display: grid;
   place-items: center;
   align-content: center;
@@ -13,8 +17,8 @@
 }
 .client-menu-content.compact-menu .add-button svg {
   display: block;
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   margin: 0 !important;
   padding: 0;
   transform: none;
@@ -22,7 +26,7 @@
 }
 @media (max-width: 640px) {
   .client-menu-content.compact-menu .add-button {
-    right: 35px;
+    right: 25px;
     bottom: 15px;
   }
 }
