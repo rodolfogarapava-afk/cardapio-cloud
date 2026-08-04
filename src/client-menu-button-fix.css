@@ -1,6 +1,7 @@
 /* Ajuste isolado do botão circular de adicionar no cardápio do cliente. */
 .client-menu-content.compact-menu .add-button {
-  right: 24px;
+  /* A imagem lateral mede 142px no desktop: 49px centraliza o círculo de 32px. */
+  right: 49px;
   bottom: 15px;
   display: grid;
   place-items: center;
@@ -21,7 +22,7 @@
 }
 @media (max-width: 640px) {
   .client-menu-content.compact-menu .add-button {
-    right: 23px;
+    right: 41px;
     bottom: 15px;
   }
 }
