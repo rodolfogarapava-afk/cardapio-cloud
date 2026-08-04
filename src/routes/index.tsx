@@ -765,9 +765,27 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
                 <button className="primary" disabled={!cashPaymentValid||paymentProcessing} onClick={async() => {
                   setPaymentProcessing(true);setPaymentError("");
                   if(paymentCommandId!==null&&supabase){
-                    const {data,error}=await supabase.rpc("finalize_restaurant_command",{p_command_id:paymentCommandId,p_payment_method:paymentMethod});
-                    if(error||!data){
-                      setPaymentError(error?.message||"Não foi possível finalizar esta comanda.");
+                    if(!tenantNavigation?.tenantId){
+                      setPaymentError("Não foi possível identificar a loja desta comanda.");
+                      setPaymentProcessing(false);
+                      return;
+                    }
+                    const {data,error}=await supabase.rpc("finalize_restaurant_command",{
+                      p_tenant_id:tenantNavigation.tenantId,
+                      p_command_id:paymentCommandId,
+                      p_payment_method:paymentMethod,
+                    });
+                    if(error){
+                      console.error("Não foi possível finalizar a comanda:",error);
+                      setPaymentError(error.message||"Não foi possível finalizar esta comanda.");
+                      setPaymentProcessing(false);
+                      return;
+                    }
+                    if(!data){
+                      setPaymentCommandBackup(null);
+                      setSavedCommands((all)=>all.filter((command)=>command.id!==paymentCommandId));
+                      window.dispatchEvent(new Event("operations-sync-refresh"));
+                      setPaymentError("Esta comanda não existe mais na nuvem. A lista foi atualizada; feche esta janela e faça uma nova comanda.");
                       setPaymentProcessing(false);
                       return;
                     }
@@ -1433,9 +1451,15 @@ function IntegratedCommands({tenantId,commands,setCommands,sales,setSales,onChar
     }
     else if(confirmation.action==="cancel") {
       if(tenantId&&supabase){
-        const {data,error}=await supabase.rpc("cancel_restaurant_command",{p_command_id:confirmation.command.id});
-        if(error||!data){
+        const {data,error}=await supabase.rpc("cancel_restaurant_command",{p_tenant_id:tenantId,p_command_id:confirmation.command.id});
+        if(error){
           console.error("Não foi possível cancelar a comanda:",error);
+          return;
+        }
+        if(!data){
+          setCommands((all)=>all.filter((command)=>command.id!==confirmation.command.id));
+          setConfirmation(null);
+          window.dispatchEvent(new Event("operations-sync-refresh"));
           return;
         }
       }
