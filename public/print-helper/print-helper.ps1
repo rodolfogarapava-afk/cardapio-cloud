@@ -64,11 +64,25 @@ function Resolve-Printers([object]$requested) {
   # Nao filtra por marca: qualquer fila fisica instalada no Windows e aceita.
   # Filas PDF/virtuais e portas de gravacao em arquivo nunca aparecem.
   $virtualPattern = 'PDF|XPS|OneNote|Fax|Microsoft Print|Adobe PDF|CutePDF|doPDF|PDFCreator|PrimoPDF|Bullzip|Foxit PDF|Nitro PDF|Wondershare PDF|Remote Printer|Remote Desktop|RustDesk|AnyDesk'
+  $cimByName = @{}
+  @(Get-CimInstance Win32_Printer -ErrorAction SilentlyContinue) | ForEach-Object {
+    $cimByName[[string]$_.Name] = $_
+  }
   $all = @(Get-Printer -ErrorAction SilentlyContinue |
     Where-Object {
+      $cim = $cimByName[[string]$_.Name]
+      $queueOffline = [string]$_.PrinterStatus -match 'Offline|NotAvailable|ServerOffline'
+      $deviceOffline = $cim -and (
+        [bool]$cim.WorkOffline -or
+        [int]$cim.PrinterStatus -eq 7 -or
+        [int]$cim.Availability -in @(7,8) -or
+        [int]$cim.DetectedErrorState -eq 9
+      )
       $_.Name -notmatch $virtualPattern -and
       $_.DriverName -notmatch $virtualPattern -and
-      $_.PortName -notmatch '^(PORTPROMPT:|FILE:|NUL:|XPSPort:)$'
+      $_.PortName -notmatch '^(PORTPROMPT:|FILE:|NUL:|XPSPort:)$' -and
+      -not $queueOffline -and
+      -not $deviceOffline
     })
 
   # Detecta pela conexao, sem limitar marcas ou modelos. Inclui USB,

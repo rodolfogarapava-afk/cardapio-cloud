@@ -1,10 +1,8 @@
-' Cardapio Digital - Inicia o agente de impressao sem abrir janela preta.
-' Coloque um atalho deste arquivo na pasta Inicializar do Windows para
-' que a impressao funcione automaticamente ao ligar o PC.
-' (Win+R  ->  shell:startup  ->  cole um atalho deste .vbs)
+' Cardapio Digital - Inicia o supervisor sem abrir janela preta.
+' O supervisor mantem os dois componentes de impressao ativos e os reinicia
+' automaticamente se o Windows ou o driver encerrar algum deles.
 
 Set fso = CreateObject("Scripting.FileSystemObject")
 scriptDir = fso.GetParentFolderName(WScript.ScriptFullName)
 Set shell = CreateObject("WScript.Shell")
-shell.Run "powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File """ & scriptDir & "\print-helper.ps1""", 0, False
-shell.Run "powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File """ & scriptDir & "\cloud-print-agent.ps1""", 0, False
+shell.Run "powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File """ & scriptDir & "\agent-watchdog.ps1""", 0, False

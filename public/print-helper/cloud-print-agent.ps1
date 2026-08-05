@@ -8,6 +8,7 @@ $SupabaseUrl = "https://mycahirzxfkejxqpvuco.supabase.co"
 $PublishableKey = "sb_publishable_bMydrvlH1_lAE6KFwY93qw_F7W4N-mx"
 $DataDir = Join-Path $env:ProgramData "CardapioCloud"
 $ConfigPath = Join-Path $DataDir "printer-agent.json"
+$AgentLogPath = Join-Path $DataDir "printer-agent.log"
 $Headers = @{ apikey = $PublishableKey; Authorization = "Bearer $PublishableKey" }
 
 Add-Type @'
@@ -52,15 +53,40 @@ function Invoke-AgentRpc([string]$Name, [hashtable]$Body) {
     -Headers $Headers -ContentType "application/json" -Body ($Body | ConvertTo-Json -Compress) -TimeoutSec 15
 }
 
+function Write-AgentLog([string]$Message) {
+  try {
+    New-Item -ItemType Directory -Path $DataDir -Force | Out-Null
+    Add-Content -LiteralPath $AgentLogPath -Value ("{0} - {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $Message) -Encoding UTF8
+    $lines = @(Get-Content -LiteralPath $AgentLogPath -ErrorAction SilentlyContinue)
+    if ($lines.Count -gt 300) {
+      $lines | Select-Object -Last 220 | Set-Content -LiteralPath $AgentLogPath -Encoding UTF8
+    }
+  } catch {}
+}
+
 function Resolve-ThermalPrinters {
   # Apenas filas de impressao fisicas. A regra nao depende de marca/modelo:
   # USB, Bluetooth, rede e compartilhadas entram; PDF e impressoras virtuais saem.
   $virtualPattern = 'PDF|XPS|OneNote|Fax|Microsoft Print|Adobe PDF|CutePDF|doPDF|PDFCreator|PrimoPDF|Bullzip|Foxit PDF|Nitro PDF|Wondershare PDF|Remote Printer|Remote Desktop|RustDesk|AnyDesk'
+  $cimByName = @{}
+  @(Get-CimInstance Win32_Printer -ErrorAction SilentlyContinue) | ForEach-Object {
+    $cimByName[[string]$_.Name] = $_
+  }
   $all = @(Get-Printer -ErrorAction SilentlyContinue |
     Where-Object {
+      $cim = $cimByName[[string]$_.Name]
+      $queueOffline = [string]$_.PrinterStatus -match 'Offline|NotAvailable|ServerOffline'
+      $deviceOffline = $cim -and (
+        [bool]$cim.WorkOffline -or
+        [int]$cim.PrinterStatus -eq 7 -or
+        [int]$cim.Availability -in @(7,8) -or
+        [int]$cim.DetectedErrorState -eq 9
+      )
       $_.Name -notmatch $virtualPattern -and
       $_.DriverName -notmatch $virtualPattern -and
-      $_.PortName -notmatch '^(PORTPROMPT:|FILE:|NUL:|XPSPort:)$'
+      $_.PortName -notmatch '^(PORTPROMPT:|FILE:|NUL:|XPSPort:)$' -and
+      -not $queueOffline -and
+      -not $deviceOffline
     }
   )
 
@@ -142,17 +168,34 @@ $Config = Get-Content $ConfigPath -Raw | ConvertFrom-Json
 $Token = $Config.agentToken
 $LastHeartbeat = [DateTime]::MinValue
 $InterJobDelaySeconds = 5
+$LastAgentState = ""
+
+Write-AgentLog "Agente iniciado para a loja $($Config.tenantName). A ativacao salva foi reutilizada."
 
 while ($true) {
   try {
     $printers = @(Resolve-ThermalPrinters)
-    if ($printers.Count -eq 0) { throw "Nenhuma impressora USB ou Bluetooth encontrada" }
-    $routing = Get-PrinterRouting $printers $Config
-    $printerLabel = if ($printers.Count -ge 2) { "$($routing.skewers) + $($routing.sides)" } else { $printers -join " + " }
+    $printerLabel = if ($printers.Count) { $printers -join " + " } else { "AGENTE ATIVO - AGUARDANDO IMPRESSORA" }
 
     if (((Get-Date) - $LastHeartbeat).TotalSeconds -ge 15) {
       Invoke-AgentRpc "printer_agent_heartbeat" @{ p_token=$Token; p_printer_name=$printerLabel } | Out-Null
       $LastHeartbeat = Get-Date
+    }
+
+    if ($printers.Count -eq 0) {
+      if ($LastAgentState -ne "waiting-printer") {
+        Write-AgentLog "Nenhuma impressora disponivel. O agente continuara procurando sem perder a ativacao."
+        $LastAgentState = "waiting-printer"
+      }
+      Start-Sleep -Seconds 2
+      continue
+    }
+
+    $routing = Get-PrinterRouting $printers $Config
+    $connectedState = $printers -join " + "
+    if ($LastAgentState -ne $connectedState) {
+      Write-AgentLog "Impressora reconectada/detectada: $connectedState"
+      $LastAgentState = $connectedState
     }
 
     # Trabalha uma comanda por vez para nunca deixar várias como "imprimindo".
@@ -211,6 +254,12 @@ while ($true) {
         Invoke-AgentRpc "complete_print_job" @{ p_token=$Token; p_job_id=$job.job_id; p_success=$false; p_error=$_.Exception.Message } | Out-Null
       }
     }
-  } catch {}
+  } catch {
+    $errorState = "error:$($_.Exception.Message)"
+    if ($LastAgentState -ne $errorState) {
+      Write-AgentLog "Falha temporaria; nova tentativa automatica: $($_.Exception.Message)"
+      $LastAgentState = $errorState
+    }
+  }
   Start-Sleep -Seconds 2
 }

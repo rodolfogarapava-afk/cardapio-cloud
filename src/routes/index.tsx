@@ -1747,6 +1747,7 @@ function IntegratedCommands({tenantId,commands,setCommands,sales,setSales,onChar
   const lateCount=commands.filter((command)=>command.kitchenStatus!=="cancelled"&&ageInMinutes(command)>=20).length;
   const failedCount=commands.filter((command)=>printStatuses[command.id]==="failed").length;
   const waitingPrintCount=commands.filter((command)=>["pending","processing","sending"].includes(printStatuses[command.id]||"")).length;
+  const waitingForPrinter=printerConnection.online&&printerConnection.printer.includes("AGUARDANDO IMPRESSORA");
   const recentSales=[...sales].sort((a,b)=>b.createdAt-a.createdAt).slice(0,12);
   const filterOptions:[typeof commandFilter,string,number][]=[
     ["all","TODOS",commands.length],
@@ -1766,10 +1767,11 @@ function IntegratedCommands({tenantId,commands,setCommands,sales,setSales,onChar
       <article className={lateCount?"has-alert":""}><small>ATRASADAS</small><strong>{lateCount}</strong></article>
     </div>
     {!printerConnection.checking&&!printerConnection.online&&<div className="kitchen-system-alert danger" role="alert"><WifiOff/><div><b>IMPRESSORA DESCONECTADA</b><span>O agente do notebook não está respondendo.{waitingPrintCount?` ${waitingPrintCount} impressão(ões) aguardando na fila.`:" Abra o agente para receber as próximas comandas."}</span></div></div>}
+    {waitingForPrinter&&<div className="kitchen-system-alert warning" role="status"><AlertTriangle/><div><b>AGENTE ATIVO · CONECTE A IMPRESSORA</b><span>O notebook está pronto e continuará procurando a impressora. Ao reconectar o USB ou Bluetooth, ela será detectada automaticamente.{waitingPrintCount?` ${waitingPrintCount} impressão(ões) permanecem na fila.`:""}</span></div></div>}
     {!!failedCount&&<div className="kitchen-system-alert danger" role="alert"><AlertTriangle/><div><b>{failedCount} FALHA(S) DE IMPRESSÃO</b><span>Use o filtro “Falha impressão” para localizar e reenviar as comandas.</span></div></div>}
     <div className="kitchen-toolbar">
       <div className="kitchen-filters" aria-label="Filtrar comandas">{filterOptions.map(([filter,label,total])=><button key={filter} className={commandFilter===filter?"active":""} onClick={()=>setCommandFilter(filter)}>{label}<span>{total}</span></button>)}</div>
-      {!printerConnection.checking&&printerConnection.online&&<span className="kitchen-printer-ok"><Printer/> {printerConnection.printer||"IMPRESSORA"} CONECTADA</span>}
+      {!printerConnection.checking&&printerConnection.online&&!waitingForPrinter&&<span className="kitchen-printer-ok"><Printer/> {printerConnection.printer||"IMPRESSORA"} CONECTADA</span>}
     </div>
     {!commands.length ? <div className="integrated-empty"><ShoppingBag/><h3>Nenhuma comanda aberta</h3><p>Adicione itens pelo cardápio e escolha “Salvar comanda”.</p></div> :
     <div className="kitchen-board">{kitchenColumns.map((column)=><section className={`kitchen-column ${column.id}`} key={column.id}>

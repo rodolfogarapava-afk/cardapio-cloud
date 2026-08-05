@@ -1,6 +1,6 @@
 @echo off
 title Instalar agente de impressao - Cardapio Digital
-setlocal
+setlocal EnableExtensions EnableDelayedExpansion
 
 net session >nul 2>&1
 if errorlevel 1 (
@@ -12,6 +12,7 @@ set "PASTA=%~dp0"
 set "VBS=%PASTA%iniciar-impressora.vbs"
 set "INSTALLDIR=%ProgramData%\CardapioCloud\Agent"
 set "INSTALLEDVBS=%INSTALLDIR%\iniciar-impressora.vbs"
+set "CONFIG=%ProgramData%\CardapioCloud\printer-agent.json"
 
 echo ============================================================
 echo   Agente de impressao - Cardapio Digital
@@ -19,7 +20,7 @@ echo ============================================================
 echo.
 
 echo Encerrando uma versao anterior do agente, se estiver aberta...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$self=$PID; Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessId -ne $self -and $_.Name -match '^(powershell|pwsh)\.exe$' -and $_.CommandLine -match '(cloud-print-agent|print-helper)\.ps1' } | ForEach-Object { Invoke-CimMethod -InputObject $_ -MethodName Terminate -ErrorAction SilentlyContinue | Out-Null }"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$self=$PID; Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessId -ne $self -and $_.Name -match '^(powershell|pwsh)\.exe$' -and $_.CommandLine -match '(cloud-print-agent|print-helper|agent-watchdog)\.ps1' } | ForEach-Object { Invoke-CimMethod -InputObject $_ -MethodName Terminate -ErrorAction SilentlyContinue | Out-Null }"
 echo      OK.
 echo.
 
@@ -39,6 +40,11 @@ if not exist "%PASTA%print-helper.ps1" (
   pause
   exit /b 1
 )
+if not exist "%PASTA%agent-watchdog.ps1" (
+  echo [ERRO] O arquivo agent-watchdog.ps1 nao foi encontrado.
+  pause
+  exit /b 1
+)
 
 echo [1/7] Instalando os arquivos em uma pasta permanente...
 if not exist "%INSTALLDIR%" mkdir "%INSTALLDIR%"
@@ -48,17 +54,30 @@ copy /Y "%PASTA%print-helper.ps1" "%INSTALLDIR%\print-helper.ps1" >nul
 if errorlevel 1 goto :copy_error
 copy /Y "%VBS%" "%INSTALLEDVBS%" >nul
 if errorlevel 1 goto :copy_error
+copy /Y "%PASTA%agent-watchdog.ps1" "%INSTALLDIR%\agent-watchdog.ps1" >nul
+if errorlevel 1 goto :copy_error
 echo      OK - arquivos instalados em %INSTALLDIR%.
 echo.
 
 echo [2/7] Vinculando este notebook a loja...
-set /p "CODIGO=Digite o codigo mostrado no site: "
-powershell -NoProfile -ExecutionPolicy Bypass -File "%INSTALLDIR%\cloud-print-agent.ps1" -ActivateCode "%CODIGO%"
-if errorlevel 1 (
-  echo.
-  echo [ERRO] Nao foi possivel ativar. Gere um novo codigo no site.
-  pause
-  exit /b 1
+if exist "%CONFIG%" (
+  powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $c=Get-Content -LiteralPath '%CONFIG%' -Raw | ConvertFrom-Json; if([string]::IsNullOrWhiteSpace([string]$c.agentToken)){exit 1}else{exit 0} } catch { exit 1 }"
+  if errorlevel 1 (
+    echo      A ativacao salva esta danificada e sera refeita.
+    del /Q "%CONFIG%" >nul 2>&1
+  )
+)
+if exist "%CONFIG%" (
+  echo      OK - ativacao existente encontrada e reutilizada.
+) else (
+  set /p "CODIGO=Digite o codigo mostrado no site: "
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%INSTALLDIR%\cloud-print-agent.ps1" -ActivateCode "!CODIGO!"
+  if errorlevel 1 (
+    echo.
+    echo [ERRO] Nao foi possivel ativar. Gere um novo codigo no site.
+    pause
+    exit /b 1
+  )
 )
 echo.
 
@@ -88,12 +107,10 @@ echo      OK - porta 19100 autorizada para o agente local.
 echo.
 
 echo [5/7] Configurando inicio automatico com o Windows...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$s=New-Object -ComObject WScript.Shell; $dest=[IO.Path]::Combine($env:APPDATA,'Microsoft\Windows\Start Menu\Programs\Startup','Impressora Cardapio Digital.lnk'); $l=$s.CreateShortcut($dest); $l.TargetPath='%INSTALLEDVBS%'; $l.WorkingDirectory='%INSTALLDIR%'; $l.Description='Agente de impressao Cardapio Digital'; $l.Save()"
-if errorlevel 1 (
-  echo      [AVISO] Nao consegui criar o inicio automatico.
-) else (
-  echo      OK - o agente iniciara junto com o Windows.
-)
+powershell -NoProfile -ExecutionPolicy Bypass -File "%INSTALLDIR%\agent-watchdog.ps1" -Install
+if errorlevel 1 echo      [AVISO] A tarefa automatica nao foi criada; usando o atalho de seguranca.
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$s=New-Object -ComObject WScript.Shell; $dest=[IO.Path]::Combine($env:APPDATA,'Microsoft\Windows\Start Menu\Programs\Startup','Impressora Cardapio Digital.lnk'); $l=$s.CreateShortcut($dest); $l.TargetPath='%INSTALLEDVBS%'; $l.WorkingDirectory='%INSTALLDIR%'; $l.Description='Supervisor de impressao Cardapio Digital'; $l.Save()"
+echo      OK - supervisor configurado para iniciar e se recuperar sozinho.
 echo.
 
 echo [6/7] Iniciando o agente agora...

@@ -6,13 +6,14 @@ CARDAPIO DIGITAL - IMPRESSAO AUTOMATICA
 3. Extraia todos os arquivos deste ZIP.
 4. No Cardapio Digital, abra Impressao e gere um codigo de ativacao.
 5. Clique duas vezes em instalar-impressora.bat.
-6. Autorize a instalacao e digite o codigo quando for solicitado.
+6. Autorize a instalacao. O codigo so e solicitado na primeira instalacao.
 7. O instalador detecta todas as impressoras fisicas automaticamente, sem perguntas.
 8. No painel do site, selecione 1 ou 2 impressoras e direcione as categorias.
 9. Volte ao Cardapio Digital e use o botao Imprimir teste.
 
-Se ja havia uma versao do agente instalada, execute este novo instalador com
-um novo codigo. Ele encerra a versao anterior antes de iniciar a atualizacao.
+Se ja havia uma versao do agente instalada, execute este novo instalador. A
+ativacao da loja sera encontrada e reutilizada automaticamente, sem novo codigo.
+Ele encerra a versao anterior antes de iniciar a atualizacao.
 Os arquivos sao atualizados na pasta permanente
 C:\ProgramData\CardapioCloud\Agent, portanto o agente nao depende da pasta
 Downloads depois da instalacao.
@@ -22,6 +23,19 @@ instalador para evitar conflito com servicos internos do Windows.
 
 O notebook precisa estar ligado e conectado a internet. O site nao precisa
 permanecer aberto para receber os pedidos feitos pelo telefone.
+
+AO DESLIGAR OU DESCONECTAR A IMPRESSORA
+---------------------------------------
+- A ativacao da loja fica salva no Windows e nao precisa ser digitada novamente.
+- Um supervisor inicia junto com o Windows e reinicia o agente se ele parar.
+- Se a impressora estiver desconectada, os pedidos permanecem na fila da nuvem.
+- Ao reconectar o USB ou Bluetooth, a impressora volta a ser detectada
+  automaticamente em poucos segundos.
+- Impressoras instaladas mas realmente offline deixam de ser tratadas como
+  disponiveis, evitando enviar uma comanda para uma fila USB desconectada.
+- Para diagnostico, os registros ficam em
+  C:\ProgramData\CardapioCloud\printer-agent.log e
+  C:\ProgramData\CardapioCloud\Agent\agent-watchdog.log.
 
 Cada loja imprime apenas os pedidos do seu proprio acesso.
 
