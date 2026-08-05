@@ -17,21 +17,20 @@
   min-width: 28px;
   height: 28px;
   min-height: 28px;
-  display: grid;
-  place-items: center;
-  align-content: center;
-  justify-content: center;
-  justify-items: center;
+  display: block;
   line-height: 1;
   text-indent: 0;
 }
 .client-menu-content.compact-menu .add-button svg {
   display: block;
+  position: absolute;
+  top: 50%;
+  left: 50%;
   width: 14px;
   height: 14px;
   margin: 0 !important;
   padding: 0;
-  transform: none;
+  transform: translate(-50%, -50%);
   translate: 0 0;
 }
 @media (max-width: 640px) {
