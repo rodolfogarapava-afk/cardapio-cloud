@@ -881,7 +881,7 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
               <>
                 <span className="modal-icon"><Info /></span>
                 <h3>Sobre o Cardápio Digital</h3>
-                <p>Smash burgers feitos na hora, ingredientes selecionados e um atendimento pensado para você aproveitar cada mordida.</p>
+                <p>Uma plataforma completa para organizar cardápio, comandas, estoque, caixa e impressão em um só lugar.</p>
                 <button className="primary" onClick={() => setModal(null)}>VOLTAR AO CARDÁPIO</button>
               </>
             )}
