@@ -1,8 +1,25 @@
 CARDAPIO DIGITAL - IMPRESSAO AUTOMATICA
-=====================================
+=======================================
+
+DRIVER LABEL PRINTER INCLUIDO
+-----------------------------
+Este pacote inclui o arquivo LabelPrinter_V1.0.6.exe.
+
+- Se a impressora ainda nao aparece em Impressoras e scanners do Windows,
+  execute LabelPrinter_V1.0.6.exe como administrador antes de instalar o
+  agente.
+- Conclua a instalacao do driver, conecte a impressora e confirme que ela
+  aparece no Windows.
+- Depois execute instalar-impressora.bat normalmente.
+- Se a impressora ja funciona no Windows, nao e necessario reinstalar o
+  driver.
+
+O driver nao e executado automaticamente. Assim, uma impressora que ja esta
+configurada nao e alterada sem necessidade.
 
 1. Conecte as impressoras ao notebook por USB, Bluetooth ou rede.
-2. Instale no Windows o driver de cada impressora que sera utilizada.
+2. Instale no Windows o driver de cada impressora que sera utilizada. Para
+   modelos compativeis, use o LabelPrinter_V1.0.6.exe incluido neste ZIP.
 3. Extraia todos os arquivos deste ZIP.
 4. No Cardapio Digital, abra Impressao e gere um codigo de ativacao.
 5. Clique duas vezes em instalar-impressora.bat.

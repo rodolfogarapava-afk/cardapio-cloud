@@ -528,7 +528,7 @@ function PrintingCenter({ tenant, jobs, setJobs }: { tenant: Tenant; jobs: Print
     </section>
     <section className="saas-print-setup">
       <div><b>1</b><span><strong>Gere o código desta loja</strong><small>O código expira em 20 minutos e só pode ser usado uma vez.</small>{activationCode&&<code className="saas-activation-code">{activationCode}</code>}</span><button className="saas-print-toggle" onClick={generateCode}><KeyRound/> {activationCode?"Gerar outro código":"Gerar código de ativação"}</button></div>
-      <div><b>2</b><span><strong>Instale no notebook da loja</strong><small>Baixe, extraia e execute “instalar-impressora.bat”. A ativação fica salva e o agente volta sozinho com o Windows; toda separação de categorias é configurada acima.</small></span><a className="saas-primary" href="/print-helper/cardapio-cloud-impressora.zip?v=20260805" download><Download/> Baixar agente Windows</a></div>
+      <div><b>2</b><span><strong>Instale no notebook da loja</strong><small>Baixe e extraia o pacote. Se o Windows ainda não reconhecer a impressora, instale primeiro o “LabelPrinter_V1.0.6.exe” incluído; depois execute “instalar-impressora.bat”. A ativação fica salva e o agente volta sozinho com o Windows.</small></span><a className="saas-primary" href="/print-helper/cardapio-cloud-impressora.zip?v=20260805-driver106" download><Download/> Baixar agente + driver</a></div>
     </section>
     {setupError&&<div className="saas-form-error">{setupError}</div>}
     <section className="saas-panel saas-table-panel"><PanelTitle title="Trabalhos recentes" subtitle="Fila isolada desta loja, com confirmação e proteção contra duplicidade"/><JobTable jobs={cloudJobs} tenants={[tenant]}/></section>
