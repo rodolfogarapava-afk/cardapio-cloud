@@ -28,5 +28,18 @@
   .client-menu-content.compact-menu .add-button {
     right: -1px;
     bottom: 15px;
+    width: 26px;
+    min-width: 26px;
+    height: 26px;
+    min-height: 26px;
+    display: block;
+  }
+  .client-menu-content.compact-menu .add-button svg {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 13px;
+    height: 13px;
+    transform: translate(-50%, -50%);
   }
 }
