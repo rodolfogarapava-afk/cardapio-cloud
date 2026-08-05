@@ -572,7 +572,24 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
 
           <div className="product-list">
             {filtered.map((product, idx) => (
-              <article className="product-card" key={product.id}>
+              <article
+                className={`product-card ${product.trackStock&&Number(product.stock||0)<=0?"is-unavailable":"is-clickable"}`}
+                key={product.id}
+                role="button"
+                tabIndex={product.trackStock&&Number(product.stock||0)<=0?-1:0}
+                aria-disabled={product.trackStock&&Number(product.stock||0)<=0}
+                aria-label={`Adicionar ${product.name} ao carrinho`}
+                onClick={() => {
+                  if(product.trackStock&&Number(product.stock||0)<=0) return;
+                  add(product.id);
+                }}
+                onKeyDown={(event) => {
+                  if(event.currentTarget!==event.target||(event.key!=="Enter"&&event.key!==" ")) return;
+                  event.preventDefault();
+                  if(product.trackStock&&Number(product.stock||0)<=0) return;
+                  add(product.id);
+                }}
+              >
                 <div className="photo">
                   {product.tag && <span className="new-badge">{product.tag}</span>}
                   <ProductImage product={product} priority={idx<4} />
@@ -587,13 +604,13 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
                   <div className="buy">
                     <div className="price"><span>A partir de</span><strong>R$ {product.price.toFixed(2).replace(".", ",")}</strong></div>
                     {cart[product.id] ? (
-                      <div className="stepper">
+                      <div className="stepper" onClick={(event)=>event.stopPropagation()}>
                         <button onClick={() => change(product.id, -1)} aria-label="Remover um"><Minus /></button>
                         <b>{cart[product.id]}</b>
                         <button onClick={() => change(product.id, 1)} aria-label="Adicionar mais um"><Plus /></button>
                       </div>
                     ) : (
-                      <button className="add-button" disabled={product.trackStock&&Number(product.stock||0)<=0} onClick={() => add(product.id)}>
+                      <button className="add-button" disabled={product.trackStock&&Number(product.stock||0)<=0} onClick={(event) => {event.stopPropagation();add(product.id)}}>
                         <Plus size={17} /> {product.trackStock&&Number(product.stock||0)<=0?"PRODUTO ESGOTADO":"ADICIONAR AO CARRINHO"}
                       </button>
                     )}

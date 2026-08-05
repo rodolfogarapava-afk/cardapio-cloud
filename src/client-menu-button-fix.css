@@ -1,4 +1,14 @@
 /* Ajuste isolado do botão circular de adicionar no cardápio do cliente. */
+.client-menu-content .product-card.is-clickable {
+  cursor: pointer;
+}
+.client-menu-content .product-card.is-clickable:focus-visible {
+  outline: 2px solid var(--yellow);
+  outline-offset: 2px;
+}
+.client-menu-content .product-card.is-unavailable {
+  cursor: not-allowed;
+}
 .client-menu-content.compact-menu .add-button {
   /* Canto inferior direito da foto. */
   right: -2px;
