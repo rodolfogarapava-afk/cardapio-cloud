@@ -146,7 +146,7 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
   const [pendingMeatId, setPendingMeatId] = useState<number | null>(null);
   const [doneness, setDoneness] = useState("");
   const [meatNote, setMeatNote] = useState("");
-  const [cartDetails, setCartDetails] = useState<Record<number, { doneness: string; note: string }>>({});
+  const [cartDetails, setCartDetails] = useState<Record<number, { doneness: string; note: string }[]>>({});
   const [menuOpen, setMenuOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
@@ -371,13 +371,22 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
   const currentCartItems = Object.entries(cart).flatMap(([id, qty]) => {
     const product = products.find((item) => item.id === Number(id));
     if(!product)return [];
-    const detail = cartDetails[Number(id)];
+    const details = cartDetails[Number(id)] || [];
+    if (usesPreparationPoint(product) && details.length) {
+      return details.slice(0, qty).map((detail) => ({
+        productId: product.id,
+        name: product.name,
+        qty: 1,
+        price: product.price,
+        detail: [detail.doneness && `Ponto: ${detail.doneness}`, detail.note && `Obs.: ${detail.note}`].filter(Boolean).join(" · "),
+      }));
+    }
     return [{
       productId: product.id,
       name: product.name,
       qty,
       price: product.price,
-      detail: detail ? [detail.doneness && `Ponto: ${detail.doneness}`, detail.note && `Obs.: ${detail.note}`].filter(Boolean).join(" · ") : "",
+      detail: "",
     }];
   });
   const sectionCopy: Record<string, { title: string; description: string }> = {
@@ -419,7 +428,8 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
   const add = (id: number) => {
     const product=products.find((item)=>item.id===id);
     if(product?.trackStock&&Number(product.stock||0)<=0)return;
-    if(product&&usesPreparationPoint(product)&&!cart[id]){
+    if(product?.trackStock&&(cart[id]||0)>=Number(product.stock||0))return;
+    if(product&&usesPreparationPoint(product)){
       setPendingMeatId(id);
       setDoneness("");
       setMeatNote("");
@@ -437,6 +447,8 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
       if (!next) {
         delete updated[id];
         setCartDetails((details)=>{const copy={...details};delete copy[id];return copy});
+      } else if (amount < 0 && product && usesPreparationPoint(product)) {
+        setCartDetails((details)=>({...details,[id]:(details[id]||[]).slice(0,next)}));
       }
       return updated;
     });
@@ -607,7 +619,7 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
                       <div className="stepper" onClick={(event)=>event.stopPropagation()}>
                         <button onClick={() => change(product.id, -1)} aria-label="Remover um"><Minus /></button>
                         <b>{cart[product.id]}</b>
-                        <button onClick={() => change(product.id, 1)} aria-label="Adicionar mais um"><Plus /></button>
+                        <button onClick={() => add(product.id)} aria-label="Adicionar mais um"><Plus /></button>
                       </div>
                     ) : (
                       <button className="add-button" disabled={product.trackStock&&Number(product.stock||0)<=0} onClick={(event) => {event.stopPropagation();add(product.id)}}>
@@ -665,7 +677,7 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
                   <button className="secondary" onClick={()=>setDoneness("Sem ponto")}>SEM PONTO</button>
                   <button className="primary" disabled={!doneness} onClick={()=>{
                     setCart((current)=>({...current,[pendingMeatId]:(current[pendingMeatId]||0)+1}));
-                    setCartDetails((current)=>({...current,[pendingMeatId]:{doneness,note:meatNote.trim()}}));
+                    setCartDetails((current)=>({...current,[pendingMeatId]:[...(current[pendingMeatId]||[]),{doneness,note:meatNote.trim()}]}));
                     setPendingMeatId(null);
                     setModal(null);
                   }}>ADICIONAR</button>
@@ -682,7 +694,7 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
                       {Object.entries(cart).map(([id, qty]) => {
                         const product = products.find((item) => item.id === Number(id))!;
                         return <div className="cart-line" key={id}>
-                          <div><b>{qty}×</b><span>{product.name}{cartDetails[Number(id)] && <small>{[cartDetails[Number(id)].doneness && `Ponto: ${cartDetails[Number(id)].doneness}`,cartDetails[Number(id)].note && `Obs.: ${cartDetails[Number(id)].note}`].filter(Boolean).join(" · ")}</small>}</span></div>
+                          <div><b>{qty}×</b><span>{product.name}{cartDetails[Number(id)]?.map((detail,index) => <small key={`${detail.doneness}-${detail.note}-${index}`}>{qty > 1 ? `${index + 1}. ` : ""}{[detail.doneness && `Ponto: ${detail.doneness}`,detail.note && `Obs.: ${detail.note}`].filter(Boolean).join(" · ")}</small>)}</span></div>
                           <strong>R$ {(product.price * qty).toFixed(2).replace(".", ",")}</strong>
                         </div>;
                       })}
