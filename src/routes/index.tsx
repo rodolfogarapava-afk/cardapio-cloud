@@ -52,7 +52,7 @@ const CLIENT_RELEASES = [
   {
     id: "2026-08-06-notification-dot",
     date: "06/08/2026",
-    title: "Avisos de atualização mais discretos",
+    title: "Avisos de atualização da plataforma",
     summary: "O topo agora mostra apenas um sino com uma pequena indicação de novidade.",
     changes: [
       "O aviso automático foi removido para não atrapalhar o atendimento.",
