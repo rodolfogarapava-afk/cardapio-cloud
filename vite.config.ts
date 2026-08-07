@@ -6,7 +6,27 @@
 // You can pass additional config via defineConfig({ vite: { ... }, etc... }) if needed.
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
+const APP_BUILD_VERSION = process.env.VERCEL_GIT_COMMIT_SHA || new Date().toISOString();
+
 export default defineConfig({
+  vite: {
+    define: {
+      __APP_BUILD_VERSION__: JSON.stringify(APP_BUILD_VERSION),
+    },
+    plugins: [
+      {
+        name: "cardapio-digital-build-version",
+        apply: "build",
+        generateBundle() {
+          this.emitFile({
+            type: "asset",
+            fileName: "app-version.json",
+            source: JSON.stringify({ version: APP_BUILD_VERSION }),
+          });
+        },
+      },
+    ],
+  },
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
     // nitro/vite builds from this

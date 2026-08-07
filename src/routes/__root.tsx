@@ -14,6 +14,71 @@ import clientMenuButtonFixCss from "../client-menu-button-fix.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 
 const STYLE_CACHE_VERSION = "20260806-notification-dot";
+const VERSION_CHECK_INTERVAL_MS = 30_000;
+const VERSION_RELOAD_GUARD_KEY = "cardapio-digital-version-reload";
+
+function AutomaticVersionRefresh() {
+  useEffect(() => {
+    let stopped = false;
+    let checking = false;
+
+    const checkForUpdate = async () => {
+      if (stopped || checking || document.visibilityState === "hidden") return;
+      checking = true;
+
+      try {
+        const response = await fetch(`/app-version.json?t=${Date.now()}`, {
+          cache: "no-store",
+          headers: { Accept: "application/json" },
+        });
+        if (!response.ok) return;
+
+        const payload = (await response.json()) as { version?: string };
+        const publishedVersion = payload.version?.trim();
+        if (!publishedVersion || publishedVersion === __APP_BUILD_VERSION__) return;
+
+        const previousReload = sessionStorage.getItem(VERSION_RELOAD_GUARD_KEY);
+        let reloadGuard: { version?: string; at?: number } | null = null;
+        if (previousReload) {
+          try {
+            reloadGuard = JSON.parse(previousReload) as { version?: string; at?: number };
+          } catch {
+            sessionStorage.removeItem(VERSION_RELOAD_GUARD_KEY);
+          }
+        }
+        const recentlyReloadedForVersion = reloadGuard?.version === publishedVersion
+          && Date.now() - Number(reloadGuard.at || 0) < 120_000;
+        if (recentlyReloadedForVersion) return;
+
+        sessionStorage.setItem(VERSION_RELOAD_GUARD_KEY, JSON.stringify({
+          version: publishedVersion,
+          at: Date.now(),
+        }));
+        window.location.reload();
+      } catch {
+        // A rede pode oscilar durante o atendimento; a próxima checagem tenta novamente.
+      } finally {
+        checking = false;
+      }
+    };
+
+    const interval = window.setInterval(checkForUpdate, VERSION_CHECK_INTERVAL_MS);
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") void checkForUpdate();
+    };
+    window.addEventListener("focus", checkForUpdate);
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      stopped = true;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", checkForUpdate);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, []);
+
+  return null;
+}
 
 function NotFoundComponent() {
   return (
@@ -132,6 +197,7 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <AutomaticVersionRefresh />
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
     </QueryClientProvider>
