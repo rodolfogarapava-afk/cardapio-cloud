@@ -50,6 +50,17 @@ import { supabase } from "@/lib/supabase";
 
 const CLIENT_RELEASES = [
   {
+    id: "2026-08-06-print-history-pagination",
+    date: "06/08/2026",
+    title: "Histórico de impressões mais organizado",
+    summary: "A Central de impressão ficou mais compacta e fácil de consultar durante o atendimento.",
+    changes: [
+      "A data e a hora de cada impressão agora aparecem separadas.",
+      "A lista mostra inicialmente apenas os cinco trabalhos mais recentes.",
+      "Os botões “Ver mais” e “Mostrar menos” permitem consultar o restante sem alongar a página.",
+    ],
+  },
+  {
     id: "2026-08-06-notification-dot",
     date: "06/08/2026",
     title: "Avisos de atualização da plataforma",
