@@ -6,6 +6,7 @@ import {
   Building2,
   CheckCircle2,
   ChefHat,
+  ChevronDown,
   CircleDollarSign,
   Clock3,
   CreditCard,
@@ -396,7 +397,7 @@ function Kpi({ icon, label, value, detail, tone }: { icon: ReactNode; label: str
   return <article className="saas-kpi"><span className={tone}>{icon}</span><div><small>{label}</small><strong>{value}</strong><em>{detail}</em></div></article>;
 }
 function PanelTitle({ title, subtitle }: { title: string; subtitle: string }) {
-  return <header className="saas-panel-title"><div><h3>{title}</h3><p>{subtitle}</p></div><button>Ver detalhes <ArrowRight /></button></header>;
+  return <header className="saas-panel-title"><div><h3>{title}</h3><p>{subtitle}</p></div></header>;
 }
 
 function TenantTable({ tenants, onStatus, onEnter, onEdit, onDelete, compact = false }: { tenants: Tenant[]; onStatus: (id: string, s: SubscriptionStatus) => void; onEnter: (id: string) => void; onEdit:(tenant:Tenant)=>void; onDelete:(tenant:Tenant)=>void; compact?: boolean }) {
@@ -536,7 +537,18 @@ function PrintingCenter({ tenant, jobs, setJobs }: { tenant: Tenant; jobs: Print
 }
 
 function JobTable({ jobs, tenants }: { jobs:PrintJob[]; tenants:Tenant[] }) {
-  return <div className="saas-table-scroll"><table><thead><tr><th>Trabalho</th><th>Restaurante</th><th>Destino</th><th>Horário</th><th>Status</th></tr></thead><tbody>{jobs.map(j=><tr key={j.id}><td><b>{j.label}</b><small>ID {j.id}</small></td><td>{tenants.find(t=>t.id===j.tenantId)?.name||j.tenantId}</td><td><Printer/> {j.destination}</td><td>{new Date(j.createdAt).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}</td><td><span className={`saas-job ${j.status}`}>{j.status==="printed"?<CheckCircle2/>:j.status==="pending"?<RefreshCw/>:<XCircle/>}{j.status==="printed"?"Impresso":j.status==="pending"?"Na fila":"Falhou"}</span></td></tr>)}</tbody></table></div>;
+  const pageSize=5;
+  const [visibleCount,setVisibleCount]=useState(pageSize);
+  const visibleJobs=jobs.slice(0,visibleCount);
+  const hasMore=visibleCount<jobs.length;
+  const isExpanded=visibleCount>pageSize;
+  return <div className="saas-job-table">
+    <div className="saas-table-scroll"><table><thead><tr><th>Trabalho</th><th>Restaurante</th><th>Destino</th><th>Data</th><th>Hora</th><th>Status</th></tr></thead><tbody>{visibleJobs.map(j=>{
+      const createdAt=new Date(j.createdAt);
+      return <tr key={j.id}><td><b>{j.label}</b><small>ID {j.id}</small></td><td>{tenants.find(t=>t.id===j.tenantId)?.name||j.tenantId}</td><td><Printer/> {j.destination}</td><td>{createdAt.toLocaleDateString("pt-BR")}</td><td>{createdAt.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}</td><td><span className={`saas-job ${j.status}`}>{j.status==="printed"?<CheckCircle2/>:j.status==="pending"?<RefreshCw/>:<XCircle/>}{j.status==="printed"?"Impresso":j.status==="pending"?"Na fila":"Falhou"}</span></td></tr>;
+    })}</tbody></table></div>
+    {(hasMore||isExpanded)&&<button type="button" className="saas-jobs-more" onClick={()=>setVisibleCount(hasMore?Math.min(visibleCount+pageSize,jobs.length):pageSize)}>{hasMore?`VER MAIS (${jobs.length-visibleCount})`:"MOSTRAR MENOS"}<ChevronDown/></button>}
+  </div>;
 }
 
 function BlockedScreen({ tenant, onPaid, onExit }: { tenant: Tenant; onPaid:()=>void; onExit:()=>void }) {
