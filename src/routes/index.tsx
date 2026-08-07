@@ -50,14 +50,14 @@ import { supabase } from "@/lib/supabase";
 
 const CLIENT_RELEASES = [
   {
-    id: "2026-08-06-preparation-repeat",
+    id: "2026-08-06-notification-dot",
     date: "06/08/2026",
-    title: "Pedidos com ponto de preparo mais precisos",
-    summary: "Cada nova unidade pede novamente o ponto e mantém sua escolha separada.",
+    title: "Avisos de atualização mais discretos",
+    summary: "O topo agora mostra apenas um sino com uma pequena indicação de novidade.",
     changes: [
-      "O ponto de preparo aparece sempre que o mesmo produto é adicionado novamente.",
-      "Cada unidade conserva seu próprio ponto e sua própria observação na comanda e na impressão.",
-      "Ajustes visuais recentes deixaram os botões de adicionar alinhados no celular e no computador.",
+      "O aviso automático foi removido para não atrapalhar o atendimento.",
+      "Uma pequena bolinha aparece no sino sempre que houver uma atualização ainda não visualizada.",
+      "Os detalhes da versão aparecem somente quando a pessoa toca ou clica no sino.",
     ],
   },
 ] as const;
@@ -196,7 +196,6 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
   const [storageReady, setStorageReady] = useState(false);
   const [releaseOpen, setReleaseOpen] = useState(false);
   const [hasUnreadRelease, setHasUnreadRelease] = useState(false);
-  const [releaseToastVisible, setReleaseToastVisible] = useState(false);
   const knownCommandIds = useRef<Set<number>>(new Set());
   const commandNotificationsReady = useRef(false);
 
@@ -204,13 +203,11 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
     if (publicMenu) return;
     const unread = window.localStorage.getItem(CLIENT_RELEASE_STORAGE_KEY) !== LATEST_CLIENT_RELEASE.id;
     setHasUnreadRelease(unread);
-    setReleaseToastVisible(unread);
   }, [publicMenu]);
 
   const markLatestReleaseSeen = () => {
     window.localStorage.setItem(CLIENT_RELEASE_STORAGE_KEY, LATEST_CLIENT_RELEASE.id);
     setHasUnreadRelease(false);
-    setReleaseToastVisible(false);
   };
 
   const openReleaseNotes = () => {
@@ -516,8 +513,8 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
             <Search size={19} /> <span>BUSCAR</span>
           </button>}
           {!publicMenu && <button className="updates-trigger" onClick={openReleaseNotes} aria-label={hasUnreadRelease ? "Ver nova atualização" : "Ver atualizações recentes"}>
-            <Bell size={18} /><span>NOVIDADES</span>
-            {hasUnreadRelease && <b className="updates-badge">NOVO</b>}
+            <Bell size={18} />
+            {hasUnreadRelease && <b className="updates-badge" aria-hidden="true" />}
           </button>}
           {!publicMenu && <button className="plain commands-trigger" onClick={() => setModal("commands")}>
             <ShoppingBag size={18} /><span>COMANDAS</span>
@@ -530,17 +527,6 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
           </button>
         </nav>
       </header>
-
-      {!publicMenu && releaseToastVisible && <aside className="release-toast" role="status" aria-label="Nova atualização disponível">
-        <span className="release-toast-icon"><Bell /></span>
-        <div>
-          <small>SISTEMA ATUALIZADO</small>
-          <strong>{LATEST_CLIENT_RELEASE.title}</strong>
-          <p>{LATEST_CLIENT_RELEASE.summary}</p>
-          <button onClick={openReleaseNotes}>VER NOVIDADES</button>
-        </div>
-        <button className="release-toast-close" onClick={markLatestReleaseSeen} aria-label="Dispensar aviso"><X /></button>
-      </aside>}
 
       {releaseOpen && <div className="modal-backdrop" onMouseDown={() => setReleaseOpen(false)}>
         <section className="modal release-modal" onMouseDown={(event) => event.stopPropagation()}>
