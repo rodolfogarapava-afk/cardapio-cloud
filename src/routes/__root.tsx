@@ -13,7 +13,7 @@ import appCss from "../styles.css?url";
 import clientMenuButtonFixCss from "../client-menu-button-fix.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 
-const STYLE_CACHE_VERSION = "20260806-repeat-preparation";
+const STYLE_CACHE_VERSION = "20260806-release-notes";
 
 function NotFoundComponent() {
   return (

@@ -3,6 +3,7 @@ import {
   
   BarChart3,
   Banknote,
+  Bell,
   Check,
   CircleUserRound,
   Info,
@@ -46,6 +47,23 @@ import { useTenantNavigation } from "@/components/SaaSPlatform";
 import { useOperationsSync } from "@/lib/operationsSync";
 import { useCatalogSync } from "@/lib/catalogSync";
 import { supabase } from "@/lib/supabase";
+
+const CLIENT_RELEASES = [
+  {
+    id: "2026-08-06-preparation-repeat",
+    date: "06/08/2026",
+    title: "Pedidos com ponto de preparo mais precisos",
+    summary: "Cada nova unidade pede novamente o ponto e mantém sua escolha separada.",
+    changes: [
+      "O ponto de preparo aparece sempre que o mesmo produto é adicionado novamente.",
+      "Cada unidade conserva seu próprio ponto e sua própria observação na comanda e na impressão.",
+      "Ajustes visuais recentes deixaram os botões de adicionar alinhados no celular e no computador.",
+    ],
+  },
+] as const;
+
+const LATEST_CLIENT_RELEASE = CLIENT_RELEASES[0];
+const CLIENT_RELEASE_STORAGE_KEY = "cardapio-digital-seen-release";
 
 export const Route = createFileRoute("/")({
   beforeLoad: () => {
@@ -176,8 +194,29 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
   const [printStatuses, setPrintStatuses] = useState<Record<number,"sending"|"pending"|"processing"|"printed"|"failed">>({});
   const [printerConnection,setPrinterConnection]=useState<{checking:boolean;online:boolean;printer:string;lastSeen:number|null}>({checking:true,online:false,printer:"",lastSeen:null});
   const [storageReady, setStorageReady] = useState(false);
+  const [releaseOpen, setReleaseOpen] = useState(false);
+  const [hasUnreadRelease, setHasUnreadRelease] = useState(false);
+  const [releaseToastVisible, setReleaseToastVisible] = useState(false);
   const knownCommandIds = useRef<Set<number>>(new Set());
   const commandNotificationsReady = useRef(false);
+
+  useEffect(() => {
+    if (publicMenu) return;
+    const unread = window.localStorage.getItem(CLIENT_RELEASE_STORAGE_KEY) !== LATEST_CLIENT_RELEASE.id;
+    setHasUnreadRelease(unread);
+    setReleaseToastVisible(unread);
+  }, [publicMenu]);
+
+  const markLatestReleaseSeen = () => {
+    window.localStorage.setItem(CLIENT_RELEASE_STORAGE_KEY, LATEST_CLIENT_RELEASE.id);
+    setHasUnreadRelease(false);
+    setReleaseToastVisible(false);
+  };
+
+  const openReleaseNotes = () => {
+    markLatestReleaseSeen();
+    setReleaseOpen(true);
+  };
 
   const openPaymentForCommand = (command: IntegratedCommand) => {
     setCustomerName(command.name);
@@ -476,6 +515,10 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
           {(!tenantNavigation||tenantNavigation.page==="operation"&&systemView===null)&&<button className="plain search-trigger" onClick={() => setSearchOpen(!searchOpen)}>
             <Search size={19} /> <span>BUSCAR</span>
           </button>}
+          {!publicMenu && <button className="updates-trigger" onClick={openReleaseNotes} aria-label={hasUnreadRelease ? "Ver nova atualização" : "Ver atualizações recentes"}>
+            <Bell size={18} /><span>NOVIDADES</span>
+            {hasUnreadRelease && <b className="updates-badge">NOVO</b>}
+          </button>}
           {!publicMenu && <button className="plain commands-trigger" onClick={() => setModal("commands")}>
             <ShoppingBag size={18} /><span>COMANDAS</span>
             {!!savedCommands.length && <b className="command-count">{savedCommands.length}</b>}
@@ -487,6 +530,30 @@ export function RestaurantApp({ publicMenu = false, publicCatalog }: {
           </button>
         </nav>
       </header>
+
+      {!publicMenu && releaseToastVisible && <aside className="release-toast" role="status" aria-label="Nova atualização disponível">
+        <span className="release-toast-icon"><Bell /></span>
+        <div>
+          <small>SISTEMA ATUALIZADO</small>
+          <strong>{LATEST_CLIENT_RELEASE.title}</strong>
+          <p>{LATEST_CLIENT_RELEASE.summary}</p>
+          <button onClick={openReleaseNotes}>VER NOVIDADES</button>
+        </div>
+        <button className="release-toast-close" onClick={markLatestReleaseSeen} aria-label="Dispensar aviso"><X /></button>
+      </aside>}
+
+      {releaseOpen && <div className="modal-backdrop" onMouseDown={() => setReleaseOpen(false)}>
+        <section className="modal release-modal" onMouseDown={(event) => event.stopPropagation()}>
+          <button className="modal-close" onClick={() => setReleaseOpen(false)} aria-label="Fechar novidades"><X /></button>
+          <span className="modal-icon"><Bell /></span>
+          <p className="release-modal-eyebrow">NOVIDADES DO CARDÁPIO DIGITAL</p>
+          <h3>{LATEST_CLIENT_RELEASE.title}</h3>
+          <div className="release-version"><span>ATUALIZAÇÃO RECENTE</span><time>{LATEST_CLIENT_RELEASE.date}</time></div>
+          <p className="release-summary">{LATEST_CLIENT_RELEASE.summary}</p>
+          <ul>{LATEST_CLIENT_RELEASE.changes.map((change) => <li key={change}><Check /> <span>{change}</span></li>)}</ul>
+          <button className="primary" onClick={() => setReleaseOpen(false)}>ENTENDI</button>
+        </section>
+      </div>}
 
       <div className={`workspace${publicMenu ? " public-menu-workspace" : ""}`}>
         {!publicMenu && menuOpen && <button className="sidebar-backdrop" onClick={() => setMenuOpen(false)} aria-label="Fechar menu e voltar para a tela atual" />}
