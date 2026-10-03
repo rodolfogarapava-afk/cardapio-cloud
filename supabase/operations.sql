@@ -107,26 +107,31 @@ declare
   admin_id uuid := 'b23ab4c7-e4dd-4c85-b796-ea845a9e52f1';
   restaurant_id uuid;
 begin
-  insert into public.profiles (id, full_name, platform_role)
-  values (admin_id, 'Administrador', 'tenant_admin')
-  on conflict (id) do update
-    set full_name = excluded.full_name,
-        platform_role = excluded.platform_role;
+  -- Only bootstrap the legacy local administrator when the corresponding
+  -- auth account already exists. Fresh Supabase projects do not have that
+  -- user, and schema installation must not fail or create an orphan tenant.
+  if exists (select 1 from auth.users where id = admin_id) then
+    insert into public.profiles (id, full_name, platform_role)
+    values (admin_id, 'Administrador', 'tenant_admin')
+    on conflict (id) do update
+      set full_name = excluded.full_name,
+          platform_role = excluded.platform_role;
 
-  select id into restaurant_id
-  from public.tenants
-  where slug = 'deus-proveu'
-  limit 1;
+    select id into restaurant_id
+    from public.tenants
+    where slug = 'deus-proveu'
+    limit 1;
 
-  if restaurant_id is null then
-    insert into public.tenants (name, slug, subscription_status)
-    values ('Deus Proveu Espetinhos', 'deus-proveu', 'active')
-    returning id into restaurant_id;
+    if restaurant_id is null then
+      insert into public.tenants (name, slug, subscription_status)
+      values ('Deus Proveu Espetinhos', 'deus-proveu', 'active')
+      returning id into restaurant_id;
+    end if;
+
+    insert into public.tenant_memberships (tenant_id, user_id, role)
+    values (restaurant_id, admin_id, 'owner')
+    on conflict (tenant_id, user_id) do update set role = excluded.role;
   end if;
-
-  insert into public.tenant_memberships (tenant_id, user_id, role)
-  values (restaurant_id, admin_id, 'owner')
-  on conflict (tenant_id, user_id) do update set role = excluded.role;
 end $$;
 
 do $$
