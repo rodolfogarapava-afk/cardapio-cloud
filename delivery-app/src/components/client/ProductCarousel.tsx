@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 
 import { Product } from '@/types';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import { cn, isImageSource } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import useEmblaCarousel from 'embla-carousel-react';
 import Autoplay from 'embla-carousel-autoplay';
@@ -185,7 +185,7 @@ export function ProductCarouselCard({ product, onAddToCart, showFeaturedBadge = 
     >
       {/* Imagem grande como destaque */}
       <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
-        {image?.startsWith('http') ? (
+        {isImageSource(image) ? (
           <img
             src={image}
             alt={name}

@@ -2,7 +2,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Badge } from '@/components/ui/badge';
 import { Tag, Sparkles, ArrowRight } from 'lucide-react';
 import { Product } from '@/types';
-import { cn } from '@/lib/utils';
+import { cn, isImageSource } from '@/lib/utils';
 
 interface OffersModalProps {
   open: boolean;
@@ -81,7 +81,7 @@ export function OffersModal({ open, onClose, products, onPick }: OffersModalProp
                   >
                     {/* Media */}
                     <div className="relative aspect-[16/10] w-full overflow-hidden bg-muted">
-                      {p.image?.startsWith('http') ? (
+                      {isImageSource(p.image) ? (
                         <img
                           src={p.image}
                           alt={p.name}

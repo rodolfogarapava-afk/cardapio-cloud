@@ -1,6 +1,6 @@
 import { Clock, Star } from 'lucide-react';
 import { Restaurant } from '@/types';
-import { cn } from '@/lib/utils';
+import { cn, isImageSource } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { Badge } from '@/components/ui/badge';
 
@@ -14,7 +14,7 @@ interface RestaurantCardProps {
 
 function LogoMark({ logo, name, size }: { logo?: string; name: string; size: 'lg' | 'sm' }) {
   const dim = size === 'lg' ? 'h-24 w-24 text-4xl' : 'h-16 w-16 text-2xl';
-  const isUrl = logo?.startsWith('http');
+  const isUrl = isImageSource(logo);
   return (
     <div
       className={cn(

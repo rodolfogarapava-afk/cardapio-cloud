@@ -2,7 +2,7 @@ import { forwardRef } from 'react';
 import { Plus } from 'lucide-react';
 import { Product } from '@/types';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import { cn, isImageSource } from '@/lib/utils';
 import { motion } from 'framer-motion';
 
 interface ProductCardProps {
@@ -77,7 +77,7 @@ export const ProductCard = forwardRef<HTMLDivElement, ProductCardProps>(
         {/* Imagem com maior destaque */}
         {image && (
           <div className="relative flex h-24 w-24 sm:h-28 sm:w-28 shrink-0 items-center justify-center rounded-xl bg-muted overflow-hidden shadow-sm">
-            {image.startsWith('http') ? (
+            {isImageSource(image) ? (
               <img 
                 src={image} 
                 alt={name} 

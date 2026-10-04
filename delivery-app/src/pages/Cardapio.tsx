@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useParams, useLocation } from 'react-router-dom';
 import { Clock, Star, Search, ShoppingCart, GalleryHorizontal, X, ArrowUp, User as UserIcon, LogIn, LogOut, MapPin, ArrowRight, UtensilsCrossed, Tag, ClipboardList, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import { cn, isImageSource } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -576,7 +576,7 @@ export default function Cardapio() {
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2.5 flex-1 min-w-0">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-lg overflow-hidden">
-                  {restaurant.logo.startsWith('http') ? <img src={restaurant.logo} alt={restaurant.name} className="h-full w-full object-cover" /> : <span>{restaurant.logo}</span>}
+                  {isImageSource(restaurant.logo) ? <img src={restaurant.logo} alt={restaurant.name} className="h-full w-full object-cover" /> : <span>{restaurant.logo}</span>}
                 </div>
                 <div className="min-w-0 flex-1">
                   <button onClick={() => setInfoOpen(true)} className="flex items-center gap-1 min-w-0 group text-left w-full">
@@ -627,7 +627,7 @@ export default function Cardapio() {
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-muted text-xl overflow-hidden">
-                  {restaurant.logo.startsWith('http') ? <img src={restaurant.logo} alt={restaurant.name} className="h-full w-full object-cover" /> : <span>{restaurant.logo}</span>}
+                  {isImageSource(restaurant.logo) ? <img src={restaurant.logo} alt={restaurant.name} className="h-full w-full object-cover" /> : <span>{restaurant.logo}</span>}
                 </div>
                 <div className="min-w-0">
                   <button onClick={() => setInfoOpen(true)} className="flex items-center gap-1.5 min-w-0 group text-left">

@@ -28,7 +28,7 @@ import {
   type SelectionType, type PricingMode,
 } from '@/lib/complementGroup';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
+import { cn, isImageSource } from '@/lib/utils';
 
 // ============================================================
 // Tipos locais — produto do editor no formato usado pelo CARDÁPIO
@@ -292,7 +292,7 @@ function ProductEditor({
   const removeIngredient = (id: string) => setIngredients(is => is.filter(i => i.id !== id));
 
   const canSave = form.name.trim().length > 0 && form.price > 0;
-  const hasImg = !!form.image && !imgError && form.image.startsWith('http');
+  const hasImg = !!form.image && !imgError && isImageSource(form.image);
 
   const basePreview = useMemo(() => {
     // Simula "a partir de": preço + menor item de cada grupo obrigatório
@@ -1142,7 +1142,7 @@ function ProductPreview({ product, basePrice }: { product: MenuProduct; basePric
 
   return (
     <div className="rounded-2xl border border-border bg-card overflow-hidden max-w-xl mx-auto">
-      {product.image && product.image.startsWith('http') ? (
+      {isImageSource(product.image) ? (
         <div className="aspect-[16/10] w-full bg-muted overflow-hidden">
           <img src={product.image} alt="" className="h-full w-full object-cover" />
         </div>
@@ -1475,7 +1475,7 @@ export function StockTab() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {filtered.map(p => {
-            const hasImg = p.image?.startsWith('http');
+            const hasImg = isImageSource(p.image);
             const grpCount = p.complementGroups?.length ?? 0;
             const ingCount = p.ingredients?.length ?? 0;
             return (

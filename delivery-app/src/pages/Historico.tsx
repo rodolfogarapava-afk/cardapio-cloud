@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { EmptyState } from '@/components/common/EmptyState';
 import { OrderStatus, PAYMENT_METHOD_LABELS, PointTransaction } from '@/types';
-import { cn } from '@/lib/utils';
+import { cn, isImageSource } from '@/lib/utils';
 import { getRestaurantBySlug, mockMenuProducts } from '@/data/restaurants';
 import { useCart } from '@/contexts/CartContext';
 import { toast } from 'sonner';
@@ -320,7 +320,7 @@ export default function Historico() {
                               <div className="flex items-center gap-3 min-w-0">
                                 {!vendorSlug && (
                                   <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-muted text-2xl overflow-hidden">
-                                    {order.restaurantLogo.startsWith('http')
+                                    {isImageSource(order.restaurantLogo)
                                       ? <img src={order.restaurantLogo} alt="" className="h-full w-full object-cover" />
                                       : <span>{order.restaurantLogo}</span>}
                                   </div>

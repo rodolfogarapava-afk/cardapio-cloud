@@ -8,6 +8,7 @@ import { PAYMENT_METHOD_LABELS, PaymentMethod } from '@/types';
 import { supabase } from '@/integrations/supabase/client';
 import { navigateDelivery } from '@/lib/deliveryNavigation';
 import { readDeliveryAccess } from '@/lib/deliverySession';
+import { isImageSource } from '@/lib/utils';
 
 interface OrderItemSummary {
   productName: string;
@@ -217,7 +218,7 @@ export default function PedidoConfirmado() {
                   {items.map((item, idx) => (
                     <div key={idx} className="flex items-start gap-3 text-sm">
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-base overflow-hidden">
-                        {item.productImage?.startsWith('http')
+                        {isImageSource(item.productImage)
                           ? <img src={item.productImage} alt={item.productName} className="h-full w-full object-cover" />
                           : (item.productImage || '🍽️')}
                       </div>

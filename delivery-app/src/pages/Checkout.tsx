@@ -16,7 +16,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { getRestaurantBySlug } from '@/data/restaurants';
 import { PaymentMethod, Address, DeliveryAddress } from '@/types';
 import { toast } from '@/hooks/use-toast';
-import { cn } from '@/lib/utils';
+import { cn, isImageSource } from '@/lib/utils';
 import { navigateDelivery } from '@/lib/deliveryNavigation';
 import { readDeliveryAccess, saveDeliveryAccess } from '@/lib/deliverySession';
 
@@ -565,7 +565,7 @@ export default function Checkout() {
     <div className="rounded-2xl border bg-card overflow-hidden">
       <div className="flex items-center gap-3 p-4 border-b bg-muted/30">
         <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-background border text-xl overflow-hidden shrink-0">
-          {restaurant.logo.startsWith('http')
+          {isImageSource(restaurant.logo)
             ? <img src={restaurant.logo} alt={restaurant.name} className="h-full w-full object-cover" />
             : restaurant.logo}
         </div>
@@ -581,7 +581,7 @@ export default function Checkout() {
         {cart.items.map(item => (
           <div key={item.id} className="flex items-start gap-3 text-sm">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-base overflow-hidden">
-              {item.productImage?.startsWith('http')
+              {isImageSource(item.productImage)
                 ? <img src={item.productImage} alt={item.productName} className="h-full w-full object-cover" />
                 : (item.productImage || '🍽️')}
             </div>

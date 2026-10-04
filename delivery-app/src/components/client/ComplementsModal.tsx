@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Product, CartItem, CartItemComplement, ComplementGroup } from '@/types';
 import { useCart } from '@/contexts/CartContext';
-import { cn } from '@/lib/utils';
+import { cn, isImageSource } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getSelectionType, getPricingMode, computeGroupPrice } from '@/lib/complementGroup';
 import { isWithinSchedule } from '@/lib/availability';
@@ -330,7 +330,7 @@ export function ComplementsModal({
                       transition={{ duration: 0.25 }}
                       className="absolute inset-0"
                     >
-                      {heroImage.startsWith('http') ? (
+                      {isImageSource(heroImage) ? (
                         <img src={heroImage} alt={product.name} className="h-full w-full object-cover" />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center text-6xl bg-muted">{heroImage}</div>

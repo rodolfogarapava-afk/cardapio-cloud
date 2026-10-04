@@ -5,7 +5,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTr
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useCart } from '@/contexts/CartContext';
-import { cn } from '@/lib/utils';
+import { cn, isImageSource } from '@/lib/utils';
 import { Product, CartItem, DeliveryMode, DeliveryAddress } from '@/types';
 import { DeliveryAddressForm } from '@/components/client/DeliveryAddressForm';
 import { navigateDelivery } from '@/lib/deliveryNavigation';
@@ -307,7 +307,7 @@ export function CartDrawer({ className, onEditItem, onAddSuggestion, allProducts
                     <div className="flex items-start gap-3">
                       {/* Image thumbnail */}
                       <div className="h-16 w-16 shrink-0 rounded-lg bg-muted overflow-hidden">
-                        {item.productImage && item.productImage.startsWith('http') ? (
+                        {isImageSource(item.productImage) ? (
                           <img
                             src={item.productImage}
                             alt={item.productName}
@@ -572,7 +572,7 @@ function SuggestionsCarousel({ suggestions, onAdd }: { suggestions: Product[]; o
             onClick={() => onAdd(product)}
           >
             <div className="relative h-[72px] w-[72px] rounded-xl bg-muted overflow-hidden mb-1.5 ring-1 ring-border group-hover:ring-primary transition-all">
-              {product.image && product.image.startsWith('http') ? (
+              {isImageSource(product.image) ? (
                 <img src={product.image} alt={product.name} className="h-full w-full object-cover" />
               ) : (
                 <div className="flex h-full w-full items-center justify-center text-2xl bg-muted">🍔</div>

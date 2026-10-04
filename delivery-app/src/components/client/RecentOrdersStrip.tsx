@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { useCart } from '@/contexts/CartContext';
 import { mockRestaurants, mockMenuProducts } from '@/data/restaurants';
 import { toast } from 'sonner';
+import { isImageSource } from '@/lib/utils';
 
 interface RecentOrder {
   id: string;
@@ -60,7 +61,7 @@ export function RecentOrdersStrip() {
             >
               <div className="flex items-center gap-2.5 min-w-0">
                 <div className="h-10 w-10 rounded-full overflow-hidden border bg-muted shrink-0">
-                  {r.logo?.startsWith('http') ? (
+                  {isImageSource(r.logo) ? (
                     <img src={r.logo} alt={r.name} className="h-full w-full object-cover" loading="lazy" />
                   ) : (
                     <span className="flex h-full w-full items-center justify-center text-lg">🍽️</span>
