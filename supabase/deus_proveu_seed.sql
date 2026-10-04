@@ -37,10 +37,11 @@ insert into public.restaurant_catalogs (tenant_id, products, categories, updated
 select
   id,
   $$[
-    {"id":9,"category":"Espetinhos","name":"Carne","price":10,"image":"/products/generated/espeto-carne.webp","description":"Espetinho de carne preparado na brasa e servido no ponto escolhido.","stock":30,"minStock":8,"trackStock":true,"preparationPointEnabled":true},
+    {"id":9,"category":"Espetinhos","name":"Carne","price":11,"image":"/products/generated/espeto-carne.webp","description":"Espetinho de carne preparado na brasa e servido no ponto escolhido.","stock":30,"minStock":8,"trackStock":true,"preparationPointEnabled":true},
     {"id":12,"category":"Espetinhos","name":"Linguiça","price":10,"image":"/products/generated/espeto-linguica.webp","description":"Espetinho de linguiça assada na brasa, dourada e suculenta.","stock":30,"minStock":8,"trackStock":true},
     {"id":11,"category":"Espetinhos","name":"Frango com Bacon","price":12,"image":"/products/generated/espeto-frango-bacon.webp","description":"Cubos de frango com bacon, grelhados até ficarem dourados e suculentos.","stock":30,"minStock":8,"trackStock":true,"preparationPointEnabled":true},
     {"id":10,"category":"Espetinhos","name":"Carne com Bacon","price":14,"tag":"DESTAQUE","image":"/products/generated/espeto-carne-bacon.webp","description":"Espetinho de carne intercalada com bacon, assado na brasa.","stock":30,"minStock":8,"trackStock":true,"preparationPointEnabled":true},
+    {"id":24,"category":"Espetinhos","name":"Meio da Asa","price":12,"image":"","description":"Meio da asa temperado e assado na brasa.","stock":30,"minStock":8,"trackStock":true},
     {"id":20,"category":"Acompanhamentos","name":"Farofa","price":3,"image":"","description":"Farofa crocante da casa.","stock":40,"minStock":10,"trackStock":true},
     {"id":21,"category":"Acompanhamentos","name":"Molho Verde","price":3,"image":"","description":"Molho verde fresco da casa.","stock":40,"minStock":10,"trackStock":true},
     {"id":22,"category":"Acompanhamentos","name":"Vinagrete","price":5,"image":"","description":"Vinagrete tradicional bem temperado.","stock":40,"minStock":10,"trackStock":true},
