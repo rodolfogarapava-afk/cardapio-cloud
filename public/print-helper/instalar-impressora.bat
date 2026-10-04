@@ -60,14 +60,18 @@ echo      OK - arquivos instalados em %INSTALLDIR%.
 echo.
 
 echo [2/7] Vinculando este notebook a loja...
+set "NEED_ACTIVATION=0"
 if exist "%CONFIG%" (
-  powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $c=Get-Content -LiteralPath '%CONFIG%' -Raw | ConvertFrom-Json; if([string]::IsNullOrWhiteSpace([string]$c.agentToken)){exit 1}else{exit 0} } catch { exit 1 }"
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%INSTALLDIR%\cloud-print-agent.ps1" -ValidateActivation
   if errorlevel 1 (
-    echo      A ativacao salva esta danificada e sera refeita.
-    del /Q "%CONFIG%" >nul 2>&1
+    echo      A ativacao salva pertence a uma conta antiga, expirou ou esta danificada.
+    echo      O vinculo sera refeito para evitar que pedidos sejam enviados a outra loja.
+    set "NEED_ACTIVATION=1"
   )
+) else (
+  set "NEED_ACTIVATION=1"
 )
-if exist "%CONFIG%" (
+if "!NEED_ACTIVATION!"=="0" (
   echo      OK - ativacao existente encontrada e reutilizada.
 ) else (
   set /p "CODIGO=Digite o codigo mostrado no site: "

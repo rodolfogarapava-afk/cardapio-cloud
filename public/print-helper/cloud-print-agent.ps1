@@ -1,11 +1,12 @@
 param(
   [string]$ActivateCode = "",
-  [switch]$ConfigureRouting
+  [switch]$ConfigureRouting,
+  [switch]$ValidateActivation
 )
 
 $ErrorActionPreference = "Stop"
-$SupabaseUrl = "https://mycahirzxfkejxqpvuco.supabase.co"
-$PublishableKey = "sb_publishable_bMydrvlH1_lAE6KFwY93qw_F7W4N-mx"
+$SupabaseUrl = "https://myxvvnhyxwcakpjbikdf.supabase.co"
+$PublishableKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im15eHZ2bmh5eHdjYWtwamJpa2RmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEwNTY4ODYsImV4cCI6MjEwNjYzMjg4Nn0.g_O1I78BGHDWNvdxQl-7hOg6nHReRoqTTTumTMREL9g"
 $DataDir = Join-Path $env:ProgramData "CardapioCloud"
 $ConfigPath = Join-Path $DataDir "printer-agent.json"
 $AgentLogPath = Join-Path $DataDir "printer-agent.log"
@@ -121,15 +122,48 @@ if ($ActivateCode) {
   New-Item -ItemType Directory -Path $DataDir -Force | Out-Null
   $device = "$env:COMPUTERNAME-$env:USERNAME"
   try {
+    $previousConfig = $null
+    if (Test-Path $ConfigPath) {
+      try { $previousConfig = Get-Content $ConfigPath -Raw | ConvertFrom-Json } catch {}
+    }
     $activation = @(Invoke-AgentRpc "activate_printer_agent" @{ p_code=$ActivateCode; p_device_name=$device })[0]
     if (-not $activation.agent_token) { throw "Resposta de ativacao invalida" }
-    @{ agentToken=$activation.agent_token; agentId=$activation.agent_id; tenantId=$activation.tenant_id; tenantName=$activation.tenant_name } |
-      ConvertTo-Json | Set-Content -Path $ConfigPath -Encoding UTF8
+    $newConfig = @{
+      agentToken=$activation.agent_token
+      agentId=$activation.agent_id
+      tenantId=$activation.tenant_id
+      tenantName=$activation.tenant_name
+      backendUrl=$SupabaseUrl
+    }
+    if ($previousConfig -and $previousConfig.skewerPrinter) {
+      $newConfig.skewerPrinter = [string]$previousConfig.skewerPrinter
+    }
+    if ($previousConfig -and $previousConfig.sidePrinter) {
+      $newConfig.sidePrinter = [string]$previousConfig.sidePrinter
+    }
+    $newConfig | ConvertTo-Json | Set-Content -Path $ConfigPath -Encoding UTF8
     Write-Host "Agente vinculado com sucesso a: $($activation.tenant_name)" -ForegroundColor Green
     exit 0
   } catch {
     Write-Host "Falha na ativacao: $($_.Exception.Message)" -ForegroundColor Red
     exit 1
+  }
+}
+
+if ($ValidateActivation) {
+  if (-not (Test-Path $ConfigPath)) { exit 2 }
+  try {
+    $savedConfig = Get-Content $ConfigPath -Raw | ConvertFrom-Json
+    if ([string]::IsNullOrWhiteSpace([string]$savedConfig.agentToken)) { exit 3 }
+    if ([string]$savedConfig.backendUrl -ne $SupabaseUrl) { exit 3 }
+    $validated = Invoke-AgentRpc "printer_agent_heartbeat" @{
+      p_token=[string]$savedConfig.agentToken
+      p_printer_name="AGENTE EM VALIDACAO"
+    }
+    if (-not [bool]$validated) { exit 4 }
+    exit 0
+  } catch {
+    exit 4
   }
 }
 
